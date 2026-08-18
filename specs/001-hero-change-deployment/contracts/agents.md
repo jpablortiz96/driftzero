@@ -20,6 +20,18 @@ Each agent has its **own identity**. Two mutually exclusive provisioning models,
 | Frontline Enablement | `driftzero-enablement` | `driftzero-enablement-sa@…` | **No — negative security test subject** |
 | Field Verification | `driftzero-field-verify` (only where deployed on Agent Runtime; a Cloud Run GPU inference service instead runs under its own dedicated Cloud Run service account, which is a runtime identity, not an Agent Identity) | `driftzero-field-verify-sa@…` | **No** |
 
+## Trust-Boundary Policy (applies to every agent below)
+
+**General principle**: every non-authoritative agent or tool result crossing into the deterministic Truth Engine MUST be validated before it can affect authoritative workflow state. No result is trusted because it is well-formed; schema validity is a necessary first filter, never a sufficient one. Validation is **context-appropriate** — each crossing has a defined minimum, listed per agent below and specified in full in plan.md § Trust-Boundary Validation Policy.
+
+| Crossing | Result | Agent may | Agent may NOT |
+|---|---|---|---|
+| 1 | `ChangeSet` | Propose impact candidates with auditable reasons | Determine impact, authorization, or applicability |
+| 2 | `RemediationEvidence` | Report a mutation or an already-compliant no-op | Establish that remediation counts toward completion |
+| 3 | `DeliveryResult` | Deliver and return a mechanism receipt | Assert `DELIVERED` without positive delivery evidence |
+| 4 | `FieldObservation` | Return a bounded normalized observation | Return or imply an authoritative PASS/FAIL |
+| 5 | Veo output | Attach a generated asset | Establish delivery truth by generation success |
+
 ## Agent Topology (4 Agents + 1 Deterministic Service)
 
 ### 1. Change Intelligence Agent (`change_intel_agent`)
@@ -65,6 +77,10 @@ class AffectedArtifactCandidate(BaseModel):
     is_affected: bool  # all 4 conditions true
 ```
 
+**Trust-boundary validation (Crossing 1)**: schema · workflow/change provenance (`change_id` + `correlation_id`) · source-version association (applicable and non-superseded) · expected source and artifact identities (referenced artifact IDs exist in the registry; source procedure ID is the one ingested) · semantic domain invariants (`previous_value` matches the recorded prior approved value; exactly one atomic requirement change described).
+
+**Authority boundary**: `candidate_affected_artifacts` and `is_affected` are **proposals**. The Truth Engine decides whether the FR-002 impact conditions are satisfied; an agent-set `is_affected` flag never establishes impact.
+
 **Failure handling**: Malformed or ambiguous extraction → workflow enters `REVIEW_REQUIRED`
 
 ---
@@ -84,25 +100,45 @@ class AffectedArtifactCandidate(BaseModel):
 - NO write access to non-authorized artifacts
 
 **Input Tool**: `read_artifact_content` → current artifact content
-**Output Tool**: `write_remediated_artifact` → patched artifact + before/after refs
+**Output Tool**: `apply_authorized_artifact_patch` → discriminated `RemediationEvidence`
+
+The output is a **discriminated union**, not one shape with optional fields. An already-compliant artifact must never be reported with a fabricated mutation or a synthetic after-state (data-model.md § RemediationEvidence):
 
 ```python
-class RemediationResult(BaseModel):
+class MutationEvidence(BaseModel):
+    remediation_type: Literal["MUTATION"]
     artifact_id: str
-    remediation_type: str  # "MUTATION" | "NO_OP"
-    before_ref: str  # GCS URI
-    after_ref: str  # GCS URI
+    before_ref: str        # GCS URI to content before mutation
+    after_ref: str         # GCS URI to content after mutation
+    before_hash: str       # SHA-256 of before content
+    after_hash: str        # SHA-256 of after content
     before_value: str
     after_value: str
     patch_description: str
+
+class NoOpEvidence(BaseModel):
+    remediation_type: Literal["NO_OP"]
+    artifact_id: str
+    evaluated_artifact_ref: str    # single evaluated state — NO before/after pair
+    evaluated_artifact_hash: str
+    observed_value: str
+    expected_value: str
+    no_op_reason: str
+    compliance_basis: str          # locator of the instruction establishing compliance
+
+RemediationEvidence = MutationEvidence | NoOpEvidence
 ```
+
+Both variants are **independently auditable**: `MutationEvidence` answers "what changed, from what, to what, and are both states hash-verifiable"; `NoOpEvidence` answers "which artifact was evaluated, in what exact state, against which approved value, and on what basis was it already compliant". Completion condition 3 is satisfied by exactly one of them.
 
 **Autonomy gate** (checked by deterministic Truth Engine BEFORE agent executes):
 All 9 autonomous boundary conditions must be satisfied. If not → `REVIEW_REQUIRED`.
 
 **Failure handling**: Mutation failure → action NOT marked completed, retry permitted.
 
-**Tool response validation**: every `RemediationResult` passes the five-layer Truth Engine chain (plan.md § Tool Response Validation Chain) before it can advance state — schema, provenance/expected-source, expected artifact/tool identity, authorization/scope, deterministic semantic invariants. A schema-valid response naming an artifact outside `authorized_scope` or citing an inconsistent `source_version` is rejected, records rejection evidence, and enters `REVIEW_REQUIRED` with the target artifact hash unchanged.
+**Trust-boundary validation (Crossing 2)**: schema · provenance/correlation · expected tool identity · expected artifact identity · authorization scope (`artifact_id ∈ authorized_scope`; caller is the mutation-authorized identity) · source-version applicability · before-state hash consistency (`before_hash` equals the pre-state hash the Truth Engine recorded before invoking the tool) · atomic-change invariants (exactly one requirement changed; `after_value` equals the approved `current_value`; no additional divergence; authoritative source untouched). A `NO_OP` claim is validated on its own terms — `evaluated_artifact_hash` resolves and `observed_value == expected_value` — and is rejected if presented with a fabricated before/after pair.
+
+A schema-valid response naming an artifact outside `authorized_scope` or citing an inconsistent `source_version` is rejected, records rejection evidence into `EvidenceManifest.rejected_result_refs`, and enters `REVIEW_REQUIRED` with the target artifact hash unchanged.
 
 ---
 
@@ -133,6 +169,10 @@ class DeliveryResult(BaseModel):
     training_video_ref: str | None  # optional Veo output GCS URI
 ```
 
+**Trust-boundary validation (Crossing 3)**: schema · workflow/change provenance · intended worker identity (matches the workflow's `worker_id`) · expected delivery operation and channel · **positive delivery evidence/receipt** (`delivery_evidence_ref` must resolve to a receipt produced by the delivery mechanism itself) · source-version applicability.
+
+**Authority boundary**: an agent asserting `delivered: true`, or narrating delivery in text, is **insufficient** and MUST NOT satisfy FR-004. `DELIVERED` is recorded only on positive mechanism evidence. A successful Veo generation (Crossing 5) never establishes delivery — `training_video_ref` is supplementary content attached to a delivery that must independently prove itself.
+
 **Failure handling**: Delivery failure → NOT marked as `DELIVERED`, retry permitted.
 
 ---
@@ -162,7 +202,9 @@ class FieldObservation(BaseModel):
     confidence_note: str  # informational only, NOT authoritative
 ```
 
-**Critical boundary**: The agent produces ONLY the derived observation. The deterministic Truth Engine performs: `observed == expected → PASS`, `observed != expected → FAIL`, `observed == INCONCLUSIVE → VERIFICATION_INCONCLUSIVE`.
+**Trust-boundary validation (Crossing 4)**: schema · workflow/change provenance · raw evidence reference (resolvable, hash-recorded, associated with this workflow) · expected verification operation · allowed normalized observation enum — `LEFT` | `TOP_RIGHT` | `INCONCLUSIVE`, any other value rejected rather than coerced · event chronology (monotonic `event_sequence`; an older event cannot override a newer one) · source-version applicability.
+
+**Critical boundary**: The agent produces ONLY the derived observation. `FieldObservation` MUST NOT carry an authoritative PASS/FAIL, and `confidence_note` is informational only and never authoritative. The deterministic Truth Engine performs: `observed == expected → PASS`, `observed != expected → FAIL`, `observed == INCONCLUSIVE → VERIFICATION_INCONCLUSIVE`.
 
 ---
 
@@ -179,7 +221,8 @@ class FieldObservation(BaseModel):
 - Authorization decisions
 - Verification ordering (latest valid verification)
 - Expected-vs-observed deterministic comparator
-- Tool response validation chain layers 1–5 (schema, provenance/expected-source, expected artifact/tool identity, authorization/scope, semantic invariants)
+- Trust-boundary validation at all five non-authoritative crossings (ChangeSet, RemediationEvidence, DeliveryResult, FieldObservation, Veo output), with context-appropriate layers per crossing
+- Discriminated remediation-outcome adjudication (`MutationEvidence` vs `NoOpEvidence`)
 - Tool-invocation authorization broker in the fallback architecture (which agent identity may invoke which tool)
 - Supersession detection and transition
 - Retry deduplication
@@ -213,7 +256,7 @@ SequentialAgent("driftzero_hero_workflow"):
 
 **Async boundary**: After step 7, the workflow pauses (ADK ResumabilityConfig) awaiting field evidence submission via API. Steps 9-11 execute upon evidence arrival.
 
-**Hallucination/malformation handling**: Every agent output is validated by the Truth Engine against Pydantic schemas before state transition. Invalid output → `REVIEW_REQUIRED` or retry.
+**Hallucination/malformation handling**: Every agent output is validated by the Truth Engine before state transition — schema first, then the context-appropriate trust-boundary layers for that crossing (§ Trust-Boundary Policy). Schema conformance alone never authorizes a transition. Invalid output → `REVIEW_REQUIRED` or retry.
 
 ---
 
@@ -243,13 +286,13 @@ apply_authorized_artifact_patch(
     source_version: str,
     change_id: str,
     correlation_id: str,
-) -> RemediationResult
+) -> RemediationEvidence   # MutationEvidence | NoOpEvidence
 ```
 
 **Non-negotiable properties:**
 - Read-write; exactly one atomic requirement change per call.
 - The tool has no access whatsoever to the authoritative source procedure.
-- The tool's response is never trusted on schema validity alone — the Truth Engine applies validation layers 1–5 (plan.md) before any state advance.
+- The tool's response is never trusted on schema validity alone — the Truth Engine applies the Crossing 2 trust-boundary layers (plan.md § Trust-Boundary Validation Policy) before any state advance, and adjudicates the discriminated `MutationEvidence` / `NoOpEvidence` outcome.
 - If Agent Gateway is unavailable, the same authorization boundary is enforced by the deterministic in-process broker, and evidence is labelled application-level enforcement rather than platform-enforced.
 
 ---

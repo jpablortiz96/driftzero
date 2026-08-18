@@ -56,7 +56,7 @@ The worker needs to know only the operational delta that affects their work and 
 ### User Story 3 - Remediate only an authorized stale artifact (Priority: P1)
 **Acceptance Scenarios**:
 1. **Given** the affected artifact satisfies all autonomous remediation conditions, **When** the change is applied, **Then** the artifact must represent TOP-RIGHT rather than LEFT, preserving before/after evidence.
-2. **Given** an artifact is already compliant when remediation executes, **When** remediation executes, **Then** no mutation MUST occur, the no-op outcome MUST be recorded as evidence, and workflow MAY continue.
+2. **Given** an artifact is already compliant when remediation executes, **When** remediation executes, **Then** no mutation MUST occur, the no-op outcome MUST be recorded as evidence sufficient to independently establish that the artifact already represented the approved value, and workflow MAY continue. The system MUST NOT fabricate a mutation, a synthetic after-state, or a before/after pair that implies a change occurred.
 3. **Given** authorization is absent or ambiguous, **When** the change is processed, **Then** the system must NOT perform mutation and must enter `REVIEW_REQUIRED`.
 
 ### User Story 4 - Deliver only the operational delta to the affected worker (Priority: P1)
@@ -181,7 +181,9 @@ Must traceably answer: What changed? What authorized it? What was affected? What
 - **SC-015**: A workflow superseded by a newer version correctly reaches `SUPERSEDED` without reaching `PROOF_COMPLETE`.
 
 ## Change Proof
-The primary deliverable artifact, containing: proof ID, change ID, workflow identity, authoritative source ID & version, previous requirement, current requirement, affected artifact ID, before/after remediation references, frontline delivery status, field verification result, timestamps, data classification, completion status, evidence references, and integrity hashes. NOT an LLM summary or confidence score. Completed Change Proofs MUST NOT be silently rewritten.
+The primary deliverable artifact, containing: proof ID, change ID, workflow identity, authoritative source ID & version, previous requirement, current requirement, affected artifact ID, **remediation evidence appropriate to the outcome** (mutation before/after references, or already-compliant no-op evidence — never a fabricated after-state), frontline delivery status, field verification result, timestamps, data classification, completion status, evidence references, and integrity hashes. NOT an LLM summary or confidence score. Completed Change Proofs MUST NOT be silently rewritten.
+
+**Integrity hash semantics (what hashing does and does not establish)**: content hashes provide **content identity and replacement/alteration detection** — they establish that a referenced evidence artifact is byte-identical to the artifact recorded at proof time, and they make silent substitution detectable by comparison. Hashes by themselves DO NOT provide a digital signature, a trusted timestamp, identity attestation, proof of who produced the content, non-repudiation, or blockchain-style immutability. No requirement in this specification may be read as claiming any of those properties, and no evidence artifact or judged claim may describe the Change Proof as cryptographically attested, signed, notarized, or ledger-backed.
 
 **Change Proof Mandatory Completion Conditions**:
 `PROOF_COMPLETE` is granted ONLY when ALL of the following conditions are simultaneously satisfied:
@@ -200,6 +202,11 @@ The primary deliverable artifact, containing: proof ID, change ID, workflow iden
    This condition supports, and MUST NOT be read as contradicting, the required `FAIL → corrected evidence → PASS → PROOF_COMPLETE` recovery path defined in User Story 6.
 
 ## Non-Goals
+
+**Meaning of "Non-Goal" in this specification**: a Non-Goal is **NOT REQUIRED FOR S1 PRODUCT ACCEPTANCE**. Nothing listed below may be treated as a dependency of FR-001–FR-011 or SC-001–SC-015. Non-Goals fall into two distinct classes, and the distinction is normative.
+
+### Class A — Product scope exclusions (out of the product entirely)
+These are not built, in S1 or as any enhancement:
 - Generic enterprise SOP management
 - Arbitrary document editing
 - Management analytics dashboards
@@ -210,11 +217,34 @@ The primary deliverable artifact, containing: proof ID, change ID, workflow iden
 - ERP/WMS/HR integrations
 - Production enterprise credentials
 - Mobile application polish or final UI system
-- Agent Registry/Gateway/Identity implementation
-- Memory Bank / Model Armor / Final observability implementation
-- Generated training media (Veo/Lyria) or Gemma-based verification
-- Specific Google Cloud architectures
-- Implementation of reviewer UI, escalation, or SLA for `REVIEW_REQUIRED` (fail closed is acceptable).
+- Implementation of reviewer UI, escalation, or SLA for `REVIEW_REQUIRED` (fail closed is acceptable)
+
+### Class B — Optional Hackathon Enhancements Outside S1 Acceptance
+
+The following capabilities are **not required for S1 product acceptance**. Listing them here does **not** prohibit implementing them as supplemental, non-blocking hackathon infrastructure once the core hero workflow is working.
+
+**Normative rule**: FR-001 through FR-011 and SC-001 through SC-015 MUST NOT depend on Agent Runtime, Agent Registry, Agent Identity, Agent Gateway, Model Armor, advanced Agent Observability, Memory Bank, generated training media (Veo/Lyria), or any specific Google Cloud architecture. Every one of them may be absent, inaccessible, or fail to provision without affecting S1 acceptance.
+
+A Class B capability MAY be implemented only when all of the following hold:
+1. account access to the capability exists;
+2. time remains after the core hero workflow is stable;
+3. the capability serves a real enforcement, discovery, security, or observability role — not decoration;
+4. its failure cannot invalidate the core feature or any FR/SC.
+
+| Capability | S1 acceptance status | Optional-enhancement status |
+|---|---|---|
+| Agent Runtime | Not required | MAY be used if accessible; Cloud Run is the fallback |
+| Agent Registry | Not required | MAY be used if accessible (prerequisite for the Gateway path) |
+| Agent Identity | Not required | MAY be used if accessible; per-agent service accounts are the fallback |
+| Agent Gateway | Not required | MAY be used if accessible; deterministic in-process authorization is the fallback |
+| Model Armor | Not required | MAY be used if accessible; deterministic untrusted-content handling is the fallback |
+| Advanced Agent Observability | Not required | MAY be used if accessible; OpenTelemetry + Cloud Trace/Logging is the fallback |
+| Generated training media (Veo) | Not required — text delta alone satisfies FR-004 | MAY be added as a bonus; failure cannot block `PROOF_COMPLETE` |
+| Gemma-based field verification | Not required — FR-005 requires a normalized observation and a deterministic comparator, not a specific model | Planned as the demo route with a documented fallback to deterministic/manual observation fixtures |
+| Memory Bank | Not required | **DEFER** — not planned; authoritative state belongs in the deterministic store |
+| Lyria | Not required | **DEFER** — not planned |
+
+**Consequence for task decomposition**: no task belonging solely to a Class B capability may be generated as a prerequisite for FR-001–FR-011 or SC-001–SC-015 acceptance, and failure to provision any Class B capability MUST NOT fail the hero feature.
 
 ## Hackathon Alignment
 This feature is highly suitable for an autonomous agentic system because:

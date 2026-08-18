@@ -4,7 +4,7 @@
 
 ## Summary
 
-DRIFTZERO's hero workflow autonomously processes an approved operational procedure change (LEFT → TOP-RIGHT label placement), identifies the affected downstream artifact, remediates it, delivers the delta to a frontline worker, verifies physical execution via camera evidence, and produces an immutable Change Proof. The implementation uses a hybrid deterministic + LLM architecture: a pure-Python Truth Engine owns all authoritative state/transitions/invariants while Google ADK Python agents handle semantic interpretation tasks (change extraction, remediation composition, delta delivery, vision observation). Gemini 3.5 Flash powers the semantic agents; Gemma 4 provides multimodal field verification; Veo 3.1 optionally generates microtraining video. Firestore is the authoritative state store; Pub/Sub provides event-driven ingestion; Cloud Run hosts the runtime; Cloud Storage holds immutable evidence. Gemini Enterprise Agent Platform (GEAP) capabilities — Agent Runtime, Agent Registry, Agent Identity, Agent Gateway, Model Armor, advanced Agent Observability — are **track enhancements gated on account access**; the core hero workflow runs entirely on Cloud Run + ADK + Firestore + Pub/Sub + Cloud Storage and never depends on successful GEAP provisioning.
+DRIFTZERO's hero workflow autonomously processes an approved operational procedure change (LEFT → TOP-RIGHT label placement), identifies the affected downstream artifact, remediates it, delivers the delta to a frontline worker, verifies physical execution via camera evidence, and produces an immutable Change Proof. The implementation uses a hybrid deterministic + LLM architecture: a pure-Python Truth Engine owns all authoritative state/transitions/invariants while Google ADK Python agents handle semantic interpretation tasks (change extraction, remediation composition, delta delivery, vision observation). Gemini 3.5 Flash powers the semantic agents; Gemma 4 provides multimodal field verification, gated by the G1 feasibility spike and backed by a documented deterministic/manual observation fallback; Veo 3.1 optionally generates microtraining video. Firestore is the authoritative state store; Pub/Sub provides event-driven ingestion; Cloud Run hosts the runtime; Cloud Storage holds immutable evidence. Gemini Enterprise Agent Platform (GEAP) capabilities — Agent Runtime, Agent Registry, Agent Identity, Agent Gateway, Model Armor, advanced Agent Observability — are **track enhancements gated on account access**; the core hero workflow runs entirely on Cloud Run + ADK + Firestore + Pub/Sub + Cloud Storage and never depends on successful GEAP provisioning.
 
 ## Technical Context
 
@@ -166,7 +166,7 @@ graph TB
 | Pub/Sub | `CORE` | Event-driven change ingestion (real event, synthetic content). |
 | Cloud Run | `CORE` | Serverless compute runtime for agents and API. |
 | Cloud Storage | `CORE` | Immutable evidence store for artifacts and raw evidence. |
-| Gemma 4 12B | `DEMO_CRITICAL` | Multimodal field verification (second Google AI model). |
+| Gemma 4 12B | `DEMO_CRITICAL` | Multimodal field verification (second Google AI model). Promoted to the demo only after the G1 feasibility gate returns GO; FR-005 requires a normalized observation and a deterministic comparator, not this specific model, so a FALLBACK decision leaves S1 acceptance intact. |
 | Veo 3.1 | `BONUS` | Optional microtraining video generation. Non-blocking. |
 | Agent Runtime | `TRACK_ENHANCEMENT` | Managed async execution. Use if accessible; Cloud Run is the fallback. |
 | Agent Registry | `TRACK_ENHANCEMENT` | Prerequisite for the Agent Gateway path (Gateway blocks egress to unregistered hosts). Also provides agent discovery evidence. |
@@ -195,7 +195,7 @@ The Truth Engine is pure Python application logic (NO LLM calls). It owns:
 
 **Hybrid deterministic + LLM**: ADK `SequentialAgent` defines the macro workflow. The Truth Engine validates preconditions/postconditions at each step boundary. LLM agents handle semantic tasks within their bounded scope.
 
-**Agent hallucination handling**: Every agent output is validated against Pydantic schemas by the Truth Engine. Invalid structured output → retry with timeout → `REVIEW_REQUIRED`. Schema validity alone never authorizes a state transition — see § Tool Response Validation Chain.
+**Agent hallucination handling**: Every agent output is validated against Pydantic schemas by the Truth Engine. Invalid structured output → retry with timeout → `REVIEW_REQUIRED`. Schema validity alone never authorizes a state transition — see § Trust-Boundary Validation Policy, which governs every non-authoritative result crossing into the Truth Engine.
 
 ### Agent Identity and Runtime Identity Model
 
@@ -252,24 +252,59 @@ Model Armor has one narrow role: screening **untrusted text** before it is proce
 
 **Model Armor MUST NOT be described as enforcing** artifact authorization, workflow state transitions, proof completion conditions, or semantic correctness of structured business data. Those are Truth Engine responsibilities and remain deterministic and local, exactly as they are in the fallback architecture where Model Armor is absent.
 
-### Tool Response Validation Chain (Tool Poisoning Defense)
+### Trust-Boundary Validation Policy (Tool Poisoning & Non-Authoritative Output Defense)
 
-**Threat — Tool Poisoning / Malicious Tool Response**: a tool or MCP server returns a response that is **schema-valid but semantically unauthorized** — e.g. `RemediationResult` naming an `artifact_id` outside `authorized_scope`, citing a `source_version` inconsistent with the workflow under processing, or referencing before/after objects the workflow never wrote. Pydantic accepts it because the shape is correct. Schema validation alone is therefore explicitly **not sufficient**.
+**General principle**: *every non-authoritative agent or tool result crossing into the deterministic Truth Engine MUST be validated before it can affect authoritative workflow state.* No agent output, and no tool response, is trusted because it is well-formed. Schema validity is a necessary first filter, never a sufficient one.
 
-Every tool response passes five deterministic layers in the Truth Engine before it can influence state:
+**Threat — Tool Poisoning / Malicious Result**: a tool, MCP server, compromised endpoint, or hallucinating agent returns a response that is **schema-valid but semantically unauthorized** — naming an artifact outside `authorized_scope`, citing a `source_version` inconsistent with the workflow, referencing objects the workflow never wrote, or asserting an outcome that never occurred. Pydantic accepts all of these because the shape is correct.
 
-| # | Layer | Check | Rejection outcome |
-|---|---|---|---|
-| 1 | Schema validation | Pydantic model conformance, enum domains, required fields | Retry, then `REVIEW_REQUIRED` |
-| 2 | Provenance / expected-source validation | Response arrived from the tool endpoint this workflow actually invoked, correlated by `correlation_id` + `event_sequence`; unsolicited or out-of-band responses discarded | Discard + record `UNSOLICITED_TOOL_RESPONSE`; `REVIEW_REQUIRED` on repeat |
-| 3 | Expected artifact / tool identity validation | Returned `artifact_id` equals the artifact the Truth Engine targeted; returned tool identity equals the registered tool the agent was authorized to call; content hashes of `before_ref` match the pre-state hash the Truth Engine recorded | `REVIEW_REQUIRED`, no state advance |
-| 4 | Authorization / scope validation | `artifact_id ∈ authorized_scope`; calling agent identity is the mutation-authorized identity; `source_version` matches the applicable version and is not superseded | `REVIEW_REQUIRED`, no state advance |
-| 5 | Deterministic semantic invariants | Exactly one atomic requirement change applied; `after_value` equals the approved `current_value`; no additional divergence introduced; before/after diff is confined to the target instruction; authoritative source untouched | `REVIEW_REQUIRED`, no state advance |
+**Validation is context-appropriate, not uniform.** The full remediation chain does not apply identically to every result; each crossing has a defined minimum. Every layer below is deterministic Truth Engine logic with no LLM participation, and every layer holds identically in the fallback architecture where no Agent Gateway and no Model Armor exist.
 
-A response failing any layer is recorded as evidence (`REAL`, with the rejecting layer named) and MUST NOT advance the workflow, MUST NOT be treated as remediation, and MUST NOT contribute to proof condition 3. Layers 2–5 are deterministic Truth Engine logic with no LLM participation, and they hold identically in the fallback architecture where no Agent Gateway exists.
+#### Crossing 1 — Change Intelligence output (`ChangeSet`)
 
-**Planned future security test (design only — not implemented in this correction)**:
-`tests/security/test_tool_poisoning.py::test_schema_valid_unauthorized_tool_response_rejected` — a stubbed Artifact Mutation Tool returns a fully schema-valid `RemediationResult` that (a) names an artifact outside `authorized_scope` and (b) cites a `source_version` inconsistent with the workflow. Expected: rejection at layer 3/4, workflow enters `REVIEW_REQUIRED`, target artifact SHA-256 unchanged, no `REMEDIATION_COMPLETED` transition, rejection evidence written to `evidence/security/tool_poisoning_rejected.json`.
+Minimum validation: schema · workflow/change provenance (`change_id` + `correlation_id` match the workflow under processing) · source-version association (`source_version` is the applicable, non-superseded version) · expected source and artifact identities (referenced artifact IDs exist in the registry; the source procedure ID is the one ingested) · semantic domain invariants (`previous_value` matches the recorded prior approved value; exactly one atomic requirement change is described).
+
+**Authority boundary**: the agent MAY propose impact candidates with reasons. It does NOT determine impact. The Truth Engine decides whether the FR-002 impact requirements (operation match, instruction correspondence, value conflict, authorized scope) are satisfied, and an `is_affected` flag returned by the agent is treated as a proposal, never as a decision.
+
+#### Crossing 2 — Remediation result (`RemediationEvidence`)
+
+Minimum validation: schema · provenance/correlation · expected tool identity (the response came from the registered tool the agent was authorized to call) · expected artifact identity (`artifact_id` equals the artifact the Truth Engine targeted) · authorization scope (`artifact_id ∈ authorized_scope`; the caller is the mutation-authorized identity) · source-version applicability · before-state hash consistency (`before_hash` equals the pre-state hash the Truth Engine recorded before invoking remediation) · atomic-change invariants (exactly one requirement changed; `after_value` equals the approved `current_value`; no additional divergence; authoritative source untouched).
+
+**Discriminated outcome**: the result is validated as either `MutationEvidence` or `NoOpEvidence` (data-model.md § RemediationEvidence). A `NO_OP` claim is validated on its own terms — evaluated-artifact hash and observed-vs-expected equality — and MUST NOT be accepted with a fabricated before/after pair.
+
+#### Crossing 3 — Delivery result (`DeliveryResult`)
+
+Minimum validation: schema · workflow/change provenance · intended worker/demo identity (matches the workflow's `worker_id`) · expected delivery operation and channel (the mechanism the workflow selected) · **positive delivery evidence/receipt** (a resolvable delivery reference produced by the delivery mechanism) · source-version applicability.
+
+**Authority boundary**: an agent asserting "delivered" in text is insufficient and MUST NOT satisfy FR-004. `DELIVERED` is recorded only on positive evidence from the delivery mechanism itself. Absent that evidence the action is not marked completed and retry is permitted.
+
+#### Crossing 4 — Field observation (`FieldObservation`)
+
+Minimum validation: schema · workflow/change provenance · raw evidence reference (resolvable, hash-recorded, and associated with this workflow) · expected verification operation · allowed normalized observation enum (`LEFT` | `TOP_RIGHT` | `INCONCLUSIVE` — any other value is rejected, not coerced) · event chronology/sequence (monotonic `event_sequence`; an older event cannot override a newer one) · source-version applicability.
+
+**Authority boundary**: `FieldObservation` MUST NOT carry authoritative PASS/FAIL, and any confidence value it carries is informational only and never authoritative. The Truth Engine performs the comparator: `observed == expected → PASS`, `observed != expected and observed != INCONCLUSIVE → FAIL`, else `INCONCLUSIVE`.
+
+#### Crossing 5 — Veo optional output
+
+Minimum validation: schema · workflow/change provenance · asset reference resolvable · data classification recorded.
+
+**Authority boundary**: successful media generation NEVER establishes delivery truth. FR-004 requires actual delivery evidence through the selected delivery mechanism (Crossing 3). A generated asset is supplementary content attached to a delivery that must independently prove itself, and Veo failure has no effect on delivery status or `PROOF_COMPLETE`.
+
+#### Rejection behavior (all crossings)
+
+A result failing any applicable layer is recorded as evidence (`REAL`, naming the rejecting layer and crossing) into `EvidenceManifest.rejected_result_refs`, MUST NOT advance the workflow, MUST NOT be treated as the action having occurred, and MUST NOT contribute to any proof completion condition. Repeated failure after the retry cap enters `REVIEW_REQUIRED`.
+
+**Relationship to optional platform controls**: Agent Gateway restricts *which* tools an agent may call and Agent Registry restricts *which* hosts exist; Model Armor screens untrusted *text*. None of them validates the *content* of a result against DRIFTZERO business invariants. They are complementary to — never a substitute for — this policy, and this policy is mandatory whether or not any of them is provisioned.
+
+#### Planned contract-validation coverage (design only — not implemented in this remediation)
+
+| Crossing | Planned validation coverage | Evidence artifact |
+|---|---|---|
+| ChangeSet | Provenance mismatch, superseded source version, unknown artifact ID, agent-asserted `is_affected` without satisfied conditions | `security/changeset_rejected.json` |
+| RemediationEvidence | Schema-valid response naming an unauthorized artifact; inconsistent `source_version`; `before_hash` mismatch; `NO_OP` claimed with fabricated after-state | `security/tool_poisoning_rejected.json` |
+| DeliveryResult | `delivered: true` with no resolvable delivery receipt; wrong worker identity | `security/delivery_assertion_rejected.json` |
+| FieldObservation | Out-of-enum observation value; observation carrying a PASS/FAIL claim; out-of-order `event_sequence` | `security/observation_rejected.json` |
+| Veo output | Generation success used to imply delivery | Covered by the DeliveryResult case |
 
 ### GEAP Availability Gate
 
@@ -281,7 +316,7 @@ Every component below stays `TRACK_ENHANCEMENT` until proven accessible in the a
 | Agent Registry | Enable `agentregistry.googleapis.com`; register one dummy endpoint and read it back | Registry entry created and listable | Local `fixtures/agent_registry.json` manifest, explicitly labelled `SIMULATED` — no claim of platform registry |
 | Agent Identity | Confirm the project has an organization parent (`gcloud projects describe $PROJECT_ID --format='value(parent)'`); deploy one agent with agent identity enabled; bind a role to the `principal://...` member | IAM binding with the `principal://` member is accepted and the agent obtains a working token | Dedicated per-agent Cloud Run **service accounts** + in-process deterministic authorization broker; documented in `LIMITATIONS.md` as not Agent Identity |
 | Agent Gateway | Enable the 12 documented APIs; `gcloud network-services agent-gateways import`; import the authz extension in `DRY_RUN`, then enforcement | Gateway + authz policy created; ALLOW case succeeds and DENY case is rejected by IAP enforcement with a deny log entry | In-process deterministic authorization broker in the Truth Engine; ALLOW/DENY pair still demonstrated, evidence labelled application-level enforcement |
-| Model Armor | Enable `modelarmor.googleapis.com`; create template `driftzero-untrusted-artifact-text`; grant `roles/modelarmor.user` to the Vertex AI service agent; call `generateContent` with `modelArmorConfig` on the adversarial fixture | Injection fixture is blocked with `blockReason: "MODEL_ARMOR"`; the clean fixture passes | Deterministic untrusted-content handling only: content quarantining, no-instruction-following prompt contract, and Truth Engine layers 1–5; `LIMITATIONS.md` records that no external guardrail ran |
+| Model Armor | Enable `modelarmor.googleapis.com`; create template `driftzero-untrusted-artifact-text`; grant `roles/modelarmor.user` to the Vertex AI service agent; call `generateContent` with `modelArmorConfig` on the adversarial fixture | Injection fixture is blocked with `blockReason: "MODEL_ARMOR"`; the clean fixture passes | Deterministic untrusted-content handling only: content quarantining, no-instruction-following prompt contract, and the Truth Engine trust-boundary layers for Crossing 1; `LIMITATIONS.md` records that no external guardrail ran |
 | Advanced Agent Observability | After Runtime/Gateway provisioning, confirm agent and gateway telemetry appear in Agent Observability | Traces/spans for agent and gateway interactions are visible and exportable | OpenTelemetry instrumentation from Cloud Run into Cloud Trace + Cloud Logging with correlation IDs (satisfies Constitution VII) |
 
 **Scope note**: these components are infrastructure/governance enhancements. They do not add product scope — spec.md Non-Goals still exclude implementing them as product features, and no FR or SC depends on any of them. If every gate fails, the deliverable is unchanged.
@@ -302,10 +337,12 @@ Non-exclusive lineage model using `DataClassification(labels=["REAL", "SYNTHETIC
 ### Change Proof Technical Design
 
 - **Canonical format**: JSON evidence manifest containing all fields from `ChangeProof` model
+- **Remediation evidence**: `remediation_evidence` is a discriminated union — `MutationEvidence` (before/after refs + both hashes) **or** `NoOpEvidence` (single evaluated-artifact ref + hash + compliance basis). Completion condition 3 is satisfied by exactly one path, each independently auditable. The proof never fabricates an after-state for an already-compliant artifact, and never renders a `NO_OP` as a diff (data-model.md § RemediationEvidence)
 - **Integrity**: SHA-256 hash of canonical JSON (sorted keys, no whitespace)
+- **Hash guarantee boundary**: content hashes establish **content identity and replacement/alteration detection** only. They do NOT provide a digital signature, trusted timestamp, identity attestation, proof of authorship, non-repudiation, or ledger/blockchain immutability. No evidence artifact, README, or judged claim may describe the Change Proof as cryptographically attested, signed, notarized, or blockchain-backed (spec.md § Change Proof, Integrity hash semantics)
 - **Validation**: Deterministic `ProofValidator` checks all 7 completion invariants against the manifest
 - **Rendering**: Human-readable HTML generated from canonical JSON for demo/judges (NOT the source of truth)
-- **Immutability**: Firestore document marked immutable after creation; Cloud Storage object with generation match
+- **Immutability**: operationally defined as write-once application semantics — the Firestore proof document is not rewritten after creation, and the Cloud Storage object is written with a generation precondition. This is application-enforced immutability within one project's trust boundary; it is not an append-only ledger and is not tamper-proof against an actor holding project write credentials. `LIMITATIONS.md` states this plainly
 - **Condition 7 implementation**: implemented exactly as written in spec.md (Change Proof Mandatory Completion Conditions, condition 7). The plan carries no independent interpretation of this condition. Deterministic encoding in `proof_generator.py`:
   - `workflow.current_state in {SUPERSEDED, FAILED}` → completion permanently denied (terminal non-success; no later evidence can re-open it).
   - `SUPERSEDED` or `FAILED` present anywhere in the state history → completion permanently denied (both are terminal, so occupancy and history are equivalent).
@@ -318,8 +355,9 @@ Non-exclusive lineage model using `DataClassification(labels=["REAL", "SYNTHETIC
 
 | Threat | Prevention | Detection | Evidence |
 |---|---|---|---|
-| Prompt injection in artifact text | Model Armor screening at the `generateContent` call (text only, `INSPECT_AND_BLOCK`); untrusted-content prompt contract; Truth Engine validation chain layers 1–5 regardless of screening | `blockReason: "MODEL_ARMOR"` response; `ScreeningBlocked` / `SCREENING_SKIPPED` evidence | `security/prompt_injection_blocked.json` |
-| **Tool poisoning / malicious tool response** (schema-valid, semantically unauthorized) | Five-layer Truth Engine validation chain: schema → provenance/expected-source → expected artifact/tool identity → authorization/scope → deterministic semantic invariants. Schema validation alone is insufficient. Agent Gateway tool-scoped allow policy where available | Rejection record naming the failing layer; artifact hash unchanged; no `REMEDIATION_COMPLETED` transition | `security/tool_poisoning_rejected.json` |
+| Prompt injection in artifact text | Model Armor screening at the `generateContent` call (text only, `INSPECT_AND_BLOCK`); untrusted-content prompt contract; Truth Engine trust-boundary validation at Crossing 1 regardless of screening | `blockReason: "MODEL_ARMOR"` response; `ScreeningBlocked` / `SCREENING_SKIPPED` evidence | `security/prompt_injection_blocked.json` |
+| **Tool poisoning / malicious result** (schema-valid, semantically unauthorized) | Trust-Boundary Validation Policy applied at all five crossings (ChangeSet, RemediationEvidence, DeliveryResult, FieldObservation, Veo output) with context-appropriate layers. Schema validation alone is insufficient at every crossing. Agent Gateway tool-scoped allow policy where available | Rejection record naming the crossing and failing layer; artifact hash unchanged; no state advance | `security/tool_poisoning_rejected.json` and per-crossing rejection artifacts |
+| **Unearned delivery / verification claim** (agent asserts an outcome that did not occur) | `DELIVERED` requires a resolvable delivery receipt from the delivery mechanism; `FieldObservation` may not carry PASS/FAIL; Veo success never implies delivery | Missing-receipt rejection log; out-of-enum observation log | `security/delivery_assertion_rejected.json`, `security/observation_rejected.json` |
 | Unauthorized master mutation | No write tool provided to any agent for source procedure | Tool invocation audit | Agent trace logs |
 | Cross-agent privilege escalation | Primary: one Agent Identity per agent, with the mutation capability bound to the Remediation Agent principal only (Enablement Agent explicitly denied). Fallback: dedicated per-agent service accounts + deterministic in-process authorization broker | IAM audit logs; Gateway allow/deny decisions carrying the caller SPIFFE principal | Cloud Audit Logs; `security/gateway_deny_enablement_to_mutation_tool.json` |
 | Duplicate event replay | `change_id` idempotency in Truth Engine | Duplicate detection log | State transition log |
@@ -337,7 +375,7 @@ Non-exclusive lineage model using `DataClassification(labels=["REAL", "SYNTHETIC
 | **Integration: Agent + Store** | Change event → persisted workflow, Gemini ChangeSet extraction, authorized remediation + GCS evidence, delivery receipt, proof generation + Firestore persistence | FR-001–FR-006 |
 | **Agent: Output Validation** | Structured output conformance, hallucinated output rejection, tool permission denial, timeout handling | FR-011 |
 | **Multimodal: Gemma** | LEFT fixtures → `LEFT` observation, TOP_RIGHT fixtures → `TOP_RIGHT`, ambiguous fixtures → `INCONCLUSIVE` | SC-006, SC-007, SC-012 |
-| **Security** | Prompt injection in artifact **text** → blocked at the `generateContent` screening point (or deterministically quarantined in fallback); tool poisoning: schema-valid but unauthorized tool response → rejected at validation layer 3/4 with no mutation; Agent Gateway ALLOW (Remediation Agent → Artifact Mutation Tool) and DENY (Enablement Agent → Artifact Mutation Tool) | FR-002, FR-003, FR-011; Model Armor path; Gateway path; tool poisoning chain |
+| **Security** | Prompt injection in artifact **text** → blocked at the `generateContent` screening point (or deterministically quarantined in fallback); tool poisoning: schema-valid but unauthorized result rejected at each of the five crossings (unauthorized artifact, unearned `DELIVERED`, out-of-enum or PASS/FAIL-bearing observation, `NO_OP` with fabricated after-state); Agent Gateway ALLOW (Remediation Agent → Artifact Mutation Tool) and DENY (Enablement Agent → Artifact Mutation Tool) | FR-002, FR-003, FR-004, FR-005, FR-011; Model Armor path; Gateway path; Trust-Boundary Validation Policy |
 
 ### Cost Strategy
 
@@ -365,65 +403,112 @@ Non-exclusive lineage model using `DataClassification(labels=["REAL", "SYNTHETIC
 
 **Reconciliation**: after the demo, actual billing figures are exported from Cloud Billing into `evidence/cost_model.json` under `actual_cost_observed`, alongside the `estimated` block. Judged material cites only the observed figures for actual spend.
 
-### Implementation Milestones (Risk-First)
+### Implementation Milestones (Risk-First, with Binding Exit Gates)
 
-**M0 — Truth Engine Proof** (highest priority, zero cloud dependency)
-- Pydantic data models
-- State machine with all 13 states and legal transitions
-- Idempotency, supersession, verification ordering
-- 7 proof completion invariants
-- SHA-256 proof generation
-- Full unit test suite (local, no cloud)
-- **Proves**: Core product logic works without any LLM or cloud service
+Milestones are ordered by risk retirement, not by visibility. Every milestone has an **EXIT GATE**: work downstream of a gate is not considered complete until that gate passes. `/speckit.tasks` MUST honour the Task Ordering Rules that follow this table.
 
-**M1 — Gemini + ADK Integration**
-- Change Intelligence Agent with Gemini 3.5 Flash
-- Remediation Agent with scoped tools
-- Frontline Enablement Agent
-- ADK SequentialAgent orchestrator
-- Agent output validation against Truth Engine
-- Synthetic fixture end-to-end (local)
+**M0 — Deterministic Truth Engine** (highest priority, zero cloud dependency)
 
-**M2 — Real Cloud Async**
-- Firestore persistence layer
-- Cloud Storage evidence store
-- Pub/Sub change event ingestion
-- Cloud Run deployment
-- Pause/resume with ResumabilityConfig
-- Restart recovery test
+Must prove:
+- canonical 13-state machine
+- legal / illegal transitions
+- 9 remediation preconditions
+- mutation / no-op semantics (discriminated `RemediationEvidence`)
+- idempotency
+- retry deduplication
+- verification chronology
+- `FAIL → later PASS` recovery
+- supersession
+- seven `PROOF_COMPLETE` invariants
+- deterministic Change Proof generation
+- evidence integrity and lineage
 
-**M3 — Governed Fleet** (every GEAP item is OPTIONAL / TRACK ENHANCEMENT, gated by § GEAP Availability Gate)
-- Run the GEAP access checks first; record results in `evidence/geap_access_gate.json`
-- Agent Identity: one per-agent Agent Identity (`change-intel`, `remediation`, `enablement`, `field-verify`) if the gate passes; otherwise dedicated per-agent Cloud Run **service accounts** (documented as fallback, not Agent Identity)
-- Agent Registry: register the Artifact Mutation Tool endpoint (prerequisite for the Gateway path)
-- Agent Gateway: the single governed path — Remediation Agent → Gateway → Artifact Mutation Tool ALLOW, Frontline Enablement Agent → DENIED (`DRY_RUN` first, then enforcement)
-- Model Armor: `driftzero-untrusted-artifact-text` template applied at the Change Intelligence `generateContent` call; adversarial text fixture
-- Tool Response Validation Chain (layers 1–5) in the Truth Engine — **not gated**, required in the fallback architecture too
-- Observability: OpenTelemetry traces, correlation IDs (Cloud Trace/Logging baseline; Agent Observability only if the gate passes)
-- Security test suite: prompt injection, tool poisoning, Gateway ALLOW/DENY
+**EXIT GATE**: all deterministic tests corresponding to the above pass with **zero cloud dependency**. No M1 core work is considered complete before M0 passes.
 
-**M4 — Physical Gemma Verification**
-- Gemma 4 12B deployment (Cloud Run GPU)
-- Field observation structured output contract
-- Multimodal fixture evaluation (LEFT/TOP_RIGHT/INCONCLUSIVE)
-- Real camera capture test with physical demo box
-- Deterministic comparator integration
+---
 
-**M5 — Veo Enhancement** (BONUS)
-- Veo 3.1 microtraining video generation
-- Non-blocking integration (text delta fallback)
-- Generated asset stored in evidence pack
+**RISK SPIKE G1 — Gemma Feasibility** (early, small, non-blocking — NOT M4 implementation)
 
-**M6 — Demo Surface & Evidence Polish**
-- FastAPI web interface
-- Mobile-responsive field verification upload
-- Workflow state visualization
-- Change Proof display
-- JUDGES_START_HERE.md
-- Evidence pack assembly
-- LIMITATIONS.md
+Runs early, in parallel with M0/M1, specifically to retire physical-verification risk *before* any investment in optional infrastructure. Must determine:
+- Gemma model access
+- serving route (Vertex AI Model Garden vs Cloud Run + vLLM)
+- GPU/quota feasibility where applicable
+- whether the physical `LEFT` / `TOP_RIGHT` / `INCONCLUSIVE` fixture set is **empirically distinguishable**
+
+**EXIT GATE**: a recorded **GO / FALLBACK** decision in `evidence/g1_gemma_feasibility.json`, including the fixture results that justify it.
+
+**If FALLBACK**: the product core remains valid using deterministic/manual observation fixtures — FR-005 requires a normalized observation and a deterministic comparator, not a specific model — and the live-demo strategy is adjusted honestly in `LIMITATIONS.md`. G1 MUST occur **before** any optional GEAP work.
+
+---
+
+**M1 — Gemini + ADK Semantic Workflow**
+
+Must prove: synthetic approved change → structured `ChangeSet` → validated impact → authorized remediation request → delta composition, with **all agent outputs passing deterministic trust-boundary validation** (§ Trust-Boundary Validation Policy).
+
+**EXIT GATE**: local end-to-end semantic workflow passes while the Truth Engine remains authoritative at every crossing.
+
+---
+
+**M2 — Real Cloud Event + Durable State**
+
+Must prove: real Pub/Sub event → Cloud Run → Firestore authoritative workflow → Cloud Storage evidence → process restart/resume → zero duplicate logical actions.
+
+**EXIT GATE**: restart/recovery and duplicate-event evidence recorded from **real Google Cloud execution**.
+
+---
+
+**M3 — Physical Gemma Verification** (promotes the G1 result into the demo if GO)
+
+Must prove: real physical image → Gemma-derived normalized observation → deterministic comparator → FAIL / INCONCLUSIVE / PASS, with a versioned evaluation fixture set.
+
+**EXIT GATE**: empirical results recorded. Gemma may become a live-demo dependency **only after this gate passes**. M3 does **not** depend on M4 and MUST NOT be sequenced after it.
+
+---
+
+**M4 — OPTIONAL Governed Enterprise Fleet** — `OPTIONAL / TRACK_ENHANCEMENT`
+
+Begins only after the core through M2 is stable. May include, where accessible: Agent Runtime, Agent Registry, Agent Identity, Agent Gateway, Model Armor, advanced Agent Observability.
+
+**EXIT GATE (per component)**: ACCESS_CHECK passes + real capability evidence captured + fallback documented. Components that fail their access gate are **DEFERRED, not faked**.
+
+This milestone MUST NOT block M3 or core S1 acceptance. No FR or SC depends on it (spec.md § Non-Goals, Class B).
+
+---
+
+**M5 — OPTIONAL Veo Training Enhancement** — `OPTIONAL / BONUS`
+
+Begins only after text-based delta delivery works and is evidenced.
+
+**EXIT GATE**: at least one real project-generated Veo asset + generation evidence + the text fallback still working. Failure does not affect S1 completion and cannot prevent `PROOF_COMPLETE`.
+
+---
+
+**M6 — Demo Surface & Evidence Packaging**
+
+Begins only after the M0–M3 core paths are stable. Includes the minimal hero UI / mobile field interaction and final evidence packaging — not visual polish ahead of core proof.
+
+**EXIT GATE**: end-to-end reproducible hero flow + evidence pack + `LIMITATIONS.md` + `JUDGES_START_HERE.md`.
+
+---
+
+### Task Generation Ordering Rules (binding on `/speckit.tasks`)
+
+1. **M0 tasks precede all dependent implementation tasks.**
+2. **G1 Gemma feasibility must be scheduled EARLY** — before any optional infrastructure work.
+3. **M1 depends on the relevant M0 truth contracts** and may not begin before they exist.
+4. **M2 depends on stable M0/M1 boundaries.**
+5. **M3 may proceed after M2 and MUST NOT depend on M4.**
+6. **M4 is OPTIONAL and cannot block M3 or core acceptance.**
+7. **M5 is OPTIONAL and cannot block core acceptance.**
+8. **M6 polish may begin only after core hero functionality is stable.**
+9. **Frontend polish may never be P0** ahead of M0–M3 core proof.
+10. **No task belonging solely to an optional enhancement may become a prerequisite for FR-001–FR-011 acceptance.**
+
+**Additional protocol-decision rule (CHK027)**: no Agent Gateway policy-implementation task may be generated before an explicit, recorded decision task selects the supported tool protocol (MCP vs plain HTTP) for the Artifact Mutation Tool. The decision task is a prerequisite of every Gateway implementation task, because per-tool authorization granularity depends on that choice.
 
 ### Deferred Scope
+
+*(Distinct from the OPTIONAL enhancements in M4/M5: items below are not planned at all. See spec.md § Non-Goals for the normative Class A / Class B distinction.)*
 
 - Lyria 3 audio generation
 - Memory Bank integration
@@ -440,14 +525,14 @@ Non-exclusive lineage model using `DataClassification(labels=["REAL", "SYNTHETIC
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Agent Runtime access unavailable | HIGH | Fall back to Cloud Run-based ADK deployment |
-| Gemma 4 vision accuracy insufficient for demo | HIGH | Pre-validate with fixture set; use high-contrast labels; fallback to manual observation input |
+| Agent Runtime access unavailable | LOW (core), MEDIUM (M4 only) | Fall back to Cloud Run-based ADK deployment; the core hero workflow never depends on Agent Runtime |
+| Gemma 4 vision accuracy insufficient for demo | HIGH | Risk spike G1 settles this empirically and early, producing a recorded GO/FALLBACK decision; high-contrast labels; fallback to deterministic/manual observation fixtures with the limitation stated honestly |
 | GPU quota unavailable in target region | MEDIUM | Try multiple regions; fallback to Vertex AI Model Garden endpoint |
 | Veo 3.1 generation too slow for live demo | MEDIUM | Pre-generate and cache; fallback to text-only delta delivery |
 | Agent Registry/Gateway/Identity not accessible in hackathon account | MEDIUM | GEAP Availability Gate with per-component ACCESS_CHECK/SUCCESS/FALLBACK; core workflow has zero GEAP dependency |
-| Agent Identity requires an organization-scoped trust domain (`org-ORGANIZATION_ID`) that a personal hackathon project may lack | MEDIUM | Access check verifies the project's organization parent early (M3 start); fallback to dedicated per-agent service accounts, documented honestly in `LIMITATIONS.md` |
+| Agent Identity requires an organization-scoped trust domain (`org-ORGANIZATION_ID`) that a personal hackathon project may lack | MEDIUM | Access check verifies the project's organization parent at M4 start (and may be run earlier at no cost); fallback to dedicated per-agent service accounts, documented honestly in `LIMITATIONS.md`. No FR/SC depends on this |
 | Tool poisoning: schema-valid but unauthorized tool response | HIGH | Five-layer Truth Engine validation chain (provenance, artifact/tool identity, authorization/scope, semantic invariants); dedicated security test; independent of Gateway availability |
-| Single developer time constraint | HIGH | Risk-first milestones; M0-M2 are the minimum viable demo |
+| Single developer time constraint | HIGH | Risk-first milestones with binding exit gates; M0–M2 plus G1 are the minimum viable demo; M4/M5 are droppable without affecting S1 acceptance |
 | Cloud credit exhaustion | MEDIUM | $50 internal budget alert (plus $25/$75 notifications); GPU `max-instances=1` + scale-to-zero + stop between sessions; Veo generation caps; reconcile `ACTUAL COST OBSERVED` in `evidence/cost_model.json` |
 | Model Armor fail-open during a service outage (documented behavior: sanitization step is skipped) | MEDIUM | Record `SCREENING_SKIPPED` in the evidence manifest so no screening is claimed that did not occur; Truth Engine validation chain still applies |
 | Model Armor text-only limitation (documents unsupported, image screening Preview) | LOW | Screen artifact text only; field images covered by hashing + deterministic comparator; limitation stated in `LIMITATIONS.md` |
