@@ -3,6 +3,23 @@
 **Feature**: `001-hero-change-deployment`
 **Date**: 2026-08-17
 
+## Identity Model
+
+Each agent has its **own identity**. Two mutually exclusive provisioning models, selected by the GEAP Availability Gate in plan.md:
+
+- **PRIMARY — Agent Identity** (GEAP available): each agent receives its own SPIFFE-based Agent Identity issued by Google Cloud at deployment to Agent Runtime, used as an IAM principal of the form
+  `principal://agents.global.org-ORGANIZATION_ID.system.id.goog/resources/aiplatform/projects/PROJECT_NUMBER/locations/LOCATION/reasoningEngines/AGENT_ENGINE_ID`.
+- **FALLBACK — dedicated service accounts** (Agent Identity not provisionable): each agent runs under its own minimally-scoped Cloud Run **service account**, with the mutation-capability restriction enforced by a deterministic in-process authorization broker in the Truth Engine.
+
+**Terminology rule**: a service account is never called an "Agent Identity". Service accounts appear only as Cloud Run service/runtime identities or as the named fallback, and the fallback's weaker security properties are recorded in `LIMITATIONS.md`.
+
+| Agent | Agent Identity (primary) | Fallback runtime identity | Authorized for the Artifact Mutation Tool? |
+|---|---|---|---|
+| Change Intelligence | `driftzero-change-intel` | `driftzero-change-intel-sa@…` | **No** |
+| Remediation | `driftzero-remediation` | `driftzero-remediation-sa@…` | **Yes — the only authorized identity** |
+| Frontline Enablement | `driftzero-enablement` | `driftzero-enablement-sa@…` | **No — negative security test subject** |
+| Field Verification | `driftzero-field-verify` (only where deployed on Agent Runtime; a Cloud Run GPU inference service instead runs under its own dedicated Cloud Run service account, which is a runtime identity, not an Agent Identity) | `driftzero-field-verify-sa@…` | **No** |
+
 ## Agent Topology (4 Agents + 1 Deterministic Service)
 
 ### 1. Change Intelligence Agent (`change_intel_agent`)
@@ -11,11 +28,16 @@
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Interpret approved source change, extract structured ChangeSet, identify candidate affected artifacts.
 
+**Identity**: `driftzero-change-intel` Agent Identity (primary) / dedicated service account (fallback).
+
 **Permissions**: READ-ONLY
 - Read approved source procedure (GCS)
 - Read downstream artifact registry (Firestore)
 - NO write access to source procedure
 - NO write access to downstream artifacts
+- NOT authorized for the Artifact Mutation Tool
+
+**Untrusted content handling**: artifact text reaching this agent is untrusted. Where Model Armor is available, the `generateContent` call carries `modelArmorConfig.promptTemplateName = driftzero-untrusted-artifact-text` (`INSPECT_AND_BLOCK`); a `blockReason: "MODEL_ARMOR"` response fails closed to `REVIEW_REQUIRED`. Screening is content protection only — it grants no authorization and decides no state.
 
 **Input Tool**: `read_approved_change` → raw approved change document
 **Input Tool**: `read_artifact_registry` → list of authorized downstream artifacts
@@ -53,9 +75,11 @@ class AffectedArtifactCandidate(BaseModel):
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Apply authorized atomic patch to affected downstream artifact.
 
+**Identity**: `driftzero-remediation` Agent Identity (primary) / dedicated service account (fallback). This is the **only** identity authorized to invoke the Artifact Mutation Tool.
+
 **Permissions**: SCOPED WRITE
 - Read affected artifact content (GCS)
-- Write ONLY to authorized derived artifacts (GCS)
+- Write ONLY to authorized derived artifacts (GCS), exclusively through the Artifact Mutation Tool
 - NO write access to source procedure
 - NO write access to non-authorized artifacts
 
@@ -78,6 +102,8 @@ All 9 autonomous boundary conditions must be satisfied. If not → `REVIEW_REQUI
 
 **Failure handling**: Mutation failure → action NOT marked completed, retry permitted.
 
+**Tool response validation**: every `RemediationResult` passes the five-layer Truth Engine chain (plan.md § Tool Response Validation Chain) before it can advance state — schema, provenance/expected-source, expected artifact/tool identity, authorization/scope, deterministic semantic invariants. A schema-valid response naming an artifact outside `authorized_scope` or citing an inconsistent `source_version` is rejected, records rejection evidence, and enters `REVIEW_REQUIRED` with the target artifact hash unchanged.
+
 ---
 
 ### 3. Frontline Enablement Agent (`enablement_agent`)
@@ -86,12 +112,15 @@ All 9 autonomous boundary conditions must be satisfied. If not → `REVIEW_REQUI
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Compose and deliver operational delta to affected worker. Optionally generate Veo microtraining asset.
 
+**Identity**: `driftzero-enablement` Agent Identity (primary) / dedicated service account (fallback).
+
 **Permissions**: READ + NOTIFY
 - Read ChangeSet and remediation result
 - Send notification/delta to worker identity
 - Optionally invoke Veo 3.1 API for training video
 - NO write to procedures or artifacts
 - NO verification authority
+- **NOT authorized for the Artifact Mutation Tool.** An attempted call is the planned negative security test: with Agent Gateway promoted, the denial must come from real platform authorization/policy enforcement (no `roles/iap.egressor` binding on the tool endpoint, and no tool-name allow entry); in the fallback the denial comes from the deterministic in-process authorization broker and is labelled application-level enforcement.
 
 **Output**:
 ```python
@@ -114,11 +143,16 @@ class DeliveryResult(BaseModel):
 **Model**: `gemma-4-12b` (via Cloud Run GPU endpoint)
 **Responsibility**: Process raw frontline evidence image → derive normalized observation.
 
+**Identity**: `driftzero-field-verify` Agent Identity where deployed on Agent Runtime; where field verification remains a Cloud Run GPU inference service, that service runs under its own dedicated Cloud Run **service account** (a runtime identity, not an Agent Identity).
+
 **Permissions**: READ-ONLY + INFERENCE
 - Read raw evidence image (GCS or upload)
 - Invoke Gemma 4 model for vision inference
 - NO workflow state mutation authority
 - NO PASS/FAIL decision authority
+- NOT authorized for the Artifact Mutation Tool
+
+**Note on screening**: field evidence images are NOT screened by Model Armor (text-only support; image screening is Preview). Image integrity relies on SHA-256 hashing plus the deterministic comparator, and this limitation is stated in `LIMITATIONS.md`.
 
 **Output**:
 ```python
@@ -145,6 +179,8 @@ class FieldObservation(BaseModel):
 - Authorization decisions
 - Verification ordering (latest valid verification)
 - Expected-vs-observed deterministic comparator
+- Tool response validation chain layers 1–5 (schema, provenance/expected-source, expected artifact/tool identity, authorization/scope, semantic invariants)
+- Tool-invocation authorization broker in the fallback architecture (which agent identity may invoke which tool)
 - Supersession detection and transition
 - Retry deduplication
 - Seven `PROOF_COMPLETE` invariant evaluation
@@ -178,6 +214,43 @@ SequentialAgent("driftzero_hero_workflow"):
 **Async boundary**: After step 7, the workflow pauses (ADK ResumabilityConfig) awaiting field evidence submission via API. Steps 9-11 execute upon evidence arrival.
 
 **Hallucination/malformation handling**: Every agent output is validated by the Truth Engine against Pydantic schemas before state transition. Invalid output → `REVIEW_REQUIRED` or retry.
+
+---
+
+## Planned Tool Contract: Artifact Mutation Tool (DESIGN ONLY — NOT IMPLEMENTED)
+
+The authorized mutation capability is specified here as a contract only. **No implementation is produced in this correction.** It is planned as an authenticated tool/service compatible with the Agent Gateway protocol selected at implementation time (MCP is the documented option supporting per-tool authorization by tool name and read-only/read-write character).
+
+**Governed path (OPTIONAL / TRACK ENHANCEMENT, gated by plan.md § GEAP Availability Gate):**
+
+| Attribute | ALLOW | DENY (negative security test) |
+|---|---|---|
+| Traffic direction | Egress (Agent-to-Anywhere) | Egress (Agent-to-Anywhere) |
+| Caller | Remediation Agent (its Agent Identity) | Frontline Enablement Agent (its Agent Identity) |
+| Target tool | `artifact-mutation-tool`, operation `apply_authorized_artifact_patch` (read-write) | Same |
+| Allow policy | `roles/iap.egressor` on the registered endpoint granted to the Remediation Agent principal only, plus an MCP tool-name-scoped authorization policy | No binding, no tool-name allow entry → rejected by IAP runtime enforcement |
+| Expected audit evidence | Gateway telemetry + Cloud Logging allow entry (caller SPIFFE principal, tool name), Cloud Trace span, before/after artifact refs | Cloud Logging deny entry (caller SPIFFE principal, tool name), artifact SHA-256 unchanged, no `REMEDIATION_COMPLETED` transition, `evidence/security/gateway_deny_enablement_to_mutation_tool.json` |
+
+**Operation shape** (contract sketch, deliberately minimal):
+
+```
+apply_authorized_artifact_patch(
+    artifact_id: str,
+    requirement_id: str,
+    expected_before_value: str,
+    new_value: str,
+    source_procedure_id: str,
+    source_version: str,
+    change_id: str,
+    correlation_id: str,
+) -> RemediationResult
+```
+
+**Non-negotiable properties:**
+- Read-write; exactly one atomic requirement change per call.
+- The tool has no access whatsoever to the authoritative source procedure.
+- The tool's response is never trusted on schema validity alone — the Truth Engine applies validation layers 1–5 (plan.md) before any state advance.
+- If Agent Gateway is unavailable, the same authorization boundary is enforced by the deterministic in-process broker, and evidence is labelled application-level enforcement rather than platform-enforced.
 
 ---
 

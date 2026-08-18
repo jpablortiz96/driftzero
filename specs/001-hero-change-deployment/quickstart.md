@@ -13,26 +13,208 @@
 
 ## Manual Setup Required
 
-The following actions MUST be performed manually before implementation begins. They cannot be safely automated by repository code.
+The following actions MUST be performed manually. They cannot be safely automated by repository code. Every step lists **WHY / WHEN / EXPECTED RESULT / HOW TO VERIFY / COST RISK**.
 
-| # | Action | Why | When | Cost | Verification |
-|---|---|---|---|---|---|
-| 1 | Create/select GCP project | All cloud resources need a project | Before any cloud work | Free | `gcloud projects describe $PROJECT_ID` |
-| 2 | Associate billing account | Required for non-free-tier resources and GPU | Before any cloud work | Free (action itself) | `gcloud billing projects describe $PROJECT_ID` |
-| 3 | Redeem hackathon credits | Offset cloud costs | Immediately after project creation | Free | Check billing account credits |
-| 4 | Enable required APIs | Firestore, Pub/Sub, Cloud Run, Cloud Storage, Vertex AI, IAM | Before M2 milestone | Free | `gcloud services list --enabled` |
-| 5 | Authenticate local CLI | ADC for local development | Before M1 milestone | Free | `gcloud auth application-default print-access-token` |
-| 6 | Select region | Consistent region for all services (prefer `us-central1` for GPU) | Before M2 milestone | Free | N/A |
-| 7 | Create Firestore database | Standard edition, selected region | Before M2 milestone | Free tier | Firebase Console or `gcloud firestore databases create` |
-| 8 | Create Pub/Sub topic | `driftzero-approved-changes` topic | Before M2 milestone | Free tier | `gcloud pubsub topics describe driftzero-approved-changes` |
-| 9 | Create GCS bucket | `driftzero-evidence-{project-id}` | Before M2 milestone | ~$0.02/GB/month | `gcloud storage buckets describe gs://...` |
-| 10 | Configure IAM service accounts | Per-agent least-privilege identities (if Agent Identity used) | Before M3 milestone | Free | `gcloud iam service-accounts list` |
-| 11 | Request Gemma 4 model access | Vertex AI Model Garden or build container | Before M4 milestone | GPU compute cost | Model Garden access confirmation |
-| 12 | Deploy Gemma 4 to Cloud Run (GPU) | vLLM container with L4 GPU | Before M4 milestone | ~$0.50-1.00/hr when active, $0 idle | `gcloud run services describe gemma-verification` |
-| 13 | Request Veo 3.1 API access | Gemini API access for video generation | Before M5 milestone | Per-generation cost | API key test call |
-| 14 | Set budget alerts | $25, $50, $75 thresholds | After billing setup | Free | Cloud Console Billing > Budgets |
-| 15 | Prepare physical demo fixture | Real box, printed label, camera-facing orientation | Before M4 milestone | ~$5 materials | Visual inspection |
-| 16 | Agent Platform setup (if used) | Agent Runtime, Registry, Gateway, Identity | Before M3 milestone | Varies | Console verification |
+Steps are split into two tracks:
+
+- **CORE** — required for the fallback core architecture (Cloud Run + ADK + Firestore + Pub/Sub + Cloud Storage). The hero workflow depends on these.
+- **OPTIONAL / TRACK ENHANCEMENT** — Gemini Enterprise Agent Platform (GEAP) capabilities. Each is gated by the GEAP Availability Gate in plan.md. **Failure of any optional step MUST NOT block the core architecture.**
+
+Cost risk is rated LOW / MEDIUM / HIGH relative to the $50 internal budget alert. Monetary values are `ESTIMATED` only; `ACTUAL COST OBSERVED` is recorded later from Cloud Billing into `evidence/cost_model.json`.
+
+### Track: CORE (required)
+
+**MS-1 — Create/select GCP project**
+- WHY: every cloud resource needs a project boundary and billing target.
+- WHEN: before any cloud work.
+- EXPECTED RESULT: a project ID reserved for DRIFTZERO only.
+- HOW TO VERIFY: `gcloud projects describe $PROJECT_ID`
+- COST RISK: LOW (free).
+
+**MS-2 — Associate billing account**
+- WHY: required for non-free-tier resources, and mandatory for GPU.
+- WHEN: before any cloud work.
+- EXPECTED RESULT: project linked to an active billing account.
+- HOW TO VERIFY: `gcloud billing projects describe $PROJECT_ID` shows `billingEnabled: true`
+- COST RISK: LOW (the action itself is free; it enables spend).
+
+**MS-3 — Redeem hackathon credits**
+- WHY: offsets cloud costs; the GPU and Veo drivers are the ones that matter.
+- WHEN: immediately after project creation, before GPU work.
+- EXPECTED RESULT: credit balance visible on the billing account.
+- HOW TO VERIFY: Cloud Console → Billing → Credits shows a non-zero balance and expiry date.
+- COST RISK: LOW (reduces effective cost).
+
+**MS-4 — Set budget alerts**
+- WHY: the only hard guard against runaway GPU/Veo spend; required by the cost discipline in plan.md.
+- WHEN: immediately after MS-2, before any GPU or Veo work.
+- EXPECTED RESULT: a budget with a **$50 internal alert** plus $25 and $75 notification thresholds, email notifications enabled.
+- HOW TO VERIFY: Cloud Console → Billing → Budgets & alerts lists the budget; send a test notification.
+- COST RISK: LOW (free) — omitting it is the HIGH risk.
+
+**MS-5 — Enable required APIs (core architecture)**
+- WHY: every core service call fails without its API enabled.
+- WHEN: before M2.
+- EXPECTED RESULT: enabled — `firestore.googleapis.com`, `pubsub.googleapis.com`, `run.googleapis.com`, `storage.googleapis.com`, `aiplatform.googleapis.com`, `iam.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`, `logging.googleapis.com`, `monitoring.googleapis.com`, `cloudtrace.googleapis.com`.
+- HOW TO VERIFY: `gcloud services list --enabled --project $PROJECT_ID` contains each name.
+- COST RISK: LOW (enabling is free).
+
+**MS-6 — Authenticate local CLI (ADC)**
+- WHY: local development and tests need Application Default Credentials.
+- WHEN: before M1.
+- EXPECTED RESULT: ADC credentials present for the developer account.
+- HOW TO VERIFY: `gcloud auth application-default print-access-token` returns a token.
+- COST RISK: LOW.
+
+**MS-7 — Select a single region**
+- WHY: cross-region calls add latency and cost; GPU availability is region-specific.
+- WHEN: before M2.
+- EXPECTED RESULT: one region chosen for Firestore, Cloud Run, GCS, and Vertex AI (prefer a region with L4 GPU availability, e.g. `us-central1`).
+- HOW TO VERIFY: the region is recorded in `.env` and used by every deploy command.
+- COST RISK: LOW (wrong choice causes rework, not spend).
+
+**MS-8 — Create local `.env` from `.env.example`**
+- WHY: the repo must never contain secrets (Constitution: Secret Hygiene); `.env.example` holds placeholder keys only.
+- WHEN: before M1, first thing after cloning.
+- EXPECTED RESULT: a local, git-ignored `.env` containing `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `FIRESTORE_DATABASE`, `GCS_EVIDENCE_BUCKET`, `PUBSUB_TOPIC`, `GEMINI_MODEL`, plus any model endpoint variables. No real secret is ever committed.
+- HOW TO VERIFY: `git check-ignore -v .env` reports it ignored; `git status --short` never lists `.env`; the app starts and reads its configuration.
+- COST RISK: LOW.
+
+**MS-9 — Create Firestore database**
+- WHY: authoritative workflow state, idempotency keys, and proof records.
+- WHEN: before M2.
+- EXPECTED RESULT: a Standard-edition database in the selected region.
+- HOW TO VERIFY: `gcloud firestore databases describe --database='(default)'`
+- COST RISK: LOW (free tier covers demo volume).
+
+**MS-10 — Create Pub/Sub topic**
+- WHY: the hero workflow must start from a real external event, not a chat prompt.
+- WHEN: before M2.
+- EXPECTED RESULT: topic `driftzero-approved-changes` exists (plus a push subscription to the Cloud Run endpoint).
+- HOW TO VERIFY: `gcloud pubsub topics describe driftzero-approved-changes`
+- COST RISK: LOW (free tier).
+
+**MS-11 — Create Cloud Storage evidence bucket**
+- WHY: immutable raw evidence, before/after artifacts, rendered proofs.
+- WHEN: before M2.
+- EXPECTED RESULT: bucket `driftzero-evidence-$PROJECT_ID` in the selected region, uniform bucket-level access, lifecycle policy set.
+- HOW TO VERIFY: `gcloud storage buckets describe gs://driftzero-evidence-$PROJECT_ID`
+- COST RISK: LOW.
+
+**MS-12 — Decide secret handling: local `.env` vs Google Secret Manager**
+- WHY: deployed Cloud Run services should not carry secrets as plain environment variables if avoidable; this is an explicit architecture choice, not a default.
+- WHEN: before the first Cloud Run deploy (M2).
+- EXPECTED RESULT: **if Secret Manager is selected** — `secretmanager.googleapis.com` enabled, one secret per credential, the Cloud Run runtime service account granted `roles/secretmanager.secretAccessor` on those secrets only, and the service deployed with `--set-secrets`. **If not selected** — documented decision that only non-secret configuration is passed as environment variables, and no credential leaves the local `.env`.
+- HOW TO VERIFY: `gcloud secrets list`; `gcloud run services describe <svc> --format='value(spec.template.spec.containers[0].env)'` shows secret references rather than literal values; `git log -p` contains no credential.
+- COST RISK: LOW (Secret Manager is billed per secret version and access operation; negligible at this volume).
+
+**MS-13 — Configure Cloud Run CPU service `--max-instances`**
+- WHY: bounds concurrency-driven spend and matches the single-workflow demo scale.
+- WHEN: at first Cloud Run deploy (M2).
+- EXPECTED RESULT: API/agent service deployed with `--max-instances=2 --min-instances=0` (scale-to-zero).
+- HOW TO VERIFY: `gcloud run services describe driftzero-api --format='value(spec.template.metadata.annotations)'` shows the max-instances annotation as 2.
+- COST RISK: LOW when set; MEDIUM if left at the platform default.
+
+**MS-14 — Check/request Cloud Run GPU quota**
+- WHY: L4 GPU quota is not granted by default and approval is not instant; this is the single most common schedule risk for M4.
+- WHEN: as early as possible — at M2, well before M4.
+- EXPECTED RESULT: a non-zero limit for the Cloud Run NVIDIA L4 GPU quota in the selected region, or an approved increase request.
+- HOW TO VERIFY: Cloud Console → IAM & Admin → Quotas filtered to the Cloud Run GPU quota in the selected region (or `gcloud services quota list --service=run.googleapis.com --consumer=projects/$PROJECT_ID`) shows a non-zero limit; a successful GPU deploy is the definitive proof.
+- COST RISK: LOW to request; unlocks the HIGH-risk driver.
+
+**MS-15 — Configure Cloud Run GPU service `--max-instances`**
+- WHY: GPU-seconds are the dominant cost driver in this project.
+- WHEN: at the Gemma deploy (M4).
+- EXPECTED RESULT: Gemma service deployed with `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0` (scale-to-zero).
+- HOW TO VERIFY: `gcloud run services describe gemma-verification` shows one GPU, max-instances 1, min-instances 0.
+- COST RISK: **HIGH** if misconfigured (idle or parallel GPU instances); LOW when scale-to-zero with max-instances 1.
+
+**MS-16 — Verify Gemma 4 model access and licence acceptance**
+- WHY: Gemma is licence-gated; weights cannot be pulled or served until the licence is accepted, and the demo depends on this model.
+- WHEN: before M4, ideally validated at M2.
+- EXPECTED RESULT: Gemma 4 12B licence accepted for the account, and the chosen serving route confirmed (Vertex AI Model Garden deployment **or** a vLLM container image built and pushed to Artifact Registry).
+- HOW TO VERIFY: Model Garden shows the model as accessible for the project, or the container starts locally and answers a test inference; then `curl` the deployed Cloud Run endpoint with a fixture image and receive structured JSON.
+- COST RISK: MEDIUM (GPU-seconds during validation; zero when idle).
+
+**MS-17 — Enable observability: Logging, Monitoring, Cloud Trace**
+- WHY: Constitution VII requires traceable telemetry with correlation IDs; judged evidence depends on real traces.
+- WHEN: before M2 (baseline), refined at M3.
+- EXPECTED RESULT: `logging.googleapis.com`, `monitoring.googleapis.com`, `cloudtrace.googleapis.com` enabled; the Cloud Run runtime service account holds `roles/logging.logWriter`, `roles/monitoring.metricWriter`, `roles/cloudtrace.agent`; OpenTelemetry export configured from the service.
+- HOW TO VERIFY: run one workflow, then confirm a trace with the workflow correlation ID in Cloud Trace and matching structured entries in Cloud Logging.
+- COST RISK: LOW (free tier at demo volume).
+
+**MS-18 — Prepare the physical demo fixture**
+- WHY: the field verification is a real-world capture, not a rendered mock.
+- WHEN: before M4.
+- EXPECTED RESULT: a real box, a printed high-contrast label, and repeatable LEFT and TOP-RIGHT placements plus one deliberately ambiguous framing.
+- HOW TO VERIFY: capture all three photos and run them through the multimodal fixture evaluation.
+- COST RISK: LOW (~$5 physical materials `ESTIMATED`, not cloud spend).
+
+**MS-19 — Verify Veo 3.1 access (BONUS path)**
+- WHY: Veo is optional and non-blocking, but access must be confirmed before planning any demo asset around it.
+- WHEN: before M5.
+- EXPECTED RESULT: the account can submit a Veo 3.1 generation request and poll it to completion.
+- HOW TO VERIFY: one short test generation returns a video asset; the request/response is recorded in the evidence pack.
+- COST RISK: MEDIUM — billed at roughly **$0.10 per generated second** (Standard, 720p) `ESTIMATED`; enforce the ≤5 development / ≤2 demo generation cap at ≤6 seconds each.
+
+**MS-20 — Cleanup / shutdown procedure**
+- WHY: prevents post-demo spend; GPU services and stored artifacts keep costing money after judging.
+- WHEN: after every working session for the GPU service, and once after final submission for everything else.
+- EXPECTED RESULT: per session — the Gemma GPU service is scaled to zero or deleted. Final — GPU service deleted, Cloud Run services deleted or scaled to zero, evidence bucket retained (it is the deliverable) with lifecycle rules applied, Pub/Sub subscriptions deleted, no unexpected charge accruing.
+- HOW TO VERIFY: `gcloud run services list` shows no GPU service; `gcloud billing accounts describe` / Cloud Billing reports show daily spend dropping to ~$0; final figures exported to `evidence/cost_model.json` as `ACTUAL COST OBSERVED`.
+- COST RISK: **HIGH if skipped** (idle GPU is the worst case); LOW when executed.
+
+### Track: OPTIONAL / TRACK ENHANCEMENT (GEAP — must not block the core)
+
+Each step below runs only after its ACCESS_CHECK in plan.md (§ GEAP Availability Gate) passes. Record every outcome — PASS or FAIL — in `evidence/geap_access_gate.json`. **A FAIL here is an acceptable, documented outcome; it triggers the fallback and does not block the core architecture.**
+
+**MS-21 — Agent Platform / Agent Runtime setup — OPTIONAL / TRACK ENHANCEMENT**
+- WHY: managed serverless agent execution with long-running/async support; alternative to hosting ADK on Cloud Run.
+- WHEN: at the start of M3, after the core workflow already runs on Cloud Run.
+- EXPECTED RESULT: `aiplatform.googleapis.com`, `storage.googleapis.com`, `logging.googleapis.com`, `monitoring.googleapis.com`, `cloudtrace.googleapis.com`, `telemetry.googleapis.com`, `cloudresourcemanager.googleapis.com` enabled; caller holds `roles/aiplatform.user`; one trivial agent deployed and invocable.
+- HOW TO VERIFY: the agent resource exists and answers a test invocation; result recorded in the access gate file.
+- COST RISK: MEDIUM (managed runtime execution is billable; keep test agents minimal and delete them).
+- FALLBACK IF IT FAILS: keep ADK on Cloud Run (`adk deploy cloud_run`) — no change to the hero workflow.
+
+**MS-22 — Agent Registry setup — OPTIONAL / TRACK ENHANCEMENT (required only if Agent Gateway is used)**
+- WHY: Agent Gateway blocks egress to hosts that are not registered, so the mutation-tool endpoint must be registered for the governed path to work.
+- WHEN: M3, before Gateway configuration.
+- EXPECTED RESULT: `agentregistry.googleapis.com` enabled; the `artifact-mutation-tool` endpoint (and the agents) registered and listable.
+- HOW TO VERIFY: list the registry and see the entry; record in the access gate file.
+- COST RISK: LOW.
+- FALLBACK IF IT FAILS: a local `fixtures/agent_registry.json` manifest labelled `SIMULATED`; no claim of platform registry is made.
+
+**MS-23 — Agent Identity provisioning — OPTIONAL / TRACK ENHANCEMENT**
+- WHY: gives each agent a SPIFFE-based, per-agent cryptographic identity usable as an IAM principal — the basis for the least-privilege demonstration. **This is not a service account.**
+- WHEN: M3, after Agent Runtime access is confirmed.
+- EXPECTED RESULT: the project's organization parent confirmed; agents deployed with agent identity enabled (`identity_type: AGENT_IDENTITY`); IAM bindings accepted for members of the form `principal://agents.global.org-ORGANIZATION_ID.system.id.goog/resources/aiplatform/projects/PROJECT_NUMBER/locations/LOCATION/reasoningEngines/AGENT_ENGINE_ID`; the mutation capability bound to the Remediation Agent identity only.
+- HOW TO VERIFY: `gcloud projects describe $PROJECT_ID --format='value(parent)'` returns an organization; the `add-iam-policy-binding --member="principal://..."` command succeeds; the agent obtains a working token.
+- COST RISK: LOW.
+- FALLBACK IF IT FAILS (e.g. the project has no organization): dedicated per-agent Cloud Run **service accounts** plus the deterministic in-process authorization broker. Documented in `LIMITATIONS.md` as a service-account fallback — never described as Agent Identity.
+
+**MS-24 — Agent Gateway setup — OPTIONAL / TRACK ENHANCEMENT**
+- WHY: platform-enforced policy on the one governed path (Remediation Agent → Artifact Mutation Tool ALLOW; Frontline Enablement Agent → DENIED).
+- WHEN: M3, after MS-22 and MS-23.
+- EXPECTED RESULT: `compute.googleapis.com`, `networksecurity.googleapis.com`, `networkservices.googleapis.com`, `dns.googleapis.com`, `iam.googleapis.com`, `agentregistry.googleapis.com`, `aiplatform.googleapis.com`, `discoveryengine.googleapis.com`, `storage.googleapis.com`, `modelarmor.googleapis.com`, `monitoring.googleapis.com`, `logging.googleapis.com` enabled; gateway imported (`gcloud network-services agent-gateways import`); authorization extension imported (`gcloud beta service-extensions authz-extensions import`) first in `DRY_RUN`, then enforcement; authorization policy imported (`gcloud network-security authz-policies import`); `roles/iap.egressor` granted on the mutation-tool endpoint to the Remediation Agent principal **only**.
+- HOW TO VERIFY: the ALLOW call succeeds and appears in the gateway logs with the caller SPIFFE principal; the DENY call from the Enablement Agent is rejected and produces a deny log entry; the target artifact hash is unchanged after the denied attempt.
+- COST RISK: MEDIUM (networking components and IAP-fronted endpoints are billable; delete after the demo per MS-20).
+- FALLBACK IF IT FAILS: the deterministic in-process authorization broker still demonstrates the ALLOW/DENY pair, with evidence explicitly labelled application-level enforcement rather than platform-enforced.
+
+**MS-25 — Model Armor template/policy setup — OPTIONAL / TRACK ENHANCEMENT**
+- WHY: screens untrusted artifact **text** for prompt injection before Change Intelligence processing. It is content screening only — never authorization.
+- WHEN: M3, independent of Gateway (this path needs neither Gateway nor Registry nor an organization).
+- EXPECTED RESULT: `modelarmor.googleapis.com` enabled; template `driftzero-untrusted-artifact-text` created in the same region the model calls are routed to, with prompt injection/jailbreak filters at `INSPECT_AND_BLOCK`; `roles/modelarmor.user` granted to `service-PROJECT_NUMBER@gcp-sa-aiplatform.iam.gserviceaccount.com`; the Change Intelligence `generateContent` call passing `modelArmorConfig.promptTemplateName` (and `responseTemplateName`).
+- HOW TO VERIFY: the adversarial fixture returns `blockReason: "MODEL_ARMOR"` and the workflow fails closed to `REVIEW_REQUIRED`; the clean fixture passes untouched. Confirm the template exists in the routed region (a mismatch fails with `Template not found`).
+- COST RISK: LOW (billed on total prompt+response tokens screened).
+- FALLBACK IF IT FAILS: deterministic untrusted-content handling only — content quarantining, a no-instruction-following prompt contract, and Truth Engine validation layers 1–5. `LIMITATIONS.md` records that no external guardrail ran, and evidence never claims screening that did not occur.
+
+**MS-26 — Advanced Agent Observability — OPTIONAL / TRACK ENHANCEMENT**
+- WHY: platform-level agent and gateway telemetry beyond the Cloud Trace/Logging baseline.
+- WHEN: M3, after Runtime/Gateway provisioning.
+- EXPECTED RESULT: agent and gateway interaction telemetry visible and exportable.
+- HOW TO VERIFY: a demo run produces agent/gateway spans in Agent Observability; exports captured into the evidence pack.
+- COST RISK: LOW (telemetry ingestion volume is trivial here).
+- FALLBACK IF IT FAILS: the MS-17 OpenTelemetry + Cloud Trace/Logging baseline with correlation IDs, which already satisfies Constitution VII.
 
 ## Validation Scenarios
 
@@ -95,12 +277,27 @@ Fixture set:
 - `label_top_right_01.jpg` → expected observation: `TOP_RIGHT`
 - `label_ambiguous_01.jpg` → expected observation: `INCONCLUSIVE`
 
-### VS-6: Security — Prompt Injection Resistance
-**Proves**: Model Armor / FR-011
+### VS-6: Security — Prompt Injection Resistance (text screening path)
+**Proves**: FR-011; Model Armor enforcement path (plan.md)
 ```bash
 pytest tests/security/test_prompt_injection.py -v
 ```
-Adversarial fixture: downstream artifact containing embedded prompt injection text attempting to override agent instructions.
+Adversarial fixture: `fixtures/security/injected_artifact_text.json` — a downstream artifact whose instruction **text** embeds an injection attempting to override agent instructions.
+**Expected**: with Model Armor enabled, the `generateContent` call returns `blockReason: "MODEL_ARMOR"` and the workflow fails closed to `REVIEW_REQUIRED`. In the fallback (no Model Armor), the injected instruction produces no unauthorized artifact mutation and no state advance, and the evidence records `SCREENING_SKIPPED` rather than claiming screening occurred.
+
+### VS-8: Security — Tool Poisoning Rejection (planned; not implemented yet)
+**Proves**: FR-002, FR-003, FR-011; Tool Response Validation Chain (plan.md)
+```bash
+pytest tests/security/test_tool_poisoning.py -v
+```
+A stubbed Artifact Mutation Tool returns a **schema-valid** `RemediationResult` that names an artifact outside `authorized_scope` and cites an inconsistent `source_version`.
+**Expected**: rejected at validation layer 3/4, workflow enters `REVIEW_REQUIRED`, target artifact SHA-256 unchanged, no `REMEDIATION_COMPLETED` transition, rejection evidence written to `evidence/security/tool_poisoning_rejected.json`.
+
+### VS-9: Security — Agent Gateway ALLOW / DENY (planned; OPTIONAL / TRACK ENHANCEMENT)
+**Proves**: least-privilege boundary between the Remediation Agent and the Frontline Enablement Agent
+- **ALLOW**: Remediation Agent identity → Agent Gateway → `artifact-mutation-tool` → succeeds; allow decision logged with the caller SPIFFE principal and tool name.
+- **DENY**: Frontline Enablement Agent identity → Agent Gateway → `artifact-mutation-tool` → denied by IAP enforcement; deny entry logged; target artifact hash unchanged.
+**If the GEAP gate fails**: the same ALLOW/DENY pair runs against the deterministic in-process authorization broker, and the evidence is labelled application-level enforcement, not platform-enforced.
 
 ### VS-7: Cloud Deployment Smoke Test
 ```bash
@@ -138,7 +335,11 @@ evidence/
 ├── reports/                     # Test reports
 │   ├── unit_test_report.xml
 │   └── multimodal_eval.json
+├── geap_access_gate.json        # Per-component ACCESS_CHECK results (PASS/FAIL + fallback taken)
+├── cost_model.json              # ESTIMATED unit drivers/caps vs ACTUAL COST OBSERVED from billing
 ├── security/                    # Security evidence
-│   └── prompt_injection_blocked.json
+│   ├── prompt_injection_blocked.json
+│   ├── tool_poisoning_rejected.json
+│   └── gateway_deny_enablement_to_mutation_tool.json
 └── replays/                     # Reproducible replay data
 ```

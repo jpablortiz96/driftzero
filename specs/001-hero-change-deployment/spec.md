@@ -73,8 +73,9 @@ The worker needs to know only the operational delta that affects their work and 
 
 ### User Story 7 - Generate Change Proof only after valid completion (Priority: P1)
 **Acceptance Scenarios**:
-1. **Given** all 7 mandatory completion conditions are fully met (valid source change, determined impact, remediated/no-op artifact, delivered delta, PASS field verification, complete evidence trail, and non-blocked/non-superseded state), **When** finalization executes, **Then** the workflow enters `PROOF_COMPLETE`.
-2. **Given** any mandatory condition is unresolved, failed, inconclusive, or superseded, **Then** the workflow MUST NOT reach `PROOF_COMPLETE`.
+1. **Given** all 7 mandatory completion conditions are fully met (valid source change, determined impact, remediated/no-op artifact, delivered delta, latest authoritative field verification is PASS, complete evidence trail, and a current authoritative state compatible with completion), **When** finalization executes, **Then** the workflow enters `PROOF_COMPLETE`.
+2. **Given** any mandatory condition is currently unresolved, or the workflow is currently blocked in `VERIFICATION_FAILED` / `VERIFICATION_INCONCLUSIVE`, or has entered `REVIEW_REQUIRED`, `SUPERSEDED`, or `FAILED`, **Then** the workflow MUST NOT reach `PROOF_COMPLETE`.
+3. **Given** the evidence history contains earlier `VERIFICATION_FAILED` or `VERIFICATION_INCONCLUSIVE` attempts **and** a later authoritative verification produced `VERIFICATION_PASSED`, **When** finalization executes, **Then** the preserved historical FAIL/INCONCLUSIVE evidence MUST NOT block `PROOF_COMPLETE`, and that history MUST appear in the Change Proof evidence trail.
 
 ### User Story 8 - Duplicate change event idempotency (Priority: P2)
 **Acceptance Scenarios**:
@@ -97,7 +98,7 @@ The worker needs to know only the operational delta that affects their work and 
 - **Source version changes again while incomplete**: Workflow becomes `SUPERSEDED` and cannot reach `PROOF_COMPLETE`.
 - **Failed side effects (mutation/delivery)**: Action NOT represented as completed, workflow MUST NOT reach `PROOF_COMPLETE`, retries allowed without duplicating prior actions, failed attempt kept in evidence.
 - **Field evidence missing or inconclusive**: Results in `VERIFICATION_INCONCLUSIVE`. Workflow MUST NOT reach `PROOF_COMPLETE`.
-- **First field verification fails and second passes**: Latest valid verification dictates status. Both recorded.
+- **First field verification fails and second passes**: Latest valid verification dictates status. Both attempts recorded and retained; the preserved FAIL attempt does not block eventual `PROOF_COMPLETE`.
 - **Older verification arrives late**: Must not override a newer valid verification.
 - **Required evidence reference becomes unavailable**: Fails closed into `FAILED`.
 - **Late events arrive after Change Proof completion**: Duplicate events idempotent; late historical events retained for audit but MUST NOT silently rewrite the completed proof.
@@ -123,16 +124,18 @@ Explicitly supported lifecycle states:
 - `CHANGE_RECEIVED`
 - `IMPACT_DETERMINED`
 - `REMEDIATION_PENDING`
-- `REVIEW_REQUIRED` (blocking gate)
+- `REVIEW_REQUIRED` (blocking gate; no autonomous exit in this scope — prevents `PROOF_COMPLETE`)
 - `REMEDIATION_COMPLETED`
 - `FRONTLINE_DELIVERY_COMPLETED`
 - `AWAITING_FIELD_VERIFICATION`
-- `VERIFICATION_INCONCLUSIVE` (blocking non-pass)
-- `VERIFICATION_FAILED` (non-pass, permits subsequent corrected verification)
+- `VERIFICATION_INCONCLUSIVE` (blocking while current; recoverable — permits subsequent corrected verification)
+- `VERIFICATION_FAILED` (blocking while current; recoverable — permits subsequent corrected verification)
 - `VERIFICATION_PASSED`
 - `PROOF_COMPLETE` (canonical successful terminal state, immutable)
-- `SUPERSEDED` (terminal non-success state for superseded versions)
-- `FAILED` (terminal non-success state for unrecoverable failures)
+- `SUPERSEDED` (terminal non-success state for superseded versions; can never later reach `PROOF_COMPLETE`)
+- `FAILED` (terminal non-success state for unrecoverable failures; can never later reach `PROOF_COMPLETE`)
+
+**State occupancy vs. state history**: Completion conditions are evaluated against the workflow's **current authoritative state**. Recoverable states (`VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`) block completion only while the workflow is currently in them. Terminal non-success states (`SUPERSEDED`, `FAILED`) and the `REVIEW_REQUIRED` gate block completion permanently. Entering any non-success state MUST NOT cause evidence loss — the full attempt history is retained for audit.
 
 ### Autonomy Boundaries
 Autonomous remediation is permitted ONLY for a narrow atomic change (e.g., `label_position: LEFT → TOP_RIGHT`) when ALL of the following are satisfied:
@@ -168,8 +171,8 @@ Must traceably answer: What changed? What authorized it? What was affected? What
 - **SC-005**: The affected worker receives the correct operational delta, yielding a `DELIVERED` status.
 - **SC-006**: Deliberately incorrect LEFT frontline execution (derived observation) deterministically produces FAIL.
 - **SC-007**: Corrected TOP-RIGHT execution deterministically produces PASS, progressing the workflow.
-- **SC-008**: Change Proof remains incomplete after FAIL or `VERIFICATION_INCONCLUSIVE`.
-- **SC-009**: Change Proof transitions to `PROOF_COMPLETE` only after all 7 mandatory completion conditions pass.
+- **SC-008**: Change Proof remains incomplete while the latest authoritative verification is FAIL or `VERIFICATION_INCONCLUSIVE` (a later valid PASS may subsequently complete the proof — see SC-007 and SC-009).
+- **SC-009**: Change Proof transitions to `PROOF_COMPLETE` only after all 7 mandatory completion conditions pass, evaluated against the workflow's current authoritative state at proof-evaluation time. Preserved historical FAIL/INCONCLUSIVE attempts do not by themselves block completion once a later authoritative PASS exists; `SUPERSEDED`, `FAILED`, and `REVIEW_REQUIRED` block it permanently.
 - **SC-010**: Duplicate delivery of the same logical change produces zero duplicate logical side effects.
 - **SC-011**: Pause/resume and retries do not duplicate already completed logical actions.
 - **SC-012**: Ambiguous or insufficient evidence never becomes a silent PASS.
@@ -188,7 +191,13 @@ The primary deliverable artifact, containing: proof ID, change ID, workflow iden
 4. The operational delta has been successfully `DELIVERED`;
 5. The latest authoritative field verification for the applicable source version/change is PASS (`VERIFICATION_PASSED`);
 6. All evidence required to establish the above conditions exists and is traceably associated;
-7. The workflow has NOT entered `SUPERSEDED`, `REVIEW_REQUIRED`, `VERIFICATION_INCONCLUSIVE`, `VERIFICATION_FAILED`, or `FAILED`.
+7. At proof-evaluation time, the workflow MUST NOT currently be in — and MUST NOT have terminated in — a condition incompatible with completion. This condition is evaluated against the **current authoritative state**, not against the full historical state path:
+   - **Terminal non-success states** — `SUPERSEDED` and `FAILED` — permanently prevent `PROOF_COMPLETE`. A superseded or terminally failed workflow can NEVER later recover to `PROOF_COMPLETE`, regardless of any subsequent evidence.
+   - **Blocking gate** — `REVIEW_REQUIRED` prevents `PROOF_COMPLETE`. Within the scope of this specification `REVIEW_REQUIRED` has no autonomous exit, so a workflow that has entered `REVIEW_REQUIRED` MUST NOT reach `PROOF_COMPLETE`.
+   - **Currently-blocking recoverable states** — a workflow currently in `VERIFICATION_FAILED` or `VERIFICATION_INCONCLUSIVE` MUST NOT reach `PROOF_COMPLETE` while it remains in that state.
+   - **Historical recoverable verification attempts** — prior `VERIFICATION_FAILED` and `VERIFICATION_INCONCLUSIVE` occurrences MAY exist in the evidence history and DO NOT disqualify completion, provided a later authoritative verification for the applicable source version/change produced `VERIFICATION_PASSED` (condition 5). All historical FAIL/INCONCLUSIVE evidence MUST remain preserved and traceably associated (condition 6); it MUST NOT be deleted, overwritten, or omitted from the Change Proof evidence trail.
+
+   This condition supports, and MUST NOT be read as contradicting, the required `FAIL → corrected evidence → PASS → PROOF_COMPLETE` recovery path defined in User Story 6.
 
 ## Non-Goals
 - Generic enterprise SOP management
