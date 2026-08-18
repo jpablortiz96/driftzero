@@ -108,13 +108,13 @@ The worker needs to know only the operational delta that affects their work and 
 ### Functional Requirements
 
 - **FR-001**: System MUST process an approved procedural change event without modifying the authoritative source.
-- **FR-002**: System MUST identify affected authorized downstream artifacts using exact semantics (operation match, instruction correspondence, conflicting value, authorized scope) and provide auditable reasoning.
+- **FR-002**: System MUST identify affected authorized downstream artifacts using exact semantics (operation match, instruction correspondence, conflicting value, authorized scope) and provide auditable reasoning. Candidate identification MAY be plural (0..N candidates); after deterministic qualification the S1 autonomous workflow target cardinality is **exactly one** (see § Affected Artifact Cardinality).
 - **FR-003**: System MUST autonomously remediate authorized downstream artifacts only when all 9 autonomous boundary conditions are met, preserving before/after evidence.
 - **FR-004**: System MUST record positive evidence of operational delta delivery (`DELIVERED`) to the affected frontline worker identity.
 - **FR-005**: System MUST perform deterministic physical execution verification by separating raw evidence, derived observation, and deterministic PASS/FAIL comparison.
 - **FR-006**: System MUST generate an immutable, auditable Change Proof and transition to `PROOF_COMPLETE` only when all 7 completion conditions are met.
-- **FR-007**: System MUST handle repeated delivery of the same logical change event idempotently so that duplicate receipt does not create duplicate remediation, duplicate frontline delivery, duplicate completion evidence, or a second Change Proof.
-- **FR-008**: System MUST persist state for long-running workflows to survive restarts and prevent duplication of completed actions upon retry.
+- **FR-007**: System MUST handle repeated delivery of the same logical event idempotently so that duplicate receipt does not create duplicate remediation, duplicate frontline delivery, duplicate completion evidence, or a second Change Proof. This applies to every consequential logical action, not only change ingestion: a **transport duplicate** (the same logical action or the same logical field-evidence submission re-delivered) MUST NOT create a second authoritative attempt, MUST NOT consume a newer authoritative ordering position, and MUST NOT duplicate evidence. A **genuinely new attempt** (for example corrected field evidence submitted after FAIL) is a distinct logical event and MUST remain distinguishable from a transport duplicate.
+- **FR-008**: System MUST persist state for long-running workflows to survive restarts and prevent duplication of completed actions upon retry. Where a consequential side effect may have taken effect externally before its completion was authoritatively persisted, the system MUST reconcile deterministically against recorded pre-action intent and the current validated target state rather than blindly retrying or fabricating evidence; if the actual outcome cannot be safely established, it MUST fail closed to `REVIEW_REQUIRED`.
 - **FR-009**: System MUST transition an incomplete workflow to `SUPERSEDED` if a newer applicable source version arrives, starting a new workflow for the newer version.
 - **FR-010**: System MUST explicitly classify data to capture lineage, supporting multiple non-exclusive dimensions of REAL, SYNTHETIC, DERIVED, and SIMULATED.
 - **FR-011**: System MUST fail closed when conditions are ambiguous, malformed, unauthorized, insufficient, or otherwise non-actionable. Specifically: ambiguous or insufficient change interpretation MUST NOT silently proceed; unauthorized remediation targets or unsatisfied autonomous remediation preconditions MUST enter `REVIEW_REQUIRED` (blocking/recoverable); physical evidence that cannot produce a reliable normalized observation MUST enter `VERIFICATION_INCONCLUSIVE` (blocking/recoverable); malformed or invalid required inputs MUST NOT become successful completion; genuinely unrecoverable integrity conditions MUST enter `FAILED` (terminal non-success). None of these states may silently become `PROOF_COMPLETE`.
@@ -124,7 +124,7 @@ Explicitly supported lifecycle states:
 - `CHANGE_RECEIVED`
 - `IMPACT_DETERMINED`
 - `REMEDIATION_PENDING`
-- `REVIEW_REQUIRED` (blocking gate; no autonomous exit in this scope — prevents `PROOF_COMPLETE`)
+- `REVIEW_REQUIRED` (blocking gate; no autonomous exit to the progressive workflow in this scope — prevents `PROOF_COMPLETE`. Legal S1 exits are only `SUPERSEDED` or `FAILED`; see § State Requirements note below)
 - `REMEDIATION_COMPLETED`
 - `FRONTLINE_DELIVERY_COMPLETED`
 - `AWAITING_FIELD_VERIFICATION`
@@ -134,6 +134,12 @@ Explicitly supported lifecycle states:
 - `PROOF_COMPLETE` (canonical successful terminal state, immutable)
 - `SUPERSEDED` (terminal non-success state for superseded versions; can never later reach `PROOF_COMPLETE`)
 - `FAILED` (terminal non-success state for unrecoverable failures; can never later reach `PROOF_COMPLETE`)
+
+**`REVIEW_REQUIRED` legal exit set (S1)**: `REVIEW_REQUIRED` is blocking and has **no autonomous path back to the progressive workflow**. Within S1 it MUST NOT transition to `REMEDIATION_PENDING`, `REMEDIATION_COMPLETED`, `FRONTLINE_DELIVERY_COMPLETED`, `AWAITING_FIELD_VERIFICATION`, `VERIFICATION_PASSED`, or `PROOF_COMPLETE`, because reviewer-resolution functionality is outside S1 scope. Exactly two exits are legal:
+- `REVIEW_REQUIRED → SUPERSEDED` — when a newer approved source version makes the workflow obsolete;
+- `REVIEW_REQUIRED → FAILED` — only when a separate, genuinely unrecoverable integrity or system condition is established.
+
+Otherwise the workflow remains in `REVIEW_REQUIRED`. It is **not** a terminal state: a future out-of-scope capability MAY define human review → approval/rejection → resumed workflow, but that transition does not exist in S1 and MUST NOT be implemented as one.
 
 **State occupancy vs. state history**: Completion conditions are evaluated against the workflow's **current authoritative state**. Recoverable states (`VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`) block completion only while the workflow is currently in them. Terminal non-success states (`SUPERSEDED`, `FAILED`) and the `REVIEW_REQUIRED` gate block completion permanently. Entering any non-success state MUST NOT cause evidence loss — the full attempt history is retained for audit.
 
@@ -146,9 +152,61 @@ Autonomous remediation is permitted ONLY for a narrow atomic change (e.g., `labe
 5. exactly one intended atomic requirement change is being applied
 6. target artifact is authorized for remediation
 7. corresponding target instruction is uniquely identifiable
-8. artifact does not contain conflicting/additional divergence
+8. artifact does not contain conflicting/additional divergence (defined deterministically below)
 9. sufficient before/after evidence can be preserved.
 Otherwise, the system MUST trigger `REVIEW_REQUIRED`.
+
+**Definition of condition 8 — conflicting / additional divergence**
+
+The evaluation compares the current downstream artifact against the **current approved source version** for the same operation and structured requirement set.
+
+- **Target requirement** (the one intended atomic change) is treated specially: the artifact's current value MUST equal the known `previous_value`, and the approved source's current value MUST equal the known `current_value`.
+- **Every other requirement in the same relevant operational scope**: the artifact MUST already agree with the current approved source representation.
+
+**Conflicting/additional divergence therefore exists when, outside the one intended atomic target requirement, at least one other requirement in the same relevant operation/scope differs from the current approved source representation.**
+
+Worked example — target `label_position: LEFT → TOP_RIGHT`:
+
+| | Artifact | Approved source | Verdict |
+|---|---|---|---|
+| Allowed | `label_position=LEFT`, `box_size=STANDARD`, `seal_type=TAPE` | `label_position=TOP_RIGHT`, `box_size=STANDARD`, `seal_type=TAPE` | Only the target differs → autonomous remediation permitted |
+| Not allowed | `label_position=LEFT`, `box_size=LARGE`, `seal_type=TAPE` | `label_position=TOP_RIGHT`, `box_size=STANDARD`, `seal_type=TAPE` | `box_size` is an additional divergence → `REVIEW_REQUIRED` |
+
+Also treated as conflicting divergence:
+- duplicate representations of the same target requirement within the artifact;
+- the target value is neither the known `previous_value` nor already the approved `current_value`;
+- contradictory values inside the relevant structured operational scope.
+
+**Authoritative data sources** (exactly two, both structured):
+1. the authoritative approved source-version structured requirements for the operation;
+2. the current downstream artifact structured requirements.
+
+**Authority**: no LLM assertion may establish the absence of additional divergence. Semantic agents MAY identify or propose requirement mappings; the deterministic comparison is performed by the Truth Engine. If additional divergence exists, the system MUST enter `REVIEW_REQUIRED` and MUST NOT perform an autonomous rewrite. This condition does not extend S1 to free-form document reconciliation — it is a structured field-set comparison within one operational scope.
+
+### Affected Artifact Cardinality
+
+Impact analysis MAY produce **0..N** candidate artifacts. Semantic agents MAY propose candidates; the Truth Engine deterministically applies the four affected-artifact conditions (operation match, instruction correspondence, conflicting value, authorized scope). S1 autonomous hero completion requires **exactly one** qualified affected artifact.
+
+| Qualified artifacts | S1 behavior |
+|---|---|
+| **Zero** | The workflow cannot satisfy the impact/remediation completion conditions. It MUST enter `REVIEW_REQUIRED`, recording evidence that zero qualified targets were found. The system MUST NOT fabricate an `affected_artifact_id` and MUST NOT reach `PROOF_COMPLETE`. |
+| **Exactly one** | The single qualified artifact identity is persisted and the workflow proceeds. This is the S1 autonomous path. |
+| **More than one** | S1 does not implement multi-artifact remediation. The workflow MUST enter `REVIEW_REQUIRED` with the full candidate set preserved as evidence. The system MUST NOT arbitrarily select one and MUST NOT mutate multiple artifacts. |
+
+**Already-compliant race preserved**: an artifact may be validly qualified as affected during impact determination and then become compliant before remediation executes. That remains the valid no-op path of US3 scenario 2 and is unaffected by this cardinality rule.
+
+### Frontline Surface Minimums (S1 boundary)
+
+The frontline surface exists only to support US4–US6. Comprehensive design-system work, a native mobile application, full accessibility certification, and broad WCAG conformance auditing remain **out of S1 scope** (Non-Goals Class A). Within that boundary, the S1 demo/frontline web surface MUST at minimum satisfy:
+
+1. the core workflow is usable on a narrow mobile viewport suitable for a modern phone;
+2. verification status is **never communicated by color alone** — textual `FAIL` / `INCONCLUSIVE` / `PASS` labels are required;
+3. interactive controls required for the hero flow carry accessible text labels;
+4. field evidence submission supports a normal file-upload fallback when direct camera capture is unavailable;
+5. critical validation and error feedback is readable as text;
+6. core controls remain keyboard-operable on desktop where applicable.
+
+These are minimum interaction requirements, not a design system and not a device-support claim. Any specific viewport width used during implementation is an engineering target (plan.md § Engineering Targets — Non-Binding), not a product guarantee.
 
 ### Data Classification
 Data classification emphasizes transparency and lineage rather than a mutually exclusive single label. An evidence item MAY require multiple classifications.
@@ -235,7 +293,7 @@ A Class B capability MAY be implemented only when all of the following hold:
 |---|---|---|
 | Agent Runtime | Not required | MAY be used if accessible; Cloud Run is the fallback |
 | Agent Registry | Not required | MAY be used if accessible (prerequisite for the Gateway path) |
-| Agent Identity | Not required | MAY be used if accessible; per-agent service accounts are the fallback |
+| Agent Identity | Not required | MAY be used if accessible; the fallback is a per-service runtime service account plus application-level in-process agent authorization |
 | Agent Gateway | Not required | MAY be used if accessible; deterministic in-process authorization is the fallback |
 | Model Armor | Not required | MAY be used if accessible; deterministic untrusted-content handling is the fallback |
 | Advanced Agent Observability | Not required | MAY be used if accessible; OpenTelemetry + Cloud Trace/Logging is the fallback |

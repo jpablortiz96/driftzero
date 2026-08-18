@@ -50,8 +50,9 @@ The core state machine tracking a single change deployment lifecycle.
 | `change_id` | `str` | Associated change |
 | `source_version` | `str` | Applicable source version |
 | `state` | `WorkflowState` | Current lifecycle state (enum) |
-| `affected_artifact_id` | `str or None` | Identified affected artifact |
+| `affected_artifact_id` | `str or None` | The single qualified affected artifact. Populated **only** when exactly one candidate passes deterministic qualification (spec.md § Affected Artifact Cardinality); remains None for the zero-qualified and multi-qualified cases |
 | `impact_reason` | `str or None` | Auditable reason for impact classification |
+| `candidate_artifact_refs` | `list[str]` | All evaluated candidates with their per-condition qualification results. Retained as evidence in every case — notably for the zero-qualified and multi-qualified `REVIEW_REQUIRED` outcomes |
 | `remediation_evidence` | `RemediationEvidence or None` | Discriminated remediation outcome (`MutationEvidence` or `NoOpEvidence`); None until remediation is validly recorded |
 | `delivery_status` | `str or None` | `DELIVERED` or None |
 | `delivery_ref` | `str or None` | Evidence of delivery |
@@ -81,6 +82,8 @@ The core state machine tracking a single change deployment lifecycle.
 | `before_value` | `str` | Prior represented value (e.g. `LEFT`) |
 | `after_value` | `str` | New represented value (e.g. `TOP_RIGHT`) |
 | `patch_description` | `str` | Auditable description of the atomic change applied |
+| `reconciled` | `bool` | True when completion was established by post-crash reconciliation (§ Idempotency & Crash Reconciliation Rules) rather than an observed tool response. A reconciled mutation remains `MUTATION`, never `NO_OP` |
+| `action_id` | `str` | Stable identity of the `REMEDIATE_ARTIFACT` action that produced this evidence |
 | `data_classification` | `DataClassification` | Classification of this evidence |
 
 **Audit question it answers**: what was changed, from what, to what, and are both states retrievable and hash-verifiable?
@@ -103,6 +106,26 @@ The core state machine tracking a single change deployment lifecycle.
 
 **Prohibited representations**: `NoOpEvidence` MUST NOT carry `before_ref`/`after_ref`, MUST NOT duplicate the same reference into a before/after pair, and MUST NOT be recorded when the artifact was in fact mutated. `MutationEvidence` MUST NOT be recorded when no write occurred.
 
+### ActionExecution (idempotency / reconciliation ledger)
+
+An internal deterministic record of one consequential logical side effect. **It is NOT a workflow lifecycle state** and never appears in the 13-state machine; it exists so retries, transport duplicates, and crash recovery resolve deterministically. Scope is limited to the four action types below — this is not a generalized workflow platform.
+
+| Field | Type | Description |
+|---|---|---|
+| `action_id` | `str` | **Stable idempotency identity**, derived deterministically from (`workflow_id`, `action_type`, applicable `source_version`/`change_id`, target identity). Recomputing it for the same logical action yields the same value |
+| `workflow_id` | `str` | Parent workflow |
+| `action_type` | `str` | `REMEDIATE_ARTIFACT` \| `DELIVER_DELTA` \| `PROCESS_FIELD_EVIDENCE` \| `GENERATE_PROOF` |
+| `status` | `str` | `PLANNED` \| `ATTEMPTED` \| `COMPLETED` \| `FAILED_OR_UNCERTAIN` |
+| `target_ref` | `str` | Target identity (artifact ID, worker ID, evidence submission ID, or workflow ID for proof) |
+| `intent` | `dict` | Pre-action intent recorded **before dispatch**: expected before-state ref/hash, expected after-state/value, source/change identity |
+| `receipt_ref` | `str or None` | Tool/mechanism receipt when the external call returned one |
+| `outcome_evidence_ref` | `str or None` | Reference to the evidence record produced on completion |
+| `attempt_count` | `int` | Attempts made (bounded by the retry policy in plan.md) |
+| `reconciled` | `bool` | True when completion was established by post-crash reconciliation rather than an observed response |
+| `created_at` / `updated_at` | `datetime` | Timestamps |
+
+**Status semantics**: `PLANNED` = intent persisted, not dispatched. `ATTEMPTED` = dispatched, outcome not yet confirmed. `COMPLETED` = outcome confirmed (observed response **or** validated reconciliation). `FAILED_OR_UNCERTAIN` = the attempt failed, or its outcome could not be established — the latter requires reconciliation before any retry.
+
 ### VerificationEvent
 
 Individual field verification attempt within a workflow.
@@ -110,8 +133,9 @@ Individual field verification attempt within a workflow.
 | Field | Type | Description |
 |---|---|---|
 | `event_id` | `str (UUID)` | Unique event identifier |
+| `submission_id` | `str` | **Stable logical identity of the field-evidence submission** (client-supplied or derived from raw evidence content hash + workflow). A re-delivery carrying the same `submission_id` is a transport duplicate and MUST resolve to the existing `event_id`; a genuinely new attempt carries a different `submission_id` |
 | `workflow_id` | `str` | Parent workflow |
-| `event_sequence` | `int` | Monotonic sequence for chronological ordering |
+| `event_sequence` | `int` | Monotonic sequence for chronological ordering. Allocated **once per distinct `submission_id`** — a transport duplicate never consumes a newer position |
 | `raw_evidence_ref` | `str` | GCS URI to raw evidence (image) |
 | `derived_observation` | `str` | Normalized observation (`LEFT`, `TOP_RIGHT`, `INCONCLUSIVE`) |
 | `expected_value` | `str` | Current approved expected value |
@@ -125,7 +149,7 @@ The immutable auditable attestation generated upon valid workflow completion.
 
 | Field | Type | Description |
 |---|---|---|
-| `proof_id` | `str (UUID)` | Unique proof identifier |
+| `proof_id` | `str (UUID)` | Unique proof identifier. **One canonical logical proof per workflow**: repeated generation attempts resolve to the same `proof_id` via the `GENERATE_PROOF` action identity; transport or process retry never creates a second proof |
 | `workflow_id` | `str` | Associated workflow |
 | `change_id` | `str` | Associated change |
 | `source_procedure_id` | `str` | Authoritative source |
@@ -194,7 +218,14 @@ REMEDIATION_PENDING
   → FAILED
 
 REVIEW_REQUIRED
-  (blocking in S1 — no autonomous exit)
+  → SUPERSEDED   (newer approved source version makes this workflow obsolete)
+  → FAILED       (separate, genuinely unrecoverable integrity/system condition)
+  (blocking in S1 — NO autonomous exit back to the progressive workflow.
+   Explicitly ILLEGAL in S1: → REMEDIATION_PENDING, → REMEDIATION_COMPLETED,
+   → FRONTLINE_DELIVERY_COMPLETED, → AWAITING_FIELD_VERIFICATION,
+   → VERIFICATION_PASSED, → PROOF_COMPLETE.
+   Not a terminal state: a future out-of-scope reviewer-resolution capability
+   may add a resume path, which does not exist in S1.)
 
 REMEDIATION_COMPLETED
   → FRONTLINE_DELIVERY_COMPLETED
@@ -243,10 +274,38 @@ FAILED
 - `MutationEvidence` is valid only when `before_hash != after_hash`, both refs resolve, `before_hash` matches the artifact pre-state hash the Truth Engine recorded before invoking remediation, and `after_value` equals the approved `current_value`
 - `NoOpEvidence` is valid only when `observed_value == expected_value`, the evaluated ref resolves, and `evaluated_artifact_hash` matches the content at evaluation time. No mutation may have been performed on that artifact within the workflow
 - A `NO_OP` outcome MUST NOT be recorded with `before_ref`/`after_ref` fields, and MUST NOT be rendered as a diff
-- `SUPERSEDED` may be entered from any non-terminal state
-- `FAILED` may be entered from any non-terminal state
+- `SUPERSEDED` may be entered from any non-terminal state, including `REVIEW_REQUIRED`
+- `FAILED` may be entered from any non-terminal state, including `REVIEW_REQUIRED`
+- `REVIEW_REQUIRED` has exactly two legal S1 exits (`SUPERSEDED`, `FAILED`); any transition from `REVIEW_REQUIRED` into a progressive state is illegal in S1
+- **Affected-artifact cardinality**: zero qualified candidates → `REVIEW_REQUIRED` with `candidate_artifact_refs` retained and `affected_artifact_id` left None; exactly one → persist `affected_artifact_id` and proceed; more than one → `REVIEW_REQUIRED` with the full candidate set retained, no arbitrary selection, no multi-artifact mutation
+- **Action identity**: every consequential side effect (`REMEDIATE_ARTIFACT`, `DELIVER_DELTA`, `PROCESS_FIELD_EVIDENCE`, `GENERATE_PROOF`) has exactly one `ActionExecution` per stable `action_id`; a second execution record for the same `action_id` is invalid
+- **Transport duplicate vs new attempt**: a `VerificationEvent` is uniquely keyed by `submission_id` within a workflow; re-delivery of the same `submission_id` returns the existing event without allocating a new `event_sequence` or new evidence
+- **Reconciled mutation classification**: an `ActionExecution` of type `REMEDIATE_ARTIFACT` that is completed by reconciliation MUST produce `MutationEvidence` with `reconciled = true`, never `NoOpEvidence`
+- **Proof singularity**: at most one `ChangeProof` per `workflow_id`
 - No transition OUT of `PROOF_COMPLETE`, `SUPERSEDED`, or `FAILED`
 - `VerificationEvent.verification_result` derived deterministically: `observed == expected → PASS`, `observed != expected and observed != INCONCLUSIVE → FAIL`, else `INCONCLUSIVE`
+
+## Idempotency & Crash Reconciliation Rules
+
+These rules are deterministic Truth Engine logic. They introduce no lifecycle state and select no queueing or distributed-transaction technology.
+
+**Pre-dispatch intent (required for every consequential mutation)**: before a mutation is dispatched, the system persists an `ActionExecution` with `status = PLANNED` carrying the stable `action_id`, the intended artifact, the expected before-state reference and hash, the expected after-state value, and the workflow/change identity. The mutation tool receives the stable action identity (or an equivalent idempotency context) where technically possible.
+
+**Recovery reconciliation for `REMEDIATE_ARTIFACT`** — applied when an action is not recorded `COMPLETED` and the workflow resumes. The same logical mutation MAY be reconciled as completed **only when all four hold**:
+1. the action is not recorded complete;
+2. the target artifact is already exactly in the intended after-state;
+3. the stored pre-action evidence proves this workflow had planned that specific mutation;
+4. all authorization and source-version invariants still hold.
+
+When reconciled, the missing completion evidence is reconstructed from stored pre-action intent + the current validated post-state + the action identity / tool receipt where available, and is recorded as `MutationEvidence` with `reconciled = true`.
+
+**Classification rule**: a reconciled mutation is `MUTATION`, never `NO_OP`. `NO_OP` remains reserved for an artifact that was already compliant **before this workflow performed any mutation** — i.e. no `REMEDIATE_ARTIFACT` action for that artifact ever reached `ATTEMPTED`. If reconciliation cannot safely establish what happened, the workflow fails closed to `REVIEW_REQUIRED` rather than fabricating evidence.
+
+**Delivery reconciliation (`DELIVER_DELTA`)**: delivery requires a stable `action_id` and a positive receipt. If a first call succeeded but its response was lost, recovery reconciles using the mechanism's receipt/idempotency key where available. No agent text asserting delivery establishes `DELIVERED`; absent a resolvable receipt the action remains `FAILED_OR_UNCERTAIN` and is retried under its stable identity.
+
+**Field evidence (`PROCESS_FIELD_EVIDENCE`)**: keyed by `submission_id` (above). Transport duplicates are absorbed; genuinely new evidence is a new submission and may represent the corrected attempt after FAIL/INCONCLUSIVE.
+
+**Proof generation (`GENERATE_PROOF`)**: keyed by `workflow_id`; repeated attempts resolve to the single canonical `proof_id`.
 
 ## Integrity Hash Semantics
 

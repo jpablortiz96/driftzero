@@ -9,16 +9,25 @@ Each agent has its **own identity**. Two mutually exclusive provisioning models,
 
 - **PRIMARY — Agent Identity** (GEAP available): each agent receives its own SPIFFE-based Agent Identity issued by Google Cloud at deployment to Agent Runtime, used as an IAM principal of the form
   `principal://agents.global.org-ORGANIZATION_ID.system.id.goog/resources/aiplatform/projects/PROJECT_NUMBER/locations/LOCATION/reasoningEngines/AGENT_ENGINE_ID`.
-- **FALLBACK — dedicated service accounts** (Agent Identity not provisionable): each agent runs under its own minimally-scoped Cloud Run **service account**, with the mutation-capability restriction enforced by a deterministic in-process authorization broker in the Truth Engine.
+- **FALLBACK — one runtime service account per deployed service + logical agent context** (Agent Identity not provisionable): all four agents run **in one Cloud Run process**, so there is exactly **one** runtime service account for that service. Per-agent separation is achieved by a logical agent identity/capability context inside ADK plus a deterministic in-process authorization broker in the Truth Engine. This is **application-level per-agent authorization**, NOT GEAP Agent Identity and NOT per-agent Google Cloud IAM runtime identity.
 
-**Terminology rule**: a service account is never called an "Agent Identity". Service accounts appear only as Cloud Run service/runtime identities or as the named fallback, and the fallback's weaker security properties are recorded in `LIMITATIONS.md`.
+**Terminology rule**: a service account is never called an "Agent Identity". Service accounts appear only as Cloud Run service/runtime identities, and the fallback's weaker security properties are recorded in `LIMITATIONS.md`.
 
-| Agent | Agent Identity (primary) | Fallback runtime identity | Authorized for the Artifact Mutation Tool? |
+**Deployed Cloud Run topology** (authoritative — see plan.md § Agent Identity and Runtime Identity Model):
+
+| Cloud Run service | Contents | Runtime service account |
+|---|---|---|
+| `driftzero-api` | API + Truth Engine + orchestrator + all four ADK agents, one process | `driftzero-run-sa@PROJECT.iam.gserviceaccount.com` |
+| `gemma-verification` | Gemma 4 GPU inference endpoint | `driftzero-gemma-sa@PROJECT.iam.gserviceaccount.com` |
+
+| Agent | Agent Identity (primary, GEAP) | Fallback identity basis | Authorized for the Artifact Mutation Tool? |
 |---|---|---|---|
-| Change Intelligence | `driftzero-change-intel` | `driftzero-change-intel-sa@…` | **No** |
-| Remediation | `driftzero-remediation` | `driftzero-remediation-sa@…` | **Yes — the only authorized identity** |
-| Frontline Enablement | `driftzero-enablement` | `driftzero-enablement-sa@…` | **No — negative security test subject** |
-| Field Verification | `driftzero-field-verify` (only where deployed on Agent Runtime; a Cloud Run GPU inference service instead runs under its own dedicated Cloud Run service account, which is a runtime identity, not an Agent Identity) | `driftzero-field-verify-sa@…` | **No** |
+| Change Intelligence | `driftzero-change-intel` | Logical agent context inside `driftzero-api`; no separate IAM principal | **No** |
+| Remediation | `driftzero-remediation` | Logical agent context inside `driftzero-api`; broker-enforced | **Yes — the only authorized identity (logical in fallback, IAM principal under GEAP)** |
+| Frontline Enablement | `driftzero-enablement` | Logical agent context inside `driftzero-api`; broker-enforced | **No — negative security test subject** |
+| Field Verification | `driftzero-field-verify` (only where deployed on Agent Runtime) | Logical agent context inside `driftzero-api`; the GPU inference **service** it calls has its own runtime service account, which is a runtime identity, not an Agent Identity | **No** |
+
+**Honesty rule**: in the fallback, no evidence artifact may claim four IAM identities, per-agent IAM runtime identities, or platform-enforced Agent Identity. Service count is never inflated to simulate Agent Identity.
 
 ## Trust-Boundary Policy (applies to every agent below)
 
@@ -40,7 +49,7 @@ Each agent has its **own identity**. Two mutually exclusive provisioning models,
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Interpret approved source change, extract structured ChangeSet, identify candidate affected artifacts.
 
-**Identity**: `driftzero-change-intel` Agent Identity (primary) / dedicated service account (fallback).
+**Identity**: `driftzero-change-intel` Agent Identity (primary, GEAP) / logical agent context inside the `driftzero-api` Cloud Run service (fallback — not a separate IAM principal).
 
 **Permissions**: READ-ONLY
 - Read approved source procedure (GCS)
@@ -91,7 +100,7 @@ class AffectedArtifactCandidate(BaseModel):
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Apply authorized atomic patch to affected downstream artifact.
 
-**Identity**: `driftzero-remediation` Agent Identity (primary) / dedicated service account (fallback). This is the **only** identity authorized to invoke the Artifact Mutation Tool.
+**Identity**: `driftzero-remediation` Agent Identity (primary, GEAP) / logical agent context inside the `driftzero-api` Cloud Run service, broker-enforced (fallback — not a separate IAM principal). This is the **only** identity authorized to invoke the Artifact Mutation Tool.
 
 **Permissions**: SCOPED WRITE
 - Read affected artifact content (GCS)
@@ -134,7 +143,9 @@ Both variants are **independently auditable**: `MutationEvidence` answers "what 
 **Autonomy gate** (checked by deterministic Truth Engine BEFORE agent executes):
 All 9 autonomous boundary conditions must be satisfied. If not → `REVIEW_REQUIRED`.
 
-**Failure handling**: Mutation failure → action NOT marked completed, retry permitted.
+**Failure handling**: Mutation failure → action NOT marked completed, retry permitted **only after reconciliation** (plan.md § Action Identity, Idempotency & Crash Reconciliation). A post-dispatch timeout is an UNKNOWN outcome, never an automatic failure, and MUST NOT trigger a blind retry. Request timeout default 30 s, configurable (plan.md § Retry & Timeout Engineering Policy).
+
+**Action identity**: the call carries a stable `action_id` for `REMEDIATE_ARTIFACT` derived from (`workflow_id`, action type, `source_version`/`change_id`, `artifact_id`). Pre-dispatch intent (expected before-state ref/hash, expected after-value) is persisted before the tool is invoked. A mutation completed by post-crash reconciliation is recorded as `MutationEvidence` with `reconciled = true` — never as `NoOpEvidence`.
 
 **Trust-boundary validation (Crossing 2)**: schema · provenance/correlation · expected tool identity · expected artifact identity · authorization scope (`artifact_id ∈ authorized_scope`; caller is the mutation-authorized identity) · source-version applicability · before-state hash consistency (`before_hash` equals the pre-state hash the Truth Engine recorded before invoking the tool) · atomic-change invariants (exactly one requirement changed; `after_value` equals the approved `current_value`; no additional divergence; authoritative source untouched). A `NO_OP` claim is validated on its own terms — `evaluated_artifact_hash` resolves and `observed_value == expected_value` — and is rejected if presented with a fabricated before/after pair.
 
@@ -148,7 +159,7 @@ A schema-valid response naming an artifact outside `authorized_scope` or citing 
 **Model**: `gemini-3.5-flash`
 **Responsibility**: Compose and deliver operational delta to affected worker. Optionally generate Veo microtraining asset.
 
-**Identity**: `driftzero-enablement` Agent Identity (primary) / dedicated service account (fallback).
+**Identity**: `driftzero-enablement` Agent Identity (primary, GEAP) / logical agent context inside the `driftzero-api` Cloud Run service (fallback — not a separate IAM principal).
 
 **Permissions**: READ + NOTIFY
 - Read ChangeSet and remediation result
@@ -173,7 +184,7 @@ class DeliveryResult(BaseModel):
 
 **Authority boundary**: an agent asserting `delivered: true`, or narrating delivery in text, is **insufficient** and MUST NOT satisfy FR-004. `DELIVERED` is recorded only on positive mechanism evidence. A successful Veo generation (Crossing 5) never establishes delivery — `training_video_ref` is supplementary content attached to a delivery that must independently prove itself.
 
-**Failure handling**: Delivery failure → NOT marked as `DELIVERED`, retry permitted.
+**Failure handling**: Delivery failure → NOT marked as `DELIVERED`, retry permitted under the stable `DELIVER_DELTA` action identity. If a first call succeeded but its response was lost, recovery reconciles using the delivery mechanism's receipt/idempotency key where available rather than re-sending blindly; absent a resolvable receipt the action stays `FAILED_OR_UNCERTAIN`.
 
 ---
 
@@ -183,7 +194,7 @@ class DeliveryResult(BaseModel):
 **Model**: `gemma-4-12b` (via Cloud Run GPU endpoint)
 **Responsibility**: Process raw frontline evidence image → derive normalized observation.
 
-**Identity**: `driftzero-field-verify` Agent Identity where deployed on Agent Runtime; where field verification remains a Cloud Run GPU inference service, that service runs under its own dedicated Cloud Run **service account** (a runtime identity, not an Agent Identity).
+**Identity**: `driftzero-field-verify` Agent Identity where deployed on Agent Runtime; in the fallback the agent is a logical context inside `driftzero-api`, and the separate `gemma-verification` GPU service it calls runs under its own Cloud Run **service account** (a runtime identity, not an Agent Identity).
 
 **Permissions**: READ-ONLY + INFERENCE
 - Read raw evidence image (GCS or upload)
@@ -197,10 +208,13 @@ class DeliveryResult(BaseModel):
 **Output**:
 ```python
 class FieldObservation(BaseModel):
+    submission_id: str  # stable logical identity of the evidence submission
     raw_evidence_ref: str  # GCS URI to raw image
     observed_label_position: str  # "LEFT" | "TOP_RIGHT" | "INCONCLUSIVE"
     confidence_note: str  # informational only, NOT authoritative
 ```
+
+**Transport duplicate vs new attempt**: re-delivery carrying the same `submission_id` resolves to the existing `VerificationEvent` — no second authoritative attempt, no newer `event_sequence`, no duplicated evidence. A genuinely new submission carries a different `submission_id` and may be the corrected attempt after FAIL/INCONCLUSIVE. Inference request timeout default 60 s, configurable; exhaustion yields the unavailable/inconclusive path and never fabricates PASS.
 
 **Trust-boundary validation (Crossing 4)**: schema · workflow/change provenance · raw evidence reference (resolvable, hash-recorded, associated with this workflow) · expected verification operation · allowed normalized observation enum — `LEFT` | `TOP_RIGHT` | `INCONCLUSIVE`, any other value rejected rather than coerced · event chronology (monotonic `event_sequence`; an older event cannot override a newer one) · source-version applicability.
 
@@ -223,7 +237,11 @@ class FieldObservation(BaseModel):
 - Expected-vs-observed deterministic comparator
 - Trust-boundary validation at all five non-authoritative crossings (ChangeSet, RemediationEvidence, DeliveryResult, FieldObservation, Veo output), with context-appropriate layers per crossing
 - Discriminated remediation-outcome adjudication (`MutationEvidence` vs `NoOpEvidence`)
-- Tool-invocation authorization broker in the fallback architecture (which agent identity may invoke which tool)
+- Tool-invocation authorization broker in the fallback architecture (which **logical** agent identity may invoke which tool — application-level, not IAM)
+- Stable action identity and the `ActionExecution` idempotency/reconciliation ledger (`REMEDIATE_ARTIFACT`, `DELIVER_DELTA`, `PROCESS_FIELD_EVIDENCE`, `GENERATE_PROOF`)
+- Transport-duplicate absorption vs new-attempt distinction (`submission_id`, `action_id`)
+- Post-crash reconciliation of side effects, and fail-closed when the outcome cannot be safely established
+- Affected-artifact cardinality qualification (0 / exactly 1 / >1)
 - Supersession detection and transition
 - Retry deduplication
 - Seven `PROOF_COMPLETE` invariant evaluation
@@ -278,9 +296,11 @@ The authorized mutation capability is specified here as a contract only. **No im
 
 ```
 apply_authorized_artifact_patch(
+    action_id: str,            # stable idempotency identity (REMEDIATE_ARTIFACT)
     artifact_id: str,
     requirement_id: str,
     expected_before_value: str,
+    expected_before_hash: str, # pre-state the Truth Engine recorded before dispatch
     new_value: str,
     source_procedure_id: str,
     source_version: str,
@@ -291,6 +311,7 @@ apply_authorized_artifact_patch(
 
 **Non-negotiable properties:**
 - Read-write; exactly one atomic requirement change per call.
+- Idempotent on `action_id` where technically possible: a repeated call with the same `action_id` MUST NOT apply the change twice, and SHOULD return the original receipt so recovery can reconcile deterministically.
 - The tool has no access whatsoever to the authoritative source procedure.
 - The tool's response is never trusted on schema validity alone — the Truth Engine applies the Crossing 2 trust-boundary layers (plan.md § Trust-Boundary Validation Policy) before any state advance, and adjudicates the discriminated `MutationEvidence` / `NoOpEvidence` outcome.
 - If Agent Gateway is unavailable, the same authorization boundary is enforced by the deterministic in-process broker, and evidence is labelled application-level enforcement rather than platform-enforced.

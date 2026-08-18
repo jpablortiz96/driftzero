@@ -110,10 +110,20 @@ Cost risk is rated LOW / MEDIUM / HIGH relative to the $50 internal budget alert
 - HOW TO VERIFY: `gcloud secrets list`; `gcloud run services describe <svc> --format='value(spec.template.spec.containers[0].env)'` shows secret references rather than literal values; `git log -p` contains no credential.
 - COST RISK: LOW (Secret Manager is billed per secret version and access operation; negligible at this volume).
 
+**MS-12b — Create the CORE Cloud Run runtime service accounts**
+- WHY: the core architecture deploys **two** Cloud Run services (`driftzero-api` holding the API + Truth Engine + all four ADK agents in one process, and `gemma-verification` for GPU inference). Each service needs one least-privilege runtime identity. Running on the default Compute Engine service account would be over-privileged. **This is not Agent Identity and not per-agent IAM identity** — per-agent separation in the fallback is application-level, enforced by the in-process authorization broker (plan.md § Agent Identity and Runtime Identity Model).
+- WHEN: before the first Cloud Run deploy (M2); the `gemma-verification` account before M3.
+- EXPECTED RESULT: two service accounts exist — `driftzero-run-sa` and `driftzero-gemma-sa` — each granted only the roles it needs:
+  - `driftzero-run-sa`: `roles/datastore.user` (Firestore), `roles/storage.objectAdmin` **scoped to the evidence bucket only**, `roles/pubsub.subscriber`, `roles/aiplatform.user` (Gemini), `roles/logging.logWriter`, `roles/monitoring.metricWriter`, `roles/cloudtrace.agent`, plus `roles/run.invoker` on `gemma-verification`, and `roles/secretmanager.secretAccessor` on named secrets only if MS-12 selected Secret Manager.
+  - `driftzero-gemma-sa`: `roles/storage.objectViewer` on the evidence bucket, `roles/logging.logWriter`, `roles/monitoring.metricWriter`, `roles/cloudtrace.agent`. No Firestore, no Pub/Sub, no write access.
+  - Neither account receives project-level Owner/Editor.
+- HOW TO VERIFY: `gcloud iam service-accounts list` shows both; `gcloud projects get-iam-policy $PROJECT_ID --flatten=bindings --filter='bindings.members:driftzero-run-sa'` lists only the intended roles; after deploy, `gcloud run services describe driftzero-api --format='value(spec.template.spec.serviceAccountName)'` returns `driftzero-run-sa@...` and the same check on `gemma-verification` returns `driftzero-gemma-sa@...`; a deliberate cross-boundary call (Gemma SA attempting a Firestore write) is denied.
+- COST RISK: LOW (IAM is free; correct scoping reduces blast radius, not spend).
+
 **MS-13 — Configure Cloud Run CPU service `--max-instances`**
 - WHY: bounds concurrency-driven spend and matches the single-workflow demo scale.
 - WHEN: at first Cloud Run deploy (M2).
-- EXPECTED RESULT: API/agent service deployed with `--max-instances=2 --min-instances=0` (scale-to-zero).
+- EXPECTED RESULT: API/agent service deployed with `--max-instances=2 --min-instances=0` (scale-to-zero) **and `--service-account=driftzero-run-sa@$PROJECT_ID.iam.gserviceaccount.com`** (MS-12b), never the default Compute Engine account.
 - HOW TO VERIFY: `gcloud run services describe driftzero-api --format='value(spec.template.metadata.annotations)'` shows the max-instances annotation as 2.
 - COST RISK: LOW when set; MEDIUM if left at the platform default.
 
@@ -127,7 +137,7 @@ Cost risk is rated LOW / MEDIUM / HIGH relative to the $50 internal budget alert
 **MS-15 — Configure Cloud Run GPU service `--max-instances`**
 - WHY: GPU-seconds are the dominant cost driver in this project.
 - WHEN: at the Gemma deploy (M3), on the serving route G1 selected.
-- EXPECTED RESULT: Gemma service deployed with `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0` (scale-to-zero).
+- EXPECTED RESULT: Gemma service deployed with `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0` (scale-to-zero) **and `--service-account=driftzero-gemma-sa@$PROJECT_ID.iam.gserviceaccount.com`** (MS-12b).
 - HOW TO VERIFY: `gcloud run services describe gemma-verification` shows one GPU, max-instances 1, min-instances 0.
 - COST RISK: **HIGH** if misconfigured (idle or parallel GPU instances); LOW when scale-to-zero with max-instances 1.
 
@@ -192,7 +202,7 @@ Each step below belongs to **M4** and runs only after its ACCESS_CHECK in plan.m
 - EXPECTED RESULT: the project's organization parent confirmed; agents deployed with agent identity enabled (`identity_type: AGENT_IDENTITY`); IAM bindings accepted for members of the form `principal://agents.global.org-ORGANIZATION_ID.system.id.goog/resources/aiplatform/projects/PROJECT_NUMBER/locations/LOCATION/reasoningEngines/AGENT_ENGINE_ID`; the mutation capability bound to the Remediation Agent identity only.
 - HOW TO VERIFY: `gcloud projects describe $PROJECT_ID --format='value(parent)'` returns an organization; the `add-iam-policy-binding --member="principal://..."` command succeeds; the agent obtains a working token.
 - COST RISK: LOW.
-- FALLBACK IF IT FAILS (e.g. the project has no organization): dedicated per-agent Cloud Run **service accounts** plus the deterministic in-process authorization broker. Documented in `LIMITATIONS.md` as a service-account fallback — never described as Agent Identity.
+- FALLBACK IF IT FAILS (e.g. the project has no organization): the MS-12b per-service runtime service accounts plus the logical agent context and deterministic in-process authorization broker. This is application-level per-agent authorization; documented in `LIMITATIONS.md` as such — never described as Agent Identity, and never as per-agent IAM runtime identity.
 
 **MS-24 — Agent Gateway setup — OPTIONAL / TRACK ENHANCEMENT**
 - WHY: platform-enforced policy on the one governed path (Remediation Agent → Artifact Mutation Tool ALLOW; Frontline Enablement Agent → DENIED).
@@ -306,6 +316,41 @@ A stubbed Artifact Mutation Tool returns **schema-valid** `RemediationEvidence` 
 **Proves**: SC-003 (no-op path), completion condition 3(b)
 An already-compliant artifact is processed. **Expected**: `NoOpEvidence` recorded with `evaluated_artifact_ref`, `evaluated_artifact_hash`, `observed_value == expected_value`, and `no_op_reason` — with **no** `before_ref`/`after_ref`, no fabricated after-state, no diff rendering, and no write to the artifact. The Change Proof satisfies condition 3 by the no-op path and remains independently auditable.
 
+### VS-12: Data Classification & Lineage Validation (planned; not implemented yet)
+**Proves**: FR-010, SC-013
+```bash
+pytest tests/unit/truth_engine/test_data_lineage.py -v
+```
+Every judged evidence item carries a `DataClassification` with a non-exclusive `labels` set and an ordered `lineage` chain. Coverage:
+- synthetic SOP fixture → `labels: [SYNTHETIC]`;
+- real Gemini call over a synthetic fixture → `labels: [REAL]`, lineage referencing the synthetic source;
+- derived observation from a real photo of the demo box → `labels: [DERIVED, REAL]` with both photo and demo-scenario lineage entries;
+- any emulated dependency → `labels: [SIMULATED]` (e.g. the `SIMULATED` local agent-registry manifest when the Agent Registry gate fails);
+- Change Proof → `labels: [DERIVED]` with lineage covering every contributing evidence ref.
+**Expected**: no judged evidence item lacks a classification; no lineage chain is broken; no `REAL` label is applied to an emulated dependency.
+**Evidence**: `evidence/reports/data_lineage.json`
+
+### VS-13: Idempotency, Duplicate Evidence & Crash Reconciliation (planned; not implemented yet)
+**Proves**: FR-002 (cardinality), FR-007, FR-008, FR-011; SC-010, SC-011
+```bash
+pytest tests/unit/truth_engine/test_action_idempotency.py -v
+```
+- **Transport duplicate field evidence**: the same `submission_id` re-delivered → resolves to the existing `VerificationEvent`; no second authoritative attempt, no newer `event_sequence`, no duplicated proof evidence.
+- **New attempt**: a different `submission_id` after FAIL → a distinct verification attempt that may produce the corrected PASS (US6 path preserved).
+- **Crash after successful mutation**: mutation applied externally, process dies before `REMEDIATION_COMPLETED` persists, workflow resumes with the artifact already at `TOP_RIGHT` → reconciliation over stored pre-action intent + validated post-state records `MutationEvidence` with `reconciled = true`, **never** `NoOpEvidence`.
+- **Unsafe reconciliation**: intent missing, invariants violated, or post-state not exactly the intended after-state → fail closed to `REVIEW_REQUIRED`, no fabricated evidence.
+- **Delivery retry**: lost response with a recoverable receipt → reconciled without a second delivery; no receipt → stays `FAILED_OR_UNCERTAIN`.
+- **Proof singularity**: repeated `GENERATE_PROOF` attempts → one canonical `proof_id`.
+- **Cardinality**: zero qualified artifacts → `REVIEW_REQUIRED` with candidate evidence and no `affected_artifact_id`; exactly one → proceeds; more than one → `REVIEW_REQUIRED` with the full candidate set, no arbitrary selection.
+**Evidence**: `evidence/runs/hero_run_001/idempotency_log.json`, `evidence/runs/hero_run_001/restart_recovery.json`
+
+### VS-14: Frontline Surface Minimums (planned; not implemented yet)
+**Proves**: spec.md § Frontline Surface Minimums (supports FR-004, FR-005; no FR/SC depends on it)
+Manual or lightweight automated check of the demo surface against the six minimums:
+1. hero flow usable on a narrow phone viewport; 2. `FAIL`/`INCONCLUSIVE`/`PASS` conveyed as **text**, never color alone; 3. hero-flow controls carry accessible text labels; 4. file-upload fallback works when camera capture is unavailable; 5. validation/error feedback readable as text; 6. desktop core controls keyboard-operable.
+**Expected**: all six satisfied, or any exception recorded honestly in `LIMITATIONS.md`. This is a minimum-interaction check, not a WCAG conformance audit and not a design review.
+**Evidence**: `evidence/reports/frontline_minimums.json`
+
 ### VS-9: Security — Agent Gateway ALLOW / DENY (planned; OPTIONAL / TRACK ENHANCEMENT)
 **Proves**: least-privilege boundary between the Remediation Agent and the Frontline Enablement Agent
 - **ALLOW**: Remediation Agent identity → Agent Gateway → `artifact-mutation-tool` → succeeds; allow decision logged with the caller SPIFFE principal and tool name.
@@ -344,10 +389,16 @@ evidence/
 │   └── hero_run_001/
 │       ├── state_transitions.json
 │       ├── agent_traces.json
+│       ├── impact_determination.json   # candidate set + qualification results
+│       ├── delivery_receipt.json       # positive delivery evidence
+│       ├── idempotency_log.json        # ActionExecution ledger + duplicate absorption
+│       ├── restart_recovery.json       # crash reconciliation evidence
 │       └── change_proof.json
 ├── reports/                     # Test reports
 │   ├── unit_test_report.xml
-│   └── multimodal_eval.json
+│   ├── multimodal_eval.json
+│   ├── data_lineage.json        # FR-010 / SC-013 classification + lineage coverage
+│   └── frontline_minimums.json  # Frontline Surface Minimums check
 ├── geap_access_gate.json        # Per-component ACCESS_CHECK results (PASS/FAIL + fallback taken)
 ├── cost_model.json              # ESTIMATED unit drivers/caps vs ACTUAL COST OBSERVED from billing
 ├── g1_gemma_feasibility.json     # G1 GO/FALLBACK decision + fixture results
