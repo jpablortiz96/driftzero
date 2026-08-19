@@ -548,7 +548,7 @@ def test_outdated_event_cannot_override_current_pass() -> None:
 
 def test_generation_refuses_when_not_eligible() -> None:
     with pytest.raises(ProofGenerationError) as exc:
-        generate_change_proof(make_context(receipt=None), completion_timestamp=T1)
+        generate_change_proof(make_context(receipt=None))
     assert ProofCondition.C4_DELTA_DELIVERED in exc.value.failed_conditions
 
 
@@ -564,49 +564,53 @@ def test_generation_refuses_when_not_eligible() -> None:
 )
 def test_blocked_states_cannot_produce_a_proof(state: WorkflowState) -> None:
     with pytest.raises(ProofGenerationError):
-        generate_change_proof(make_context(state=state), completion_timestamp=T1)
+        generate_change_proof(make_context(state=state))
 
 
 def test_canonical_proof_is_deterministic_for_identical_inputs() -> None:
-    a = generate_change_proof(make_context(), completion_timestamp=T1)
-    b = generate_change_proof(make_context(), completion_timestamp=T1)
+    a = generate_change_proof(make_context())
+    b = generate_change_proof(make_context())
     assert a.content_hash == b.content_hash
     assert a.model_dump(mode="json") == b.model_dump(mode="json")
 
 
 def test_proof_hash_covers_content_changes() -> None:
-    proof = generate_change_proof(make_context(), completion_timestamp=T1)
+    proof = generate_change_proof(make_context())
     tampered = proof.model_copy(update={"worker_id": "worker-other"})
     assert compute_proof_hash(tampered) != proof.content_hash
 
 
 def test_both_remediation_paths_generate_valid_proofs() -> None:
-    mutation_proof = generate_change_proof(make_context(), completion_timestamp=T1)
-    no_op_proof = generate_change_proof(
-        make_context(evidence=make_no_op()), completion_timestamp=T1
-    )
+    mutation_proof = generate_change_proof(make_context())
+    no_op_proof = generate_change_proof(make_context(evidence=make_no_op()))
     assert isinstance(mutation_proof.remediation_evidence, MutationEvidence)
     assert isinstance(no_op_proof.remediation_evidence, NoOpEvidence)
     assert len(no_op_proof.evidence_manifest.remediation_evidence_refs) == 1
 
 
 def test_repeated_generation_resolves_to_one_logical_proof() -> None:
-    first = generate_change_proof(make_context(), completion_timestamp=T1)
-    retry = generate_change_proof(
-        make_context(), completion_timestamp=T1, existing_proof=first
-    )
+    first = generate_change_proof(make_context())
+    retry = generate_change_proof(make_context(), existing_proof=first)
     assert retry is first
     assert retry.proof_id == first.proof_id == derive_proof_id(WF)
 
 
-def test_proof_identity_is_independent_of_timestamp() -> None:
-    """A retry at a different moment cannot create proof-2."""
-    a = generate_change_proof(make_context(), completion_timestamp=T1)
-    b = generate_change_proof(
-        make_context(), completion_timestamp=datetime(2026, 8, 18, 8, 0, tzinfo=UTC)
-    )
+def test_completion_timestamp_is_derived_not_caller_supplied() -> None:
+    """The generator accepts no timestamp, so a retry cannot alter the document.
+
+    Superseded the earlier "identity is independent of timestamp" test: the timestamp is
+    now derived from the authoritative passing verification event, so regeneration is
+    byte-identical rather than merely identity-stable.
+    """
+    import inspect
+
+    assert "completion_timestamp" not in inspect.signature(generate_change_proof).parameters
+
+    a = generate_change_proof(make_context())
+    b = generate_change_proof(make_context())
     assert a.proof_id == b.proof_id
-    assert a.content_hash != b.content_hash, "timestamp is inside the canonical document"
+    assert a.content_hash == b.content_hash
+    assert a.completion_timestamp == PASS_EVENT.timestamp
 
 
 def test_proof_id_differs_per_workflow() -> None:
@@ -618,7 +622,7 @@ def test_proof_id_differs_per_workflow() -> None:
 
 def test_valid_proof_revalidates() -> None:
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     result = ProofValidator().validate(proof, context)
     assert result.valid is True
     assert result.failures == ()
@@ -626,7 +630,7 @@ def test_valid_proof_revalidates() -> None:
 
 def test_content_hash_mismatch_invalidates_proof() -> None:
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     result = ProofValidator().validate(
         proof, context, resolved_contents={"gs://evidence/after.json": '{"tampered":true}'}
     )
@@ -637,7 +641,7 @@ def test_content_hash_mismatch_invalidates_proof() -> None:
 
 def test_unchanged_content_passes_revalidation() -> None:
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     result = ProofValidator().validate(
         proof,
         context,
@@ -648,7 +652,7 @@ def test_unchanged_content_passes_revalidation() -> None:
 
 def test_tampered_proof_document_fails_revalidation() -> None:
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     tampered = proof.model_copy(update={"worker_id": "worker-other"})
     result = ProofValidator().validate(tampered, context)
     assert result.valid is False
@@ -657,7 +661,7 @@ def test_tampered_proof_document_fails_revalidation() -> None:
 
 def test_forged_proof_identity_fails_revalidation() -> None:
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     forged = proof.model_copy(update={"proof_id": "proof-2"})
     result = ProofValidator().validate(forged, context)
     assert result.valid is False
@@ -667,7 +671,7 @@ def test_forged_proof_identity_fails_revalidation() -> None:
 def test_validation_fails_when_conditions_no_longer_hold() -> None:
     """A proof issued earlier does not stay valid if the workflow was superseded."""
     context = make_context()
-    proof = generate_change_proof(context, completion_timestamp=T1)
+    proof = generate_change_proof(context)
     result = ProofValidator().validate(proof, make_context(state=WorkflowState.SUPERSEDED))
     assert result.valid is False
     assert ProofValidationFailure.UNMET_COMPLETION_CONDITION in result.failures

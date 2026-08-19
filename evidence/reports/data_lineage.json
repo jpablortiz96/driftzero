@@ -1,0 +1,35 @@
+{
+  "items": [
+    {
+      "item": "approved_change_fixture",
+      "labels": [
+        "SYNTHETIC"
+      ],
+      "lineage": []
+    },
+    {
+      "item": "remediation_evidence",
+      "labels": [
+        "SYNTHETIC"
+      ],
+      "remediation_type": "MUTATION"
+    },
+    {
+      "count": 2,
+      "item": "verification_events",
+      "results": [
+        "FAIL",
+        "PASS"
+      ]
+    },
+    {
+      "content_hash": "5d7d98bffaf2cf93886699f63db0264fcb7460e7b4f170f6ecc8246509495511",
+      "item": "change_proof",
+      "labels": [
+        "DERIVED"
+      ]
+    }
+  ],
+  "note": "Classification is non-exclusive; hashes give content identity only, not signature, attestation, or non-repudiation.",
+  "scenario": "hero_change_deployment"
+}

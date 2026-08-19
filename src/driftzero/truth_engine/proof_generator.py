@@ -232,10 +232,29 @@ def compute_proof_hash(proof: ChangeProof) -> str:
     return canonical_hash(canonical_proof_material(proof))
 
 
+def derive_completion_timestamp(context: ProofContext) -> datetime:
+    """The authoritative completion moment, derived — never read from a clock.
+
+    Completion is established by the authoritative passing field verification, so that
+    event's persisted timestamp *is* the completion moment. Condition 5 guarantees such
+    an event exists before generation is permitted.
+
+    Deriving it rather than accepting a caller value is what makes a proof exactly
+    reproducible after a crash: regenerating from the same persisted authoritative state
+    yields byte-identical canonical material, so an orchestration retry cannot change
+    ``content_hash``.
+    """
+    latest = latest_authoritative_event(
+        context.verification_events, context.workflow.workflow_id
+    )
+    if latest is None:
+        raise ProofGenerationError((ProofCondition.C5_LATEST_VERIFICATION_PASS,))
+    return latest.timestamp
+
+
 def generate_change_proof(
     context: ProofContext,
     *,
-    completion_timestamp: datetime,
     existing_proof: ChangeProof | None = None,
 ) -> ChangeProof:
     """T044/T046 — generate the canonical Change Proof, once.
@@ -243,9 +262,10 @@ def generate_change_proof(
     Refuses unless all seven invariants pass. If a proof already exists for this
     workflow it is returned unchanged, so a retry never creates a second one.
 
-    ``completion_timestamp`` is caller-supplied rather than read from a clock, keeping
-    generation deterministic: identical authoritative inputs produce an identical
-    canonical representation and hash. The proof *identity* does not depend on it.
+    ``completion_timestamp`` is **derived** from the authoritative passing verification
+    event (see :func:`derive_completion_timestamp`). The generator accepts no caller
+    timestamp and reads no clock, so identical authoritative inputs always produce an
+    identical canonical representation and hash — including after a crash and replay.
     """
     if existing_proof is not None:
         return existing_proof
@@ -277,7 +297,7 @@ def generate_change_proof(
         verification_event_id=latest.event_id,
         worker_id=workflow.worker_id,
         evidence_manifest=context.manifest,
-        completion_timestamp=completion_timestamp,
+        completion_timestamp=derive_completion_timestamp(context),
         content_hash="0" * 64,
         data_classification=DataClassification(labels=[ClassificationLabel.DERIVED]),
     )
