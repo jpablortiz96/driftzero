@@ -1,0 +1,12 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "_note": "box_size diverges from approved source (STANDARD) -> autonomy condition 8 fails -> REVIEW_REQUIRED.",
+  "artifact_id": "wi-packing-standard-003",
+  "artifact_type": "work_instruction",
+  "operation_id": "packing_label_placement",
+  "requirement_id": "label_position",
+  "current_value": "LEFT",
+  "content_ref": "fixtures/divergent_artifact.json",
+  "authorized_for_remediation": true,
+  "requirements": {"label_position": "LEFT", "box_size": "LARGE", "seal_type": "TAPE"}
+}

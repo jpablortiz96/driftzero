@@ -1,0 +1,26 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "_note": "Two independently qualifying artifacts -> REVIEW_REQUIRED, no arbitrary selection.",
+  "artifacts": [
+    {
+      "artifact_id": "wi-packing-standard-001",
+      "artifact_type": "work_instruction",
+      "operation_id": "packing_label_placement",
+      "requirement_id": "label_position",
+      "current_value": "LEFT",
+      "content_ref": "fixtures/multi_candidate_artifacts.json#0",
+      "authorized_for_remediation": true,
+      "requirements": {"label_position": "LEFT", "box_size": "STANDARD", "seal_type": "TAPE"}
+    },
+    {
+      "artifact_id": "wi-packing-nightshift-007",
+      "artifact_type": "work_instruction",
+      "operation_id": "packing_label_placement",
+      "requirement_id": "label_position",
+      "current_value": "LEFT",
+      "content_ref": "fixtures/multi_candidate_artifacts.json#1",
+      "authorized_for_remediation": true,
+      "requirements": {"label_position": "LEFT", "box_size": "STANDARD", "seal_type": "TAPE"}
+    }
+  ]
+}

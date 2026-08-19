@@ -1,0 +1,16 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "_note": "SYNTHETIC enterprise fixture. Business content is fabricated; event delivery is real.",
+  "change_id": "chg-2026-0817-0001",
+  "source_procedure_id": "proc-warehouse-packing",
+  "source_version": "v2",
+  "previous_version": "v1",
+  "operation_id": "packing_label_placement",
+  "requirement_id": "label_position",
+  "previous_value": "LEFT",
+  "current_value": "TOP_RIGHT",
+  "authorized_scope": ["wi-packing-standard-001"],
+  "approved_status": "APPROVED",
+  "source_evidence_ref": "fixtures/source_procedure_v2.json",
+  "received_at": "2026-08-17T09:00:00Z"
+}

@@ -1,0 +1,12 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "_note": "Lexical LEFT match in a DIFFERENT operation. MUST NOT be marked affected (SC-002).",
+  "artifact_id": "wi-forklift-turn-014",
+  "artifact_type": "work_instruction",
+  "operation_id": "forklift_navigation",
+  "requirement_id": "turn_direction",
+  "current_value": "LEFT",
+  "content_ref": "fixtures/unrelated_artifact.json",
+  "authorized_for_remediation": false,
+  "requirements": {"turn_direction": "LEFT"}
+}

@@ -1,0 +1,12 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "_note": "Already at TOP_RIGHT before this workflow mutates anything -> NO_OP path (US3 scenario 2).",
+  "artifact_id": "wi-packing-standard-002",
+  "artifact_type": "work_instruction",
+  "operation_id": "packing_label_placement",
+  "requirement_id": "label_position",
+  "current_value": "TOP_RIGHT",
+  "content_ref": "fixtures/already_compliant_artifact.json",
+  "authorized_for_remediation": true,
+  "requirements": {"label_position": "TOP_RIGHT", "box_size": "STANDARD", "seal_type": "TAPE"}
+}

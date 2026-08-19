@@ -23,8 +23,8 @@
 8. M6 polish may begin only after core hero functionality is stable.
 9. Frontend polish may never be P0 ahead of M0–M3 core proof.
 10. No task belonging solely to an optional enhancement may become a prerequisite for FR-001–FR-011 acceptance.
-11. **Protocol rule**: no Agent Gateway policy-implementation task may begin before T105 records the tool-protocol decision.
-12. **Identity rule**: no Agent Identity implementation task may begin before T102 completes the organization/access check.
+11. **Protocol rule**: no Agent Gateway policy-implementation task may begin before T113 records the tool-protocol decision.
+12. **Identity rule**: no Agent Identity implementation task may begin before T110 completes the organization/access check.
 
 ## Deployment Topology (authoritative — do not inflate)
 
@@ -43,11 +43,11 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 
 **Purpose**: Repository scaffolding required before M0 logic. No cloud account needed.
 
-- [ ] T001 Create Python package scaffolding: `pyproject.toml` (Python 3.11+, pydantic>=2.0, pytest, pytest-asyncio), `src/driftzero/__init__.py`, `src/driftzero/models/__init__.py`, `src/driftzero/truth_engine/__init__.py`, `tests/unit/truth_engine/__init__.py`
-- [ ] T002 [P] Create `.env.example` with placeholder keys only (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `FIRESTORE_DATABASE`, `GCS_EVIDENCE_BUCKET`, `PUBSUB_TOPIC`, `GEMINI_MODEL`, `GEMMA_ENDPOINT`) and `.gitignore` ignoring `.env`, per Constitution § Secret Hygiene
-- [ ] T003 [P] Configure `pytest.ini`/`pyproject.toml` test settings and `ruff.toml` lint config; add `make test` equivalent in `Makefile`
-- [ ] T004 [P] Create synthetic business fixtures in `fixtures/`: `hero_change.json` (LEFT→TOP_RIGHT), `stale_artifact.json`, `unrelated_artifact.json` (lexical `LEFT` match, different operation), `already_compliant_artifact.json`, `multi_candidate_artifacts.json`, `divergent_artifact.json` (extra `box_size` divergence) — every file labelled `SYNTHETIC`
-- [ ] T005 [P] Create approved source procedure fixtures `fixtures/source_procedure_v1.json` and `fixtures/source_procedure_v2.json` (structured requirement sets for the divergence comparator and supersession tests)
+- [x] T001 Create Python package scaffolding: `pyproject.toml` (Python 3.11+, pydantic>=2.0, pytest, pytest-asyncio), `src/driftzero/__init__.py`, `src/driftzero/models/__init__.py`, `src/driftzero/truth_engine/__init__.py`, `tests/unit/truth_engine/__init__.py`
+- [x] T002 [P] Create `.env.example` with placeholder keys only (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_REGION`, `FIRESTORE_DATABASE`, `GCS_EVIDENCE_BUCKET`, `PUBSUB_TOPIC`, `GEMINI_MODEL`, `GEMMA_ENDPOINT`) and `.gitignore` ignoring `.env`, per Constitution § Secret Hygiene
+- [x] T003 [P] Configure `pytest.ini`/`pyproject.toml` test settings and `ruff.toml` lint config; add `make test` equivalent in `Makefile`
+- [x] T004 [P] Create synthetic business fixtures in `fixtures/`: `hero_change.json` (LEFT→TOP_RIGHT), `stale_artifact.json`, `unrelated_artifact.json` (lexical `LEFT` match, different operation), `already_compliant_artifact.json`, `multi_candidate_artifacts.json`, `divergent_artifact.json` (extra `box_size` divergence) — every file labelled `SYNTHETIC`
+- [x] T005 [P] Create approved source procedure fixtures `fixtures/source_procedure_v1.json` and `fixtures/source_procedure_v2.json` (structured requirement sets for the divergence comparator and supersession tests)
 
 **Checkpoint**: Repository builds and `pytest` runs with zero tests collected.
 
@@ -61,20 +61,20 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 
 ### M0.1 — Typed domain models
 
-- [ ] T006 [P] [M0] Implement `DataClassification` (non-exclusive `labels`) and `LineageEntry` (`source_ref`, `source_classification`, `relationship`) in `src/driftzero/models/classification.py` — FR-010
-- [ ] T007 [P] [M0] Implement `DownstreamArtifact` (incl. `authorized_for_remediation`, `operation_id`, `requirement_id`, `current_value`, `content_ref`) in `src/driftzero/models/artifact.py` — FR-002
-- [ ] T008 [P] [M0] Implement `ApprovedChange` (all data-model fields incl. `authorized_scope`, `previous_value`, `current_value`, `source_version`, `previous_version`) in `src/driftzero/models/change.py` — FR-001
-- [ ] T009 [M0] Implement `ChangeSet` and `AffectedArtifactCandidate` (four condition booleans + `is_affected` as a **proposal** field) in `src/driftzero/models/change.py` (depends T008) — FR-002
-- [ ] T010 [P] [M0] Implement `WorkflowState` enum with all **13 canonical states** plus a category map (`PROGRESSIVE` / `BLOCKING_RECOVERABLE` / `BLOCKING_GATE` / `TERMINAL_SUCCESS` / `TERMINAL_NON_SUCCESS`) in `src/driftzero/models/workflow.py` — spec § State Requirements
-- [ ] T011 [P] [M0] Implement `MutationEvidence` (`before_ref`, `after_ref`, `before_hash`, `after_hash`, `before_value`, `after_value`, `patch_description`, `reconciled`, `action_id`) in `src/driftzero/models/remediation.py` — FR-003
-- [ ] T012 [M0] Implement `NoOpEvidence` (`evaluated_artifact_ref`, `evaluated_artifact_hash`, `observed_value`, `expected_value`, `no_op_reason`, `compliance_basis`) and the `RemediationEvidence` discriminated union on `remediation_type` in `src/driftzero/models/remediation.py`; reject `before_ref`/`after_ref` on the NO_OP variant (depends T011) — FR-003, US3-2
-- [ ] T013 [P] [M0] Implement `ObservedPosition` enum (`LEFT` | `TOP_RIGHT` | `INCONCLUSIVE`, closed) and `FieldObservation` (`submission_id`, `raw_evidence_ref`, `observed_label_position`, `confidence_note` non-authoritative) in `src/driftzero/models/verification.py` — FR-005
-- [ ] T014 [M0] Implement `VerificationEvent` (`event_id`, `submission_id`, `event_sequence`, `raw_evidence_ref`, `derived_observation`, `expected_value`, `verification_result`) in `src/driftzero/models/verification.py` (depends T013) — FR-005
-- [ ] T015 [P] [M0] Implement `DeliveryResult` (`worker_id`, `delivery_mechanism`, `delta_content`, `delivered`, `delivery_evidence_ref`, optional `training_video_ref`) in `src/driftzero/models/delivery.py` — FR-004
-- [ ] T016 [P] [M0] Implement `ActionExecution`, `ActionType` (`REMEDIATE_ARTIFACT`, `DELIVER_DELTA`, `PROCESS_FIELD_EVIDENCE`, `GENERATE_PROOF`) and `ActionStatus` (`PLANNED`, `ATTEMPTED`, `COMPLETED`, `FAILED_OR_UNCERTAIN`) in `src/driftzero/models/action.py` — FR-007, FR-008
-- [ ] T017 [M0] Implement `Workflow` aggregate incl. `affected_artifact_id`, `candidate_artifact_refs`, `remediation_evidence`, `verification_events`, `latest_verification_status`, `event_sequence` in `src/driftzero/models/workflow.py` (depends T007, T010, T012, T014) — FR-008
-- [ ] T018 [P] [M0] Implement `EvidenceManifest` (`remediation_evidence_refs`, `rejected_result_refs`, `verification_refs`, `state_transition_refs`, `content_hashes`) in `src/driftzero/models/proof.py` — FR-006
-- [ ] T019 [M0] Implement `ChangeProof` with `remediation_evidence` union field and `content_hash` in `src/driftzero/models/proof.py` (depends T012, T018) — FR-006
+- [x] T006 [P] [M0] Implement `DataClassification` (non-exclusive `labels`) and `LineageEntry` (`source_ref`, `source_classification`, `relationship`) in `src/driftzero/models/classification.py` — FR-010
+- [x] T007 [P] [M0] Implement `DownstreamArtifact` (incl. `authorized_for_remediation`, `operation_id`, `requirement_id`, `current_value`, `content_ref`) in `src/driftzero/models/artifact.py` — FR-002
+- [x] T008 [P] [M0] Implement `ApprovedChange` (all data-model fields incl. `authorized_scope`, `previous_value`, `current_value`, `source_version`, `previous_version`) in `src/driftzero/models/change.py` — FR-001
+- [x] T009 [M0] Implement `ChangeSet` and `AffectedArtifactCandidate` (four condition booleans + `is_affected` as a **proposal** field) in `src/driftzero/models/change.py` (depends T008) — FR-002
+- [x] T010 [P] [M0] Implement `WorkflowState` enum with all **13 canonical states** plus a category map (`PROGRESSIVE` / `BLOCKING_RECOVERABLE` / `BLOCKING_GATE` / `TERMINAL_SUCCESS` / `TERMINAL_NON_SUCCESS`) in `src/driftzero/models/workflow.py` — spec § State Requirements
+- [x] T011 [P] [M0] Implement `MutationEvidence` (`before_ref`, `after_ref`, `before_hash`, `after_hash`, `before_value`, `after_value`, `patch_description`, `reconciled`, `action_id`) in `src/driftzero/models/remediation.py` — FR-003
+- [x] T012 [M0] Implement `NoOpEvidence` (`evaluated_artifact_ref`, `evaluated_artifact_hash`, `observed_value`, `expected_value`, `no_op_reason`, `compliance_basis`) and the `RemediationEvidence` discriminated union on `remediation_type` in `src/driftzero/models/remediation.py`; reject `before_ref`/`after_ref` on the NO_OP variant (depends T011) — FR-003, US3-2
+- [x] T013 [P] [M0] Implement `ObservedPosition` enum (`LEFT` | `TOP_RIGHT` | `INCONCLUSIVE`, closed) and `FieldObservation` (`submission_id`, `raw_evidence_ref`, `observed_label_position`, `confidence_note` non-authoritative) in `src/driftzero/models/verification.py` — FR-005
+- [x] T014 [M0] Implement `VerificationEvent` (`event_id`, `submission_id`, `event_sequence`, `raw_evidence_ref`, `derived_observation`, `expected_value`, `verification_result`) in `src/driftzero/models/verification.py` (depends T013) — FR-005
+- [x] T015 [P] [M0] Implement `DeliveryResult` (`worker_id`, `delivery_mechanism`, `delta_content`, `delivered`, `delivery_evidence_ref`, optional `training_video_ref`) in `src/driftzero/models/delivery.py` — FR-004
+- [x] T016 [P] [M0] Implement `ActionExecution`, `ActionType` (`REMEDIATE_ARTIFACT`, `DELIVER_DELTA`, `PROCESS_FIELD_EVIDENCE`, `GENERATE_PROOF`) and `ActionStatus` (`PLANNED`, `ATTEMPTED`, `COMPLETED`, `FAILED_OR_UNCERTAIN`) in `src/driftzero/models/action.py` — FR-007, FR-008
+- [x] T017 [M0] Implement `Workflow` aggregate incl. `affected_artifact_id`, `candidate_artifact_refs`, `remediation_evidence`, `verification_events`, `latest_verification_status`, `event_sequence` in `src/driftzero/models/workflow.py` (depends T007, T010, T012, T014) — FR-008
+- [x] T018 [P] [M0] Implement `EvidenceManifest` (`remediation_evidence_refs`, `rejected_result_refs`, `verification_refs`, `state_transition_refs`, `content_hashes`) in `src/driftzero/models/proof.py` — FR-006
+- [x] T019 [M0] Implement `ChangeProof` with `remediation_evidence` union field and `content_hash` in `src/driftzero/models/proof.py` (depends T012, T018) — FR-006
 
 ### M0.2 — State machine
 

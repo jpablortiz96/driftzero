@@ -1,0 +1,11 @@
+{
+  "_data_classification": {"labels": ["SYNTHETIC"], "lineage": []},
+  "source_procedure_id": "proc-warehouse-packing",
+  "source_version": "v1",
+  "approved_status": "APPROVED",
+  "operations": {
+    "packing_label_placement": {
+      "requirements": {"label_position": "LEFT", "box_size": "STANDARD", "seal_type": "TAPE"}
+    }
+  }
+}
