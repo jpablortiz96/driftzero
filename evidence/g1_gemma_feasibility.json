@@ -1,0 +1,80 @@
+{
+  "access_checks": {
+    "application_default_credentials": {
+      "present": false,
+      "state": "ACTUAL_OBSERVED"
+    },
+    "gcloud_authenticated": {
+      "authenticated": false,
+      "detail": "no credentialed accounts",
+      "state": "ACTUAL_OBSERVED"
+    },
+    "gcloud_cli": {
+      "path": "C:\\Users\\jpabl\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.CMD",
+      "present": true,
+      "state": "ACTUAL_OBSERVED"
+    },
+    "gcp_project": {
+      "configured": false,
+      "detail": "(unset)",
+      "state": "ACTUAL_OBSERVED"
+    },
+    "local_env_file": {
+      "present": false,
+      "state": "ACTUAL_OBSERVED"
+    }
+  },
+  "data_classification": {
+    "labels": [
+      "REAL"
+    ],
+    "note": "Access-check results are REAL observations of this environment. No inference was performed unless records are present below."
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.13"
+  },
+  "fixtures": {
+    "capture_type_required": "REAL_PHYSICAL_CAPTURE",
+    "directory": "D:\\DriftZero\\fixtures\\multimodal",
+    "directory_exists": false,
+    "note": "Synthetic images may not substitute for the required physical capture. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer.",
+    "required": {
+      "label_ambiguous_01.jpg": {
+        "bytes": 0,
+        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_ambiguous_01.jpg",
+        "present": false
+      },
+      "label_left_01.jpg": {
+        "bytes": 0,
+        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_left_01.jpg",
+        "present": false
+      },
+      "label_top_right_01.jpg": {
+        "bytes": 0,
+        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_top_right_01.jpg",
+        "present": false
+      }
+    }
+  },
+  "generated_at": "2026-08-19T20:39:26.742125+00:00",
+  "model_variant": "gemma-4-12b",
+  "records": [],
+  "route_config": {
+    "endpoint": null,
+    "max_tokens": 8,
+    "prompt": "Look at the package in the image. Report ONLY where the shipping label is physically placed. Answer with exactly one word: LEFT, TOP_RIGHT, or INCONCLUSIVE. Answer INCONCLUSIVE if the label position cannot be determined from what is visible. Do not explain. Do not judge correctness.",
+    "quantization": "NOT_YET_DECIDABLE",
+    "temperature": 0
+  },
+  "serving_route": null,
+  "stability": {},
+  "task": "G1 \u2014 Gemma feasibility risk spike (T061-T067)",
+  "verdict": "NOT_YET_DECIDABLE",
+  "verdict_reasoning": [
+    "T061/T062: no credentialed gcloud account \u2014 model access and licence acceptance cannot be verified",
+    "T062/T063: no GCP project configured \u2014 serving route and GPU quota cannot be evaluated",
+    "T064: physical fixtures not captured \u2014 real box/label photos require human capture and cannot be synthesized",
+    "T066: no inference performed, so distinguishability is unmeasured"
+  ]
+}
