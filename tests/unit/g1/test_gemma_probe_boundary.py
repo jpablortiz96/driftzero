@@ -116,7 +116,7 @@ def test_failed_and_inconclusive_records_are_preserved() -> None:
     records = [
         ProbeRecord(
             fixture_id="label_left_01.jpg",
-            fixture_classification="REAL_PHYSICAL",
+            fixture_classification="SYNTHETIC",
             expected_observation="LEFT",
             raw_output="banana",
             normalized_output=None,
@@ -129,7 +129,7 @@ def test_failed_and_inconclusive_records_are_preserved() -> None:
         ),
         ProbeRecord(
             fixture_id="label_ambiguous_01.jpg",
-            fixture_classification="REAL_PHYSICAL",
+            fixture_classification="SYNTHETIC",
             expected_observation="INCONCLUSIVE",
             raw_output="INCONCLUSIVE",
             normalized_output="INCONCLUSIVE",
@@ -149,7 +149,7 @@ def test_instability_across_repeats_is_reported_not_hidden() -> None:
     records = [
         ProbeRecord(
             fixture_id="label_left_01.jpg",
-            fixture_classification="REAL_PHYSICAL",
+            fixture_classification="SYNTHETIC",
             expected_observation="LEFT",
             raw_output=value,
             normalized_output=value,

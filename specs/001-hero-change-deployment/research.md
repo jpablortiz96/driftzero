@@ -114,8 +114,10 @@ Bindings are granted with the ordinary `gcloud ... add-iam-policy-binding --memb
 **Decision**: `DEMO_CRITICAL`. Field verification vision model.
 **Rationale**: Gemma 4 is natively multimodal with image understanding. Used to derive a structured observation (LEFT/TOP_RIGHT/INCONCLUSIVE) from frontline photo evidence. Constitutes a second Google AI model for bonus scoring.
 **Serving option**: Vertex AI Model Garden endpoint (simplest one-click deploy) OR Cloud Run with vLLM container (scale-to-zero, cost efficient but more setup).
-**Recommended**: Cloud Run + vLLM with NVIDIA L4 GPU for scale-to-zero cost control.
-**Variant**: Gemma 4 12B (encoder-free architecture, fits L4 24GB).
+**Recommended (SUPERSEDED — pre-G1 desk research)**: ~~Cloud Run + vLLM with NVIDIA L4 GPU for scale-to-zero cost control.~~ This recommendation was made before any deployment was attempted and was **superseded by empirical G1 evidence**. It is retained as the historical decision record, not as guidance.
+**SELECTED (empirical, G1 T062)**: Vertex AI Model Garden self-deploy — `google/gemma4@gemma-4-12b-it`, `g4-standard-48`, `NVIDIA_RTX_PRO_6000` ×1, `us-central1`. This is the configuration the platform actually admitted. Evidence: `evidence/g1_platform_session.json`, `evidence/g1_gemma_feasibility.json`.
+**Cloud Run + vLLM status**: an evaluated-but-**not selected** alternative serving route. It was never exercised — no Cloud Run deployment was attempted. It remains available should the selected route be abandoned, but it is **not** the currently selected route and **not** the G1 fallback path. The G1 fallback defined by T068 is operator-supplied manual observation, which is a different mechanism entirely.
+**Variant**: Gemma 4 12B (encoder-free architecture, fits L4 24GB; the selected route serves it on RTX PRO 6000 instead).
 **Interface**: Image in → strict JSON structured observation out.
 **Critical constraint**: Gemma produces the observation only. PASS/FAIL is deterministic application logic.
 **Sources**: ai.google.dev/gemma, Cloud Run GPU documentation

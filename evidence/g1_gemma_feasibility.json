@@ -1,80 +1,320 @@
 {
   "access_checks": {
     "application_default_credentials": {
-      "present": false,
-      "state": "ACTUAL_OBSERVED"
+      "state": "NOT_TESTED"
     },
     "gcloud_authenticated": {
-      "authenticated": false,
-      "detail": "no credentialed accounts",
-      "state": "ACTUAL_OBSERVED"
-    },
-    "gcloud_cli": {
-      "path": "C:\\Users\\jpabl\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin\\gcloud.CMD",
-      "present": true,
+      "authenticated": true,
+      "detail": "sourced from the recorded platform session, not re-queried",
       "state": "ACTUAL_OBSERVED"
     },
     "gcp_project": {
-      "configured": false,
-      "detail": "(unset)",
+      "configured": true,
+      "detail": "driftzero-agentic-2026",
       "state": "ACTUAL_OBSERVED"
     },
     "local_env_file": {
       "present": false,
       "state": "ACTUAL_OBSERVED"
+    },
+    "mode": {
+      "note": "No subprocess or network call was made while generating this report.",
+      "offline": true,
+      "state": "ACTUAL_OBSERVED"
     }
+  },
+  "billing_state": {
+    "billing_account_name": "",
+    "billing_enabled": false,
+    "classification": "INTENTIONAL_COST_SAFETY_STATE",
+    "consequence": "Subsequent Vertex AI calls return PERMISSION_DENIED with reason BILLING_DISABLED.",
+    "intentional": true,
+    "not_an_infrastructure_defect": true,
+    "project_id": "driftzero-agentic-2026",
+    "provenance": "OPERATOR_REPORTED",
+    "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
+    "remediation_required_now": false
   },
   "data_classification": {
     "labels": [
       "REAL"
     ],
-    "note": "Access-check results are REAL observations of this environment. No inference was performed unless records are present below."
+    "note": "Access-check and platform-session results are REAL observations. No inference was performed unless records are present below. Fixture images currently on disk are SYNTHETIC \u2014 see fixtures.required[*]."
   },
+  "decision_blockers": [
+    {
+      "code": "T063_QUOTA",
+      "detail": "The quota family for the accelerator required by the G1-selected route was returned with an empty details object and no numeric value. Neither >= 1 nor 0 may be asserted.",
+      "summary": "effective NVIDIA_RTX_PRO_6000 quota unknown",
+      "task": "T063"
+    },
+    {
+      "code": "T064_PHYSICAL_FIXTURES",
+      "detail": "The canonical REAL_PHYSICAL paths hold no declared physical capture. Absence fails closed, and generated media in ./synthetic/ can never substitute \u2014 neither by declaration nor by directory placement.",
+      "summary": "no REAL_PHYSICAL fixtures",
+      "task": "T064"
+    },
+    {
+      "code": "T066_DEPLOYMENT",
+      "detail": "The platform admitted the configuration and real attempts were made, but no deployed model ever existed. PLATFORM_SUPPORTED and PLATFORM_ATTEMPTED are true; DEPLOYMENT_SUCCEEDED is false.",
+      "summary": "no successful Gemma deployment",
+      "task": "T066"
+    },
+    {
+      "code": "T066_INFERENCE",
+      "detail": "0 inference record(s) present, 0 of them qualifying. A record qualifies only if it came from a REAL_PHYSICAL fixture and normalized into the closed observation domain.",
+      "summary": "zero successful qualifying Gemma inference records",
+      "task": "T066"
+    }
+  ],
+  "deployment_attempts": [
+    {
+      "attempt": 1,
+      "create_time": "2026-08-21T14:57:11.136873Z",
+      "deployment_succeeded": false,
+      "done": true,
+      "error_code": 13,
+      "error_message": "INTERNAL",
+      "inference_performed": false,
+      "label": "SPOT",
+      "operation_id": "1853041001086582784",
+      "operation_name": "projects/960160978064/locations/us-central1/operations/1853041001086582784",
+      "outcome": "FAILED",
+      "post_failure_state": {
+        "endpoints_listed": 0,
+        "models_listed": "empty"
+      },
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "publisher_model": "publishers/google/models/gemma4@gemma-4-12b-it",
+      "source_artifact": "evidence/g1_vertex_deploy_operation.json",
+      "update_time": "2026-08-21T14:57:12.526065Z"
+    },
+    {
+      "attempt": 2,
+      "cancel_attempt": {
+        "http_status": 400,
+        "message": "Operation .../7737979076664623104 is not cancellable.",
+        "status": "FAILED_PRECONDITION"
+      },
+      "deployment_succeeded": false,
+      "endpoint_created": "mg-endpoint-aa0fb0fc-bae0-4064-b68e-818020a2c6c8",
+      "endpoint_delete_attempt": {
+        "blocking_operation_describe": "NOT_FOUND",
+        "blocking_operation_id": "5198793311757795328",
+        "message": "another operation running: 5198793311757795328",
+        "status": "FAILED_PRECONDITION"
+      },
+      "endpoint_display_name": "driftzero-g1-gemma4-temp",
+      "inference_performed": false,
+      "label": "ON_DEMAND",
+      "observed_endpoint_state": {
+        "deployedModels": null
+      },
+      "operation_id": "7737979076664623104",
+      "outcome": "UNFINISHED_NO_DEPLOYED_MODEL",
+      "outcome_note": "The operation remained unfinished with no observable genericMetadata update during monitoring. An endpoint resource existed but carried no deployed model, so nothing was ever servable.",
+      "provenance": "OPERATOR_REPORTED",
+      "source_artifact": null,
+      "start_time": "2026-08-21T15:00:44.669042Z"
+    }
+  ],
   "environment": {
     "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.13.13"
   },
   "fixtures": {
+    "all_present": false,
     "capture_type_required": "REAL_PHYSICAL_CAPTURE",
     "directory": "D:\\DriftZero\\fixtures\\multimodal",
-    "directory_exists": false,
-    "note": "Synthetic images may not substitute for the required physical capture. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer.",
+    "directory_exists": true,
+    "note": "Presence is not provenance. Synthetic images may not substitute for the required physical capture, and an undeclared fixture fails closed as non-physical. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer.",
+    "physical_capture_satisfied": false,
+    "provenance_manifest_present": true,
     "required": {
       "label_ambiguous_01.jpg": {
         "bytes": 0,
-        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_ambiguous_01.jpg",
-        "present": false
+        "capture_method": "NOT_YET_CAPTURED",
+        "classification": "UNDECLARED",
+        "path": "fixtures\\multimodal\\label_ambiguous_01.jpg",
+        "present": false,
+        "satisfies_t064_physical_capture": false
       },
       "label_left_01.jpg": {
         "bytes": 0,
-        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_left_01.jpg",
-        "present": false
+        "capture_method": "NOT_YET_CAPTURED",
+        "classification": "UNDECLARED",
+        "path": "fixtures\\multimodal\\label_left_01.jpg",
+        "present": false,
+        "satisfies_t064_physical_capture": false
       },
       "label_top_right_01.jpg": {
         "bytes": 0,
-        "path": "D:\\DriftZero\\fixtures\\multimodal\\label_top_right_01.jpg",
-        "present": false
+        "capture_method": "NOT_YET_CAPTURED",
+        "classification": "UNDECLARED",
+        "path": "fixtures\\multimodal\\label_top_right_01.jpg",
+        "present": false,
+        "satisfies_t064_physical_capture": false
       }
     }
   },
-  "generated_at": "2026-08-19T20:39:26.742125+00:00",
+  "generated_at": "2026-08-21T16:50:51.808516+00:00",
+  "model_access": {
+    "eula_acceptance": {
+      "established": "The EULA was accepted as part of the deploy invocation.",
+      "evidence": "The deploy command explicitly contained --accept-eula.",
+      "not_established": "No licence-acceptance receipt or API response was captured. The negative case was never exercised: this repository holds no evidence about what the platform does when the EULA is absent, so no claim is made that a missing EULA would have failed before operation creation.",
+      "provenance": "OPERATOR_REPORTED",
+      "source_artifact": null
+    },
+    "model_backend_access": {
+      "established": "The project could reach this publisher model well enough for Vertex to admit the request and create a long-running deploy operation against it.",
+      "evidence": "Vertex AI admitted the request and created DeployOperationMetadata for publishers/google/models/gemma4@gemma-4-12b-it in project 960160978064, which then failed inside the backend with code 13 INTERNAL.",
+      "not_established": "It does not establish that the model was deployed, served, or invoked. It says nothing about entitlement enforcement ordering.",
+      "provenance": "EMPIRICALLY_OBSERVED",
+      "source_artifact": "evidence/g1_vertex_deploy_operation.json"
+    },
+    "model_variant": "gemma-4-12b",
+    "publisher_model": "publishers/google/models/gemma4@gemma-4-12b-it",
+    "variant_qualifier": "it (instruction-tuned)",
+    "what_this_does_NOT_prove": "It does not prove the model was deployed, served, or invoked. Backend INTERNAL failure occurred after admission."
+  },
   "model_variant": "gemma-4-12b",
+  "operational_holds": [
+    {
+      "blocks_g1_decision": false,
+      "code": "BILLING_DISABLED",
+      "detail": "A deliberate cost control adopted to stop an uncancellable GPU provisioning operation from accruing cost. Vertex calls now return PERMISSION_DENIED/BILLING_DISABLED. This says nothing about whether Gemma is technically feasible and is not evidence of model infeasibility.",
+      "financial_safety_control": true,
+      "infrastructure_defect": false,
+      "intentional": true,
+      "summary": "billing intentionally disabled on driftzero-agentic-2026"
+    }
+  ],
+  "outcome_flags": {
+    "DEPLOYMENT_SUCCEEDED": {
+      "basis": "Attempt 1 ended done=true with error code 13 INTERNAL and left 0 endpoints and no models. Attempt 2 created an endpoint whose deployedModels was null and never finished. No deployed model existed at any point.",
+      "value": false
+    },
+    "INFERENCE_SUCCEEDED": {
+      "basis": "No servable endpoint ever existed, so zero Gemma inference calls were made and zero observations were produced. Billing is now disabled, so no further call is possible.",
+      "value": false
+    },
+    "PLATFORM_ATTEMPTED": {
+      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND).",
+      "value": true
+    },
+    "PLATFORM_SUPPORTED": {
+      "basis": "Vertex AI Model Garden admitted a deploy request for gemma4@gemma-4-12b-it with the g4-standard-48 / NVIDIA_RTX_PRO_6000 x1 / pytorch-vllm-serve configuration, and RTX PRO 6000 availability was observed in three us-central1 zones.",
+      "value": true
+    }
+  },
+  "quota_findings": {
+    "cloud_quotas_family": {
+      "applicable_locations_include_us_central1": true,
+      "details": {},
+      "details_value_present": false,
+      "effective_numeric_quota": "UNKNOWN_NOT_RETURNED",
+      "effective_numeric_quota_note": "dimensionsInfos[NVIDIA_RTX_PRO_6000].details is an empty object. No numeric value was returned, so no effective quota may be asserted in either direction \u2014 neither >= 1 nor 0.",
+      "family_entry_present": true,
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "metric": "compute.googleapis.com/gpus_per_gpu_family",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "quota_id": "GPUS-PER-GPU-FAMILY-per-project-region",
+      "quota_increase_eligibility": {
+        "isEligible": true
+      },
+      "source_artifact": "evidence/g1_quota_gpus_per_gpu_family.json"
+    },
+    "legacy_compute_regional_listing": {
+      "adjacent_observation": {
+        "limit": 1.0,
+        "metric": "NVIDIA_L4_GPUS",
+        "relevance": "NOT_APPLICABLE_TO_SELECTED_ROUTE",
+        "relevance_note": "L4 is the accelerator named in the original T063 task text (Cloud Run + vLLM route). The route empirically verified in T062 is Vertex AI Model Garden self-deploy on NVIDIA_RTX_PRO_6000. This L4 limit does NOT satisfy T063 for the selected route and must not be read as doing so.",
+        "usage": 0.0
+      },
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "rtx_pro_6000_metric_note": "No NVIDIA_RTX_PRO_6000_GPUS metric appears anywhere in the 113-entry listing. The accelerator required by the selected route therefore has no observable numeric limit in this capture either.",
+      "rtx_pro_6000_metric_present": false,
+      "scope_note": "Regional compute quota listing (contains CPUS/INSTANCES/DISKS_TOTAL_GB and no NETWORKS/FIREWALLS/IMAGES). The capture does not name its own region, so the region is not asserted here.",
+      "source_artifact": "evidence/g1_quota_compute_regional.json",
+      "total_quota_entries": 113
+    },
+    "requirement": "Effective GPU quota sufficient for one g4-standard-48 deployment with NVIDIA_RTX_PRO_6000 x1 in us-central1 \u2014 the accelerator family of the G1-selected serving route. Quota from another accelerator family does not satisfy this requirement.",
+    "resolved": false,
+    "route_supersession": {
+      "artifacts_updated": [
+        "specs/001-hero-change-deployment/tasks.md T063 (quota target)",
+        "specs/001-hero-change-deployment/tasks.md T066 (depends T063 added)",
+        "specs/001-hero-change-deployment/tasks.md T102 (M3 consumes the G1-selected route)",
+        "specs/001-hero-change-deployment/tasks.md \u00a7 ordering rules (G1 serving-feasibility chain)",
+        "specs/001-hero-change-deployment/quickstart.md MS-14, MS-15, MS-16, prerequisites, region criterion",
+        "specs/001-hero-change-deployment/research.md R-008 (supersession annotation)"
+      ],
+      "note": "A planning/task retarget only. No FR, SC, or product requirement was altered.",
+      "previous_candidate": "Cloud Run + NVIDIA L4",
+      "previous_candidate_source": "research.md R-008 recommendation and original T063 task text",
+      "product_requirements_changed": false,
+      "superseded_by": "Vertex AI Model Garden + NVIDIA RTX PRO 6000",
+      "superseded_by_basis": "empirical G1 platform evidence (T062): the configuration Vertex actually admitted"
+    }
+  },
   "records": [],
   "route_config": {
     "endpoint": null,
     "max_tokens": 8,
     "prompt": "Look at the package in the image. Report ONLY where the shipping label is physically placed. Answer with exactly one word: LEFT, TOP_RIGHT, or INCONCLUSIVE. Answer INCONCLUSIVE if the label position cannot be determined from what is visible. Do not explain. Do not judge correctness.",
-    "quantization": "NOT_YET_DECIDABLE",
+    "quantization": "The accepted configuration carried no quantization override. The effective serving precision was never observed because no deployment completed, so no numeric precision is asserted here.",
     "temperature": 0
   },
-  "serving_route": null,
+  "route_decision": {
+    "decided": true,
+    "model_variant": "gemma-4-12b",
+    "model_variant_qualifier": "it (instruction-tuned), as gemma4@gemma-4-12b-it",
+    "provenance": "OPERATOR_REPORTED",
+    "quantization_basis": "The configuration the platform accepted carried no quantization parameter, so the decision is to use the route default published for the pytorch-vllm-serve container. The effective numeric precision was never observed because no deployment completed, and none is asserted.",
+    "quantization_decision": "MODEL_GARDEN_DEFAULT_NO_OVERRIDE",
+    "routes_evaluated": [
+      {
+        "basis": "Vertex AI admitted a real deploy request for gemma4@gemma-4-12b-it and returned a concrete supported machine/accelerator/container configuration. This is the only route for which the platform empirically confirmed a supported deployment shape.",
+        "route": "vertex_ai_model_garden",
+        "status": "SELECTED"
+      },
+      {
+        "basis": "research.md R-008 originally recommended Cloud Run + vLLM on NVIDIA L4 for scale-to-zero cost control. It was not exercised: the Model Garden self-deploy path was the one the platform actually accepted for this publisher model. No Cloud Run deployment was attempted.",
+        "route": "cloud_run_vllm",
+        "status": "NOT_SELECTED"
+      }
+    ],
+    "selected_route": "vertex_ai_model_garden",
+    "selected_route_label": "Vertex AI Model Garden self-deploy",
+    "task": "T062",
+    "what_this_decision_does_NOT_establish": "It does not establish that the route works end to end. DEPLOYMENT_SUCCEEDED and INFERENCE_SUCCEEDED are both false.",
+    "what_this_decision_establishes": "PLATFORM_SUPPORTED \u2014 a route and a supported deployment configuration are known."
+  },
+  "serving_route": "vertex_ai_model_garden",
   "stability": {},
   "task": "G1 \u2014 Gemma feasibility risk spike (T061-T067)",
   "verdict": "NOT_YET_DECIDABLE",
   "verdict_reasoning": [
-    "T061/T062: no credentialed gcloud account \u2014 model access and licence acceptance cannot be verified",
-    "T062/T063: no GCP project configured \u2014 serving route and GPU quota cannot be evaluated",
-    "T064: physical fixtures not captured \u2014 real box/label photos require human capture and cannot be synthesized",
-    "T066: no inference performed, so distinguishability is unmeasured"
-  ]
+    "T063_QUOTA: effective NVIDIA_RTX_PRO_6000 quota unknown",
+    "T064_PHYSICAL_FIXTURES: no REAL_PHYSICAL fixtures",
+    "T066_DEPLOYMENT: no successful Gemma deployment",
+    "T066_INFERENCE: zero successful qualifying Gemma inference records"
+  ],
+  "verified_deployment_configuration": {
+    "accelerator_availability_observed_zones": [
+      "us-central1-b",
+      "us-central1-c",
+      "us-central1-f"
+    ],
+    "accelerator_count": 1,
+    "accelerator_type": "NVIDIA_RTX_PRO_6000",
+    "container_image": "us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20260603_0916_RC01",
+    "machine_type": "g4-standard-48",
+    "note": "Configuration accepted by Vertex AI Model Garden self-deploy for this publisher model. Establishes PLATFORM_SUPPORTED only \u2014 the platform admitted this shape. It does not establish that a deployment completed.",
+    "provenance": "OPERATOR_REPORTED",
+    "quantization_note": "The accepted configuration carried no quantization override. The effective serving precision was never observed because no deployment completed, so no numeric precision is asserted here.",
+    "quantization_parameter_present": false
+  }
 }

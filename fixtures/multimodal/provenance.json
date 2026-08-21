@@ -1,0 +1,53 @@
+{
+  "schema": "driftzero.g1.fixture_provenance.v1",
+  "directory_role": "CANONICAL_REAL_PHYSICAL",
+  "purpose": "This directory is reserved for REAL_PHYSICAL evidence: photographs of a real box with a printed label. Nothing generated, rendered, or composited may occupy these paths. Generated engineering images live in ./synthetic/ under different filenames so the two can never be confused.",
+  "t064_requirement": "REAL_PHYSICAL_CAPTURE — a photograph of a real physical object, taken with a camera.",
+  "capture_methods": {
+    "PHYSICAL_CAMERA_CAPTURE": "Photograph of a real physical object. The only method that satisfies T064.",
+    "GENERATED_IMAGE": "Image produced by a generative model or renderer. Never satisfies T064.",
+    "SYNTHETIC_COMPOSITE": "Assembled or edited from other images. Never satisfies T064."
+  },
+  "gating_rules": [
+    "Presence is not provenance: a file at a canonical path proves only that a file exists.",
+    "Absence fails closed: a missing canonical path leaves T064 unsatisfied.",
+    "An undeclared fixture fails closed and is classified UNDECLARED.",
+    "A declaration carrying the SYNTHETIC label can never satisfy T064, whatever else it asserts.",
+    "Directory placement confers nothing: moving a generated image into this directory does not make it REAL.",
+    "Declaration alone confers nothing: labelling a generated image REAL does not make it a physical capture. The declaration must be internally consistent AND truthful, and truthfulness is a human attestation this repository cannot verify from bytes."
+  ],
+  "fixtures": {
+    "label_left_01.jpg": {
+      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "present": false,
+      "classification": [],
+      "capture_method": "NOT_YET_CAPTURED",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "LEFT",
+      "synthetic_counterpart": "synthetic/label_left_synthetic_01.jpg"
+    },
+    "label_top_right_01.jpg": {
+      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "present": false,
+      "classification": [],
+      "capture_method": "NOT_YET_CAPTURED",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "TOP_RIGHT",
+      "synthetic_counterpart": "synthetic/label_top_right_synthetic_01.jpg"
+    },
+    "label_ambiguous_01.jpg": {
+      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "present": false,
+      "classification": [],
+      "capture_method": "NOT_YET_CAPTURED",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "INCONCLUSIVE",
+      "synthetic_counterpart": "synthetic/label_ambiguous_synthetic_01.jpg"
+    }
+  },
+  "t064_status": "PENDING — all three required physical captures are outstanding. No file occupies any canonical path.",
+  "when_capturing": {
+    "declare": "Set classification to [\"REAL\"], capture_method to \"PHYSICAL_CAMERA_CAPTURE\", satisfies_t064_physical_capture to true, present to true, and status to \"CAPTURED\".",
+    "answer_leakage_rule": "The observation must be derivable from visible evidence alone. No filename, EXIF field, QR code, watermark, directory name exposed to the model, or prompt hint may encode the answer. Filenames are used only by the harness to look up the expected value and are never sent to the model."
+  }
+}

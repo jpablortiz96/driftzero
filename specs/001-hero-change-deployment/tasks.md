@@ -148,12 +148,12 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Runs in parallel with**: M0/M1 (independent of both).
 **MUST precede**: all M4 optional GEAP work.
 
-- [ ] T061 [MANUAL] [G1] Verify Gemma 4 model access and accept the licence for the project; record the outcome in `evidence/g1_gemma_feasibility.json` (quickstart MS-16)
-- [ ] T062 [MANUAL] [G1] Evaluate serving routes — Vertex AI Model Garden endpoint vs Cloud Run + vLLM — and record the selected route with its rationale in `evidence/g1_gemma_feasibility.json`. Variant/quantization choice is decided **here**, not assumed (research R-008)
-- [ ] T063 [MANUAL] [G1] Check/request Cloud Run NVIDIA L4 GPU quota in the selected region **only if** T062 selected the GPU route; record quota status in `evidence/g1_gemma_feasibility.json` (quickstart MS-14)
+- [x] T061 [MANUAL] [G1] Verify Gemma 4 model access and accept the licence for the project; record the outcome in `evidence/g1_gemma_feasibility.json` (quickstart MS-16)
+- [x] T062 [MANUAL] [G1] Evaluate serving routes — Vertex AI Model Garden endpoint vs Cloud Run + vLLM — and record the selected route with its rationale in `evidence/g1_gemma_feasibility.json`. Variant/quantization choice is decided **here**, not assumed (research R-008)
+- [ ] T063 [MANUAL] [G1] Verify effective GPU quota for the serving route selected by G1. For the currently selected Vertex AI Model Garden route, `NVIDIA_RTX_PRO_6000` in `us-central1` must have sufficient effective quota for one `g4-standard-48` deployment. Quota from another accelerator family MUST NOT satisfy this task. Record quota status in `evidence/g1_gemma_feasibility.json` (quickstart MS-14). **Supersession**: previous candidate *Cloud Run + NVIDIA L4*, superseded by empirical G1 platform evidence *Vertex Model Garden + NVIDIA RTX PRO 6000* (T062); see `evidence/g1_platform_session.json` § `quota_findings`
 - [ ] T064 [MANUAL] [G1] Prepare the physical demo fixture (real box, printed high-contrast label) and capture `fixtures/multimodal/label_left_01.jpg`, `label_top_right_01.jpg`, `label_ambiguous_01.jpg` (quickstart MS-18)
 - [x] T065 [G1] Implement the feasibility probe harness `scripts/g1_gemma_probe.py` that sends each fixture to the selected serving route and records the raw structured response — probe only, not the production adapter
-- [ ] T066 [G1] Run the distinguishability evaluation and write per-fixture results (expected vs observed) to `evidence/g1_gemma_feasibility.json` (depends T064, T065)
+- [ ] T066 [G1] Run the distinguishability evaluation and write per-fixture results (expected vs observed) to `evidence/g1_gemma_feasibility.json` (depends T063, T064, T065)
 - [ ] T067 [G1] **G1 EXIT GATE** — record an explicit **GO** or **FALLBACK** decision with the justifying fixture results in `evidence/g1_gemma_feasibility.json` (depends T066)
 - [ ] T068 [P] [G1] Implement the deterministic/manual observation fallback adapter in `src/driftzero/agents/manual_observation.py` accepting an operator-supplied normalized observation — required only if T067 returns FALLBACK; keeps FR-005 satisfiable without Gemma
 
@@ -220,7 +220,7 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Depends on**: M2 (T101) and the G1 decision (T067). **MUST NOT depend on M4.**
 **Conditional**: run only if T067 returned **GO**; otherwise the T068 fallback remains in place and this phase is documented as deferred.
 
-- [ ] T102 [M3] Deploy Gemma 4 on the route selected in T062; if the Cloud Run GPU route was chosen, deploy `gemma-verification` with `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0 --service-account=driftzero-gemma-sa@…` (quickstart MS-15) (depends T067, T091)
+- [ ] T102 [M3] Provision/deploy the Gemma verification serving route **selected by G1**, using the verified configuration recorded by T062/T063 — never a route hardcoded here. For the currently selected route this is Vertex AI Model Garden, `google/gemma4@gemma-4-12b-it`, `g4-standard-48`, `NVIDIA_RTX_PRO_6000` ×1, `us-central1`. **Do not provision until T063 is satisfied and billing/cost authorization is explicitly restored.** (quickstart MS-15) (depends T063, T067, T091)
 - [ ] T103 [M3] Implement the production Gemma inference adapter with strict structured-observation output in `src/driftzero/agents/gemma_client.py`, 60 s configurable timeout, out-of-enum values rejected (depends T079, T102)
 - [ ] T104 [M3] Build the versioned multimodal evaluation fixture set under `fixtures/multimodal/` with a `manifest.json` recording expected observations per image (depends T064)
 - [ ] T105 [M3] Multimodal evaluation run in `tests/multimodal/test_gemma_observations.py`; emit results to `evidence/reports/multimodal_eval.json` (depends T103, T104)
@@ -313,6 +313,7 @@ G1 (T061–T068) ── GATE T067 ───────────────�
 - T110 (organization/access check) **before** T111 (Agent Identity provisioning).
 - T113 (protocol decision) **before** T114–T117 (mutation tool deployment and all Gateway policy work).
 - T067 (G1 GO/FALLBACK) **before** T102 (Gemma deployment) and before all of M4.
+- G1 serving-feasibility chain: **T063** (effective GPU quota for the selected route) and **T064** (REAL_PHYSICAL fixtures) **before** T066 (deployment + inference feasibility) **before** T067 (GO/FALLBACK) **before** T102 (M3 provisioning). T063 and T064 are deliberately **parallel**, not sequential: photographing a physical box does not depend on GPU quota. Both must be satisfied before T066.
 - T091 (runtime service accounts) **before** T096 and T102 (deploys that bind them).
 - T032 (action ledger) **before** T033–T036 (dedup and reconciliation).
 

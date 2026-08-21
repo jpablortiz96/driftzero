@@ -1,0 +1,41 @@
+{
+  "schema": "driftzero.g1.fixture_provenance.v1",
+  "directory_role": "SYNTHETIC_ENGINEERING_FIXTURES",
+  "purpose": "Generated images used only to exercise the probe's transport and normalization path. They are engineering fixtures, never evidence. They are deliberately named differently from the canonical REAL_PHYSICAL filenames so a copy or a path mistake cannot silently promote them.",
+  "hard_rules": [
+    "These files MUST NOT be moved or copied into the canonical fixtures/multimodal/ paths.",
+    "These files can never satisfy T064, in any directory, under any declaration.",
+    "Results obtained from these files can never contribute to a G1 GO verdict.",
+    "Any inference record produced from these files is non-qualifying by construction."
+  ],
+  "fixtures": {
+    "label_left_synthetic_01.jpg": {
+      "classification": ["SYNTHETIC"],
+      "capture_method": "GENERATED_IMAGE",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "LEFT",
+      "sha256": "e4a895f69b674b3394c5552673116448781111cf4204cf8689b3e813d6f3ab70",
+      "canonical_counterpart": "../label_left_01.jpg",
+      "note": "Synthetic engineering fixture. Not evidence."
+    },
+    "label_top_right_synthetic_01.jpg": {
+      "classification": ["SYNTHETIC"],
+      "capture_method": "GENERATED_IMAGE",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "TOP_RIGHT",
+      "sha256": "0877d6801d4f9a46117b2546852f7e9e276ca2374d2c01831ecf236a62b01e74",
+      "canonical_counterpart": "../label_top_right_01.jpg",
+      "note": "Synthetic engineering fixture. Not evidence."
+    },
+    "label_ambiguous_synthetic_01.jpg": {
+      "classification": ["SYNTHETIC"],
+      "capture_method": "GENERATED_IMAGE",
+      "satisfies_t064_physical_capture": false,
+      "expected_observation": "INCONCLUSIVE",
+      "sha256": "bb56aab20b6770a6e0d88bafcc292b2bd95961d3bb151e87e766b031f44bc08b",
+      "canonical_counterpart": "../label_ambiguous_01.jpg",
+      "note": "Synthetic engineering fixture. Not evidence."
+    }
+  },
+  "provenance_note": "These images were generated during the G1 spike. They were briefly placed at the canonical REAL_PHYSICAL paths, which caused the T064 blocker to clear silently; they were moved here and the gate was hardened so presence can never again be mistaken for provenance."
+}

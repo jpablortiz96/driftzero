@@ -9,7 +9,7 @@
 - Google Cloud SDK (`gcloud`) authenticated
 - GCP project with billing enabled and hackathon credits applied
 - `uv` or `pip` for Python dependency management
-- Docker (for Gemma 4 Cloud Run GPU deployment)
+- Docker — **only** if the G1-selected serving route needs a locally built container. The currently selected route (Vertex AI Model Garden self-deploy) uses a Google-published serving container and needs no local Docker build.
 
 ## Manual Setup Required
 
@@ -71,7 +71,7 @@ Cost risk is rated LOW / MEDIUM / HIGH relative to the $50 internal budget alert
 **MS-7 — Select a single region**
 - WHY: cross-region calls add latency and cost; GPU availability is region-specific.
 - WHEN: before M2.
-- EXPECTED RESULT: one region chosen for Firestore, Cloud Run, GCS, and Vertex AI (prefer a region with L4 GPU availability, e.g. `us-central1`).
+- EXPECTED RESULT: one region chosen for Firestore, Cloud Run, GCS, and Vertex AI — it must have availability for the accelerator of the **G1-selected** serving route. For the current route that is `NVIDIA_RTX_PRO_6000`, observed in `us-central1` (zones `-b`, `-c`, `-f`).
 - HOW TO VERIFY: the region is recorded in `.env` and used by every deploy command.
 - COST RISK: LOW (wrong choice causes rework, not spend).
 
@@ -127,25 +127,30 @@ Cost risk is rated LOW / MEDIUM / HIGH relative to the $50 internal budget alert
 - HOW TO VERIFY: `gcloud run services describe driftzero-api --format='value(spec.template.metadata.annotations)'` shows the max-instances annotation as 2.
 - COST RISK: LOW when set; MEDIUM if left at the platform default.
 
-**MS-14 — Check/request Cloud Run GPU quota**
-- WHY: L4 GPU quota is not granted by default and approval is not instant; this is the single most common schedule risk for the Gemma path.
+**MS-14 — Verify GPU quota for the G1-selected serving route**
+- WHY: GPU quota is not granted by default and approval is not instant; this is the single most common schedule risk for the Gemma path.
 - WHEN: as early as possible — during the **G1** feasibility spike, well before M3. Only required if G1 selects a GPU serving route.
-- EXPECTED RESULT: a non-zero limit for the Cloud Run NVIDIA L4 GPU quota in the selected region, or an approved increase request.
-- HOW TO VERIFY: Cloud Console → IAM & Admin → Quotas filtered to the Cloud Run GPU quota in the selected region (or `gcloud services quota list --service=run.googleapis.com --consumer=projects/$PROJECT_ID`) shows a non-zero limit; a successful GPU deploy is the definitive proof.
+- APPLIES TO: the accelerator family of the route **G1 actually selected**. Quota from another accelerator family does not satisfy this step.
+- SUPERSESSION: the previous candidate was *Cloud Run + NVIDIA L4*. Empirical G1 platform evidence selected *Vertex AI Model Garden + `NVIDIA_RTX_PRO_6000`* (T062), so this step now targets that family.
+- EXPECTED RESULT: sufficient effective quota for one `g4-standard-48` deployment with `NVIDIA_RTX_PRO_6000` ×1 in `us-central1`, or an approved increase request.
+- HOW TO VERIFY: Cloud Console → IAM & Admin → Quotas filtered to `compute.googleapis.com/gpus_per_gpu_family` with GPU family `NVIDIA_RTX_PRO_6000` in the selected region shows a non-zero **effective** value; a successful GPU deploy is the definitive proof. Note that G1 observed this quota family returned with an empty `details` object and **no numeric value** — an empty response is not a non-zero limit.
 - COST RISK: LOW to request; unlocks the HIGH-risk driver.
 
-**MS-15 — Configure Cloud Run GPU service `--max-instances`**
+**MS-15 — Bound GPU cost on the G1-selected serving route**
 - WHY: GPU-seconds are the dominant cost driver in this project.
-- WHEN: at the Gemma deploy (M3), on the serving route G1 selected.
-- EXPECTED RESULT: Gemma service deployed with `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0` (scale-to-zero) **and `--service-account=driftzero-gemma-sa@$PROJECT_ID.iam.gserviceaccount.com`** (MS-12b).
-- HOW TO VERIFY: `gcloud run services describe gemma-verification` shows one GPU, max-instances 1, min-instances 0.
-- COST RISK: **HIGH** if misconfigured (idle or parallel GPU instances); LOW when scale-to-zero with max-instances 1.
+- WHEN: at the Gemma deploy (M3), on the serving route G1 selected. **Not before T063 is satisfied and billing/cost authorization is explicitly restored.**
+- APPLIES TO: whichever route G1 selected. The two candidate routes do **not** share a cost-control mechanism, so the control must match the route:
+  - **Vertex AI Model Garden self-deploy (currently selected)**: a deployed endpoint holds its machine and bills for it. Scale-to-zero is not the control here — the control is to deploy only for a working session and **undeploy the model and delete the endpoint immediately afterwards**. Track the deployed wall-clock time.
+  - **Cloud Run + vLLM (superseded candidate, see R-008)**: `--gpu=1 --gpu-type=nvidia-l4 --max-instances=1 --min-instances=0` (scale-to-zero) **and `--service-account=driftzero-gemma-sa@$PROJECT_ID.iam.gserviceaccount.com`** (MS-12b).
+- HOW TO VERIFY: for the Vertex route, `gcloud ai endpoints list` shows no lingering endpoint outside a working session; for the Cloud Run route, `gcloud run services describe gemma-verification` shows one GPU, max-instances 1, min-instances 0.
+- COST RISK: **HIGH** if misconfigured or left deployed. G1 observed an uncancellable provisioning operation that could not be stopped, which is why billing was disabled as the outer safety control.
+- OPEN: plan.md § Cost Model still prices this line as Cloud Run GPU-second (NVIDIA L4). That row is **stale for the currently selected route** and needs the spec owner to re-cost it — see `evidence/g1_platform_session.json` § `planning_reconciliation.reported_not_edited`.
 
 **MS-16 — Verify Gemma 4 model access and licence acceptance**
 - WHY: Gemma is licence-gated; weights cannot be pulled or served until the licence is accepted, and the demo depends on this model.
 - WHEN: during **G1** — model access and serving route are exactly what the G1 spike exists to settle, and its GO/FALLBACK decision depends on this step.
 - EXPECTED RESULT: Gemma 4 12B licence accepted for the account, and the chosen serving route confirmed (Vertex AI Model Garden deployment **or** a vLLM container image built and pushed to Artifact Registry).
-- HOW TO VERIFY: Model Garden shows the model as accessible for the project, or the container starts locally and answers a test inference; then `curl` the deployed Cloud Run endpoint with a fixture image and receive structured JSON.
+- HOW TO VERIFY: Model Garden shows the model as accessible for the project, or the container starts locally and answers a test inference; then call the deployed endpoint of the **G1-selected** route with a fixture image and receive structured JSON.
 - COST RISK: MEDIUM (GPU-seconds during validation; zero when idle).
 
 **MS-17 — Enable observability: Logging, Monitoring, Cloud Trace**

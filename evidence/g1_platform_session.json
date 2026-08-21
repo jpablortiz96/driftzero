@@ -1,0 +1,302 @@
+{
+  "schema": "driftzero.g1.platform_session.v1",
+  "task": "G1 — Gemma feasibility risk spike: real platform session observations (T061-T063)",
+  "session_date": "2026-08-21",
+  "purpose": "Records what the Vertex AI platform actually did when a real Gemma 4 deployment was attempted, and the cost-safety shutdown that ended the spike. Consumed by scripts/g1_gemma_probe.py, which merges it into evidence/g1_gemma_feasibility.json.",
+  "provenance_legend": {
+    "MACHINE_CAPTURED_ARTIFACT": "Verbatim from a JSON response of a real API/CLI call, stored in this repository and citable by SHA-256. Independently re-checkable.",
+    "OPERATOR_REPORTED": "Observed by the human operator in their live session; no repository artifact exists. NOT independently verifiable from this repository. Must never be presented as machine-verified.",
+    "EMPIRICALLY_OBSERVED": "Directly observed in the platform's own response, captured as a repository artifact. Strongest tier: re-checkable without trusting any narrative."
+  },
+  "project": {
+    "provenance": "MACHINE_CAPTURED_ARTIFACT",
+    "project_id": "driftzero-agentic-2026",
+    "project_number": "960160978064",
+    "region": "us-central1",
+    "source_artifact": "evidence/g1_vertex_deploy_operation.json"
+  },
+  "model_access": {
+    "publisher_model": "publishers/google/models/gemma4@gemma-4-12b-it",
+    "model_variant": "gemma-4-12b",
+    "variant_qualifier": "it (instruction-tuned)",
+    "eula_acceptance": {
+      "provenance": "OPERATOR_REPORTED",
+      "evidence": "The deploy command explicitly contained --accept-eula.",
+      "source_artifact": null,
+      "established": "The EULA was accepted as part of the deploy invocation.",
+      "not_established": "No licence-acceptance receipt or API response was captured. The negative case was never exercised: this repository holds no evidence about what the platform does when the EULA is absent, so no claim is made that a missing EULA would have failed before operation creation."
+    },
+    "model_backend_access": {
+      "provenance": "EMPIRICALLY_OBSERVED",
+      "source_artifact": "evidence/g1_vertex_deploy_operation.json",
+      "evidence": "Vertex AI admitted the request and created DeployOperationMetadata for publishers/google/models/gemma4@gemma-4-12b-it in project 960160978064, which then failed inside the backend with code 13 INTERNAL.",
+      "established": "The project could reach this publisher model well enough for Vertex to admit the request and create a long-running deploy operation against it.",
+      "not_established": "It does not establish that the model was deployed, served, or invoked. It says nothing about entitlement enforcement ordering."
+    },
+    "what_this_does_NOT_prove": "It does not prove the model was deployed, served, or invoked. Backend INTERNAL failure occurred after admission."
+  },
+  "selected_route": "vertex_ai_model_garden",
+  "route_decision": {
+    "task": "T062",
+    "decided": true,
+    "selected_route": "vertex_ai_model_garden",
+    "selected_route_label": "Vertex AI Model Garden self-deploy",
+    "provenance": "OPERATOR_REPORTED",
+    "routes_evaluated": [
+      {
+        "route": "vertex_ai_model_garden",
+        "status": "SELECTED",
+        "basis": "Vertex AI admitted a real deploy request for gemma4@gemma-4-12b-it and returned a concrete supported machine/accelerator/container configuration. This is the only route for which the platform empirically confirmed a supported deployment shape."
+      },
+      {
+        "route": "cloud_run_vllm",
+        "status": "NOT_SELECTED",
+        "basis": "research.md R-008 originally recommended Cloud Run + vLLM on NVIDIA L4 for scale-to-zero cost control. It was not exercised: the Model Garden self-deploy path was the one the platform actually accepted for this publisher model. No Cloud Run deployment was attempted."
+      }
+    ],
+    "model_variant": "gemma-4-12b",
+    "model_variant_qualifier": "it (instruction-tuned), as gemma4@gemma-4-12b-it",
+    "quantization_decision": "MODEL_GARDEN_DEFAULT_NO_OVERRIDE",
+    "quantization_basis": "The configuration the platform accepted carried no quantization parameter, so the decision is to use the route default published for the pytorch-vllm-serve container. The effective numeric precision was never observed because no deployment completed, and none is asserted.",
+    "what_this_decision_establishes": "PLATFORM_SUPPORTED — a route and a supported deployment configuration are known.",
+    "what_this_decision_does_NOT_establish": "It does not establish that the route works end to end. DEPLOYMENT_SUCCEEDED and INFERENCE_SUCCEEDED are both false."
+  },
+  "verified_deployment_configuration": {
+    "provenance": "OPERATOR_REPORTED",
+    "note": "Configuration accepted by Vertex AI Model Garden self-deploy for this publisher model. Establishes PLATFORM_SUPPORTED only — the platform admitted this shape. It does not establish that a deployment completed.",
+    "machine_type": "g4-standard-48",
+    "accelerator_type": "NVIDIA_RTX_PRO_6000",
+    "accelerator_count": 1,
+    "container_image": "us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20260603_0916_RC01",
+    "quantization_parameter_present": false,
+    "quantization_note": "The accepted configuration carried no quantization override. The effective serving precision was never observed because no deployment completed, so no numeric precision is asserted here.",
+    "accelerator_availability_observed_zones": [
+      "us-central1-b",
+      "us-central1-c",
+      "us-central1-f"
+    ]
+  },
+  "deployment_attempts": [
+    {
+      "attempt": 1,
+      "label": "SPOT",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_vertex_deploy_operation.json",
+      "operation_id": "1853041001086582784",
+      "operation_name": "projects/960160978064/locations/us-central1/operations/1853041001086582784",
+      "publisher_model": "publishers/google/models/gemma4@gemma-4-12b-it",
+      "create_time": "2026-08-21T14:57:11.136873Z",
+      "update_time": "2026-08-21T14:57:12.526065Z",
+      "done": true,
+      "error_code": 13,
+      "error_message": "INTERNAL",
+      "outcome": "FAILED",
+      "post_failure_state": {
+        "endpoints_listed": 0,
+        "models_listed": "empty"
+      },
+      "deployment_succeeded": false,
+      "inference_performed": false
+    },
+    {
+      "attempt": 2,
+      "label": "ON_DEMAND",
+      "provenance": "OPERATOR_REPORTED",
+      "source_artifact": null,
+      "operation_id": "7737979076664623104",
+      "start_time": "2026-08-21T15:00:44.669042Z",
+      "endpoint_created": "mg-endpoint-aa0fb0fc-bae0-4064-b68e-818020a2c6c8",
+      "endpoint_display_name": "driftzero-g1-gemma4-temp",
+      "observed_endpoint_state": {
+        "deployedModels": null
+      },
+      "outcome": "UNFINISHED_NO_DEPLOYED_MODEL",
+      "outcome_note": "The operation remained unfinished with no observable genericMetadata update during monitoring. An endpoint resource existed but carried no deployed model, so nothing was ever servable.",
+      "cancel_attempt": {
+        "http_status": 400,
+        "status": "FAILED_PRECONDITION",
+        "message": "Operation .../7737979076664623104 is not cancellable."
+      },
+      "endpoint_delete_attempt": {
+        "status": "FAILED_PRECONDITION",
+        "message": "another operation running: 5198793311757795328",
+        "blocking_operation_id": "5198793311757795328",
+        "blocking_operation_describe": "NOT_FOUND"
+      },
+      "deployment_succeeded": false,
+      "inference_performed": false
+    }
+  ],
+  "quota_findings": {
+    "requirement": "Effective GPU quota sufficient for one g4-standard-48 deployment with NVIDIA_RTX_PRO_6000 x1 in us-central1 — the accelerator family of the G1-selected serving route. Quota from another accelerator family does not satisfy this requirement.",
+    "resolved": false,
+    "cloud_quotas_family": {
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_quota_gpus_per_gpu_family.json",
+      "quota_id": "GPUS-PER-GPU-FAMILY-per-project-region",
+      "metric": "compute.googleapis.com/gpus_per_gpu_family",
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "family_entry_present": true,
+      "applicable_locations_include_us_central1": true,
+      "details": {},
+      "details_value_present": false,
+      "effective_numeric_quota": "UNKNOWN_NOT_RETURNED",
+      "effective_numeric_quota_note": "dimensionsInfos[NVIDIA_RTX_PRO_6000].details is an empty object. No numeric value was returned, so no effective quota may be asserted in either direction — neither >= 1 nor 0.",
+      "quota_increase_eligibility": {
+        "isEligible": true
+      }
+    },
+    "legacy_compute_regional_listing": {
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_quota_compute_regional.json",
+      "scope_note": "Regional compute quota listing (contains CPUS/INSTANCES/DISKS_TOTAL_GB and no NETWORKS/FIREWALLS/IMAGES). The capture does not name its own region, so the region is not asserted here.",
+      "total_quota_entries": 113,
+      "rtx_pro_6000_metric_present": false,
+      "rtx_pro_6000_metric_note": "No NVIDIA_RTX_PRO_6000_GPUS metric appears anywhere in the 113-entry listing. The accelerator required by the selected route therefore has no observable numeric limit in this capture either.",
+      "adjacent_observation": {
+        "metric": "NVIDIA_L4_GPUS",
+        "limit": 1.0,
+        "usage": 0.0,
+        "relevance": "NOT_APPLICABLE_TO_SELECTED_ROUTE",
+        "relevance_note": "L4 is the accelerator named in the original T063 task text (Cloud Run + vLLM route). The route empirically verified in T062 is Vertex AI Model Garden self-deploy on NVIDIA_RTX_PRO_6000. This L4 limit does NOT satisfy T063 for the selected route and must not be read as doing so."
+      }
+    },
+    "route_supersession": {
+      "previous_candidate": "Cloud Run + NVIDIA L4",
+      "previous_candidate_source": "research.md R-008 recommendation and original T063 task text",
+      "superseded_by": "Vertex AI Model Garden + NVIDIA RTX PRO 6000",
+      "superseded_by_basis": "empirical G1 platform evidence (T062): the configuration Vertex actually admitted",
+      "artifacts_updated": [
+        "specs/001-hero-change-deployment/tasks.md T063 (quota target)",
+        "specs/001-hero-change-deployment/tasks.md T066 (depends T063 added)",
+        "specs/001-hero-change-deployment/tasks.md T102 (M3 consumes the G1-selected route)",
+        "specs/001-hero-change-deployment/tasks.md § ordering rules (G1 serving-feasibility chain)",
+        "specs/001-hero-change-deployment/quickstart.md MS-14, MS-15, MS-16, prerequisites, region criterion",
+        "specs/001-hero-change-deployment/research.md R-008 (supersession annotation)"
+      ],
+      "product_requirements_changed": false,
+      "note": "A planning/task retarget only. No FR, SC, or product requirement was altered."
+    }
+  },
+  "billing_state": {
+    "provenance": "OPERATOR_REPORTED",
+    "billing_enabled": false,
+    "billing_account_name": "",
+    "project_id": "driftzero-agentic-2026",
+    "intentional": true,
+    "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
+    "consequence": "Subsequent Vertex AI calls return PERMISSION_DENIED with reason BILLING_DISABLED.",
+    "classification": "INTENTIONAL_COST_SAFETY_STATE",
+    "not_an_infrastructure_defect": true,
+    "remediation_required_now": false
+  },
+  "outcome_flags": {
+    "PLATFORM_SUPPORTED": {
+      "value": true,
+      "basis": "Vertex AI Model Garden admitted a deploy request for gemma4@gemma-4-12b-it with the g4-standard-48 / NVIDIA_RTX_PRO_6000 x1 / pytorch-vllm-serve configuration, and RTX PRO 6000 availability was observed in three us-central1 zones."
+    },
+    "PLATFORM_ATTEMPTED": {
+      "value": true,
+      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND)."
+    },
+    "DEPLOYMENT_SUCCEEDED": {
+      "value": false,
+      "basis": "Attempt 1 ended done=true with error code 13 INTERNAL and left 0 endpoints and no models. Attempt 2 created an endpoint whose deployedModels was null and never finished. No deployed model existed at any point."
+    },
+    "INFERENCE_SUCCEEDED": {
+      "value": false,
+      "basis": "No servable endpoint ever existed, so zero Gemma inference calls were made and zero observations were produced. Billing is now disabled, so no further call is possible."
+    }
+  },
+  "planning_reconciliation": {
+    "trigger": "Empirical G1 serving-route selection (T062) superseded the pre-G1 desk recommendation of Cloud Run + NVIDIA L4.",
+    "scope": "Planning/task artifacts only. No product requirement, FR, SC, architecture, or G1 verdict was changed.",
+    "updated_stale_prescriptive": [
+      {
+        "ref": "tasks.md T102",
+        "was": "Deploy on the route selected in T062; if the Cloud Run GPU route was chosen, deploy gemma-verification with --gpu-type=nvidia-l4 ...",
+        "now": "Provision the G1-selected route using the configuration recorded by T062/T063; gated on T063 and restored billing authorization."
+      },
+      {
+        "ref": "tasks.md T066",
+        "was": "depends T064, T065",
+        "now": "depends T063, T064, T065 — no deployment without quota, no inference without deployment."
+      },
+      {
+        "ref": "quickstart.md MS-15",
+        "was": "Configure Cloud Run GPU service --max-instances with --gpu-type=nvidia-l4",
+        "now": "Bound GPU cost on the G1-selected route; the two routes do not share a cost-control mechanism."
+      },
+      {
+        "ref": "quickstart.md MS-16",
+        "was": "curl the deployed Cloud Run endpoint",
+        "now": "call the deployed endpoint of the G1-selected route"
+      },
+      {
+        "ref": "quickstart.md prerequisites",
+        "was": "Docker (for Gemma 4 Cloud Run GPU deployment)",
+        "now": "Docker only if the selected route needs a locally built container; the selected route does not."
+      },
+      {
+        "ref": "quickstart.md MS-13 region criterion",
+        "was": "prefer a region with L4 GPU availability",
+        "now": "region must have availability for the accelerator of the selected route (NVIDIA_RTX_PRO_6000)."
+      },
+      {
+        "ref": "research.md R-008",
+        "was": "Recommended: Cloud Run + vLLM with NVIDIA L4",
+        "now": "Recommendation marked SUPERSEDED and retained as historical record; SELECTED route recorded beside it."
+      }
+    ],
+    "preserved_as_valid": [
+      {
+        "ref": "research.md R-008 'Serving option' line",
+        "reason": "Historical candidate list; accurate record of what was evaluated."
+      },
+      {
+        "ref": "research.md GPU-for-Gemma and Cloud Run pricing notes",
+        "reason": "Factual statements about Cloud Run capability and billing mechanics; still true and still apply to the CPU services."
+      },
+      {
+        "ref": "plan.md § G1 decision inputs (serving route: Model Garden vs Cloud Run + vLLM)",
+        "reason": "Accurately describes the decision G1 existed to make."
+      },
+      {
+        "ref": "tasks.md service-account table row for gemma-verification",
+        "reason": "Already route-conditional: 'only if G1 selects that route'."
+      }
+    ],
+    "cloud_run_vllm_status": {
+      "designation": "SUPERSEDED_CANDIDATE",
+      "is_currently_selected_route": false,
+      "is_formal_g1_fallback": false,
+      "note": "No authoritative artifact designates Cloud Run + vLLM as a FALLBACK route. It is an evaluated, never-exercised alternative that remains available if the selected route is abandoned. The formal G1 fallback (T068) is operator-supplied manual observation, a different mechanism."
+    },
+    "reported_not_edited": {
+      "reason": "These define service topology, IAM boundaries, the identity model, and the cost model. Moving Gemma off Cloud Run would delete a service, orphan a service account, and replace the dominant cost driver. That is an architecture decision for the spec owner, not a mechanical consequence of G1 — and it is premature because T067 has not returned GO and the selected route has failed to deploy twice.",
+      "items": [
+        {
+          "ref": "plan.md architecture diagram, subgraph 'Cloud Run GPU'",
+          "conflict": "Depicts Gemma serving inside Cloud Run. The selected route serves it from a Vertex AI endpoint."
+        },
+        {
+          "ref": "plan.md § Cloud Run topology — exactly TWO services (driftzero-api, gemma-verification)",
+          "conflict": "The selected route may remove gemma-verification entirely, changing a stated architectural invariant."
+        },
+        {
+          "ref": "plan.md identity/service-account tables (driftzero-gemma-sa, gemma-verification)",
+          "conflict": "The Cloud Run service account and its IAM boundary may no longer be the right identity model for a Vertex endpoint."
+        },
+        {
+          "ref": "plan.md § Cost Model row 'Cloud Run (GPU, Gemma 4) | GPU-second (NVIDIA L4)' and the --max-instances cap",
+          "conflict": "Prices the dominant cost driver against the superseded route. A Model Garden endpoint holds its machine and does not scale to zero, so the cost shape and its control are materially different. No replacement rate is invented here."
+        },
+        {
+          "ref": "contracts/agents.md service table and 'Model: gemma-4-12b (via Cloud Run GPU endpoint)'",
+          "conflict": "An agent contract naming the transport of the superseded route."
+        }
+      ],
+      "recommended_owner_action": "Decide whether gemma-verification remains a Cloud Run service, and re-cost the GPU line for a persistent Vertex endpoint. Best sequenced after T067 returns GO/FALLBACK, since a FALLBACK verdict removes the question."
+    }
+  }
+}
