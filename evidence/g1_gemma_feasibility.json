@@ -127,14 +127,31 @@
     "capture_type_required": "REAL_PHYSICAL_CAPTURE",
     "directory": "D:\\DriftZero\\fixtures\\multimodal",
     "directory_exists": true,
-    "note": "Presence is not provenance. Synthetic images may not substitute for the required physical capture, and an undeclared fixture fails closed as non-physical. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer.",
+    "note": "Presence is not provenance. Synthetic images may not substitute for the required physical capture, and an undeclared fixture fails closed as non-physical. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer. Each file is additionally inspected for embedded generator provenance (C2PA content credentials, IPTC digitalSourceType) and against the registry of hashes already classified generated; a positive finding disqualifies it regardless of its declaration. Missing EXIF and container/extension mismatch are recorded as non-decisive anomalies only.",
     "physical_capture_satisfied": false,
     "provenance_manifest_present": true,
+    "rejected_as_generated": [],
     "required": {
       "label_ambiguous_01.jpg": {
         "bytes": 0,
         "capture_method": "NOT_YET_CAPTURED",
         "classification": "UNDECLARED",
+        "content_inspection": {
+          "anomalies": [],
+          "c2pa_present": false,
+          "camera_capture_corroborated": false,
+          "container_format": null,
+          "decisive_signals": [],
+          "exif_present": false,
+          "extension_matches_container": null,
+          "generator_provenance_matches": [],
+          "inspected": false,
+          "is_generated": false,
+          "known_generated_hash_match": null,
+          "markers": [],
+          "provenance_structures": [],
+          "sha256": null
+        },
         "path": "fixtures\\multimodal\\label_ambiguous_01.jpg",
         "present": false,
         "satisfies_t064_physical_capture": false
@@ -143,6 +160,22 @@
         "bytes": 0,
         "capture_method": "NOT_YET_CAPTURED",
         "classification": "UNDECLARED",
+        "content_inspection": {
+          "anomalies": [],
+          "c2pa_present": false,
+          "camera_capture_corroborated": false,
+          "container_format": null,
+          "decisive_signals": [],
+          "exif_present": false,
+          "extension_matches_container": null,
+          "generator_provenance_matches": [],
+          "inspected": false,
+          "is_generated": false,
+          "known_generated_hash_match": null,
+          "markers": [],
+          "provenance_structures": [],
+          "sha256": null
+        },
         "path": "fixtures\\multimodal\\label_left_01.jpg",
         "present": false,
         "satisfies_t064_physical_capture": false
@@ -151,13 +184,29 @@
         "bytes": 0,
         "capture_method": "NOT_YET_CAPTURED",
         "classification": "UNDECLARED",
+        "content_inspection": {
+          "anomalies": [],
+          "c2pa_present": false,
+          "camera_capture_corroborated": false,
+          "container_format": null,
+          "decisive_signals": [],
+          "exif_present": false,
+          "extension_matches_container": null,
+          "generator_provenance_matches": [],
+          "inspected": false,
+          "is_generated": false,
+          "known_generated_hash_match": null,
+          "markers": [],
+          "provenance_structures": [],
+          "sha256": null
+        },
         "path": "fixtures\\multimodal\\label_top_right_01.jpg",
         "present": false,
         "satisfies_t064_physical_capture": false
       }
     }
   },
-  "generated_at": "2026-08-21T16:50:51.808516+00:00",
+  "generated_at": "2026-08-23T16:40:38.934089+00:00",
   "model_access": {
     "eula_acceptance": {
       "established": "The EULA was accepted as part of the deploy invocation.",

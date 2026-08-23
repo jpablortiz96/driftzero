@@ -29,6 +29,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import platform
 import shutil
@@ -281,6 +282,246 @@ def _repo_relative(path: Path) -> str:
         return str(path)
 
 
+GENERATED_MEDIA_MARKERS = (
+    # IPTC digital source type meaning "created by a trained AI model". Written by the
+    # generator itself into the C2PA manifest — the decisive marker.
+    b"trainedAlgorithmicMedia",
+    b"compositeWithTrainedAlgorithmicMedia",
+    # Known generative software agents.
+    b"gpt-image",
+    b"OpenAI Media Service",
+    b"dall-e",
+    b"midjourney",
+    b"stable-diffusion",
+    b"firefly",
+    b"imagen",
+)
+"""Producer/source markers. Decisive ONLY inside a recognized provenance structure.
+
+These same strings can legitimately appear in a real photograph — printed on a poster in
+frame, in a caption, in an unrelated comment field. Matching them against raw file bytes
+would therefore manufacture false positives, so they are only ever searched inside the
+metadata structures extracted by :func:`extract_provenance_regions`.
+"""
+
+PNG_PROVENANCE_CHUNKS = (b"caBX", b"eXIf", b"iTXt", b"tEXt", b"zTXt")
+"""PNG chunks that carry provenance: C2PA/JUMBF, EXIF, and text/XMP metadata."""
+
+JPEG_PROVENANCE_SEGMENTS = {0xE1: "APP1_EXIF_OR_XMP", 0xEB: "APP11_JUMBF_C2PA", 0xED: "APP13_IPTC"}
+"""JPEG application segments that carry provenance."""
+
+
+def extract_provenance_regions(raw: bytes) -> list[tuple[str, bytes]]:
+    """Return ``(structure_name, payload)`` for each recognized metadata structure.
+
+    Only these regions may supply generator evidence. Pixel data, entropy-coded scan
+    data, and unparsed trailing bytes are deliberately excluded: a producer name in the
+    image content is not a provenance claim.
+
+    Malformed files yield fewer regions rather than raising — an unparsable container
+    simply provides no positive evidence.
+    """
+    regions: list[tuple[str, bytes]] = []
+
+    if raw[:4] == bytes([0x89]) + b"PNG":
+        offset = 8
+        while offset + 8 <= len(raw):
+            length = int.from_bytes(raw[offset : offset + 4], "big")
+            chunk_type = raw[offset + 4 : offset + 8]
+            if offset + 12 + length > len(raw):
+                break
+            if chunk_type in PNG_PROVENANCE_CHUNKS:
+                regions.append(
+                    (f"PNG_{chunk_type.decode('latin-1')}", raw[offset + 8 : offset + 8 + length])
+                )
+            if chunk_type == b"IEND":
+                break
+            offset += 12 + length
+        return regions
+
+    if raw[:3] == bytes([0xFF, 0xD8, 0xFF]):
+        offset = 2
+        while offset + 4 <= len(raw):
+            if raw[offset] != 0xFF:
+                break
+            marker = raw[offset + 1]
+            if marker == 0xDA:  # start of scan: only pixel data follows
+                break
+            if marker in (0xD8, 0xD9):
+                offset += 2
+                continue
+            length = int.from_bytes(raw[offset + 2 : offset + 4], "big")
+            if length < 2 or offset + 2 + length > len(raw):
+                break
+            if marker in JPEG_PROVENANCE_SEGMENTS:
+                regions.append(
+                    (JPEG_PROVENANCE_SEGMENTS[marker], raw[offset + 4 : offset + 2 + length])
+                )
+            offset += 2 + length
+    return regions
+
+CAMERA_CAPTURE_MARKERS = (b"digitalCapture", b"capturedWithDevice")
+"""C2PA markers that positively corroborate a camera capture."""
+
+
+def load_known_generated_hashes(exclude_dir: Path | None = None) -> dict[str, str]:
+    """Registry of content hashes already authoritatively classified as generated.
+
+    Built from the provenance manifests under ``fixtures/``. ``exclude_dir`` omits the
+    directory being inspected, so a match is always *independent* corroboration from
+    another manifest rather than a file vouching for its own classification.
+    """
+    registry: dict[str, str] = {}
+    root = DEFAULT_FIXTURES
+    if not root.exists():
+        return registry
+    for manifest_path in sorted(root.rglob("provenance.json")):
+        if exclude_dir is not None and manifest_path.parent == exclude_dir:
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # pragma: no cover - malformed manifest is ignored
+            continue
+        for name, entry in (manifest.get("fixtures") or {}).items():
+            digest = entry.get("sha256")
+            labels = entry.get("classification") or []
+            declared_generated = (
+                entry.get("generated") is True
+                or entry.get("capture_method") == "GENERATED_IMAGE"
+                or ClassificationLabel.SYNTHETIC in labels
+            )
+            if digest and declared_generated:
+                registry[digest] = f"{_repo_relative(manifest_path.parent / name)}"
+    return registry
+
+
+def detect_generated_media(
+    path: Path, known_generated: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Inspect an image's bytes for **positive** evidence that it was machine-generated.
+
+    Only positive generator provenance disqualifies a fixture:
+
+    * **A** — the content hash matches a fixture another manifest already classifies as
+      SYNTHETIC / GENERATED_IMAGE.
+    * **B** — a **recognized provenance structure** (C2PA/JUMBF, EXIF, XMP/text, IPTC)
+      names ``trainedAlgorithmicMedia`` or a known generative-image producer. Producer
+      names occurring anywhere else in the file — pixel data, scan data, a poster caught
+      in frame, an unparsed trailer — carry no weight at all.
+
+    Absence of camera metadata proves nothing. Real photographs routinely lose EXIF to
+    messaging apps, editors, export pipelines, privacy stripping, and format conversion,
+    and a container/extension mismatch is a content-type anomaly, not a generator claim.
+    Those observations are recorded under ``anomalies`` and never set ``is_generated``.
+
+    The relation stays asymmetric: positive evidence may DISQUALIFY, but clean content
+    never qualifies anything. REAL_PHYSICAL still requires the operator declaration and
+    the existing physical-capture rules.
+
+    Pure stdlib: no image library, no network, no new dependency.
+    """
+    finding: dict[str, Any] = {
+        "inspected": False,
+        "is_generated": False,
+        "decisive_signals": [],
+        "anomalies": [],
+        "sha256": None,
+        "markers": [],
+        "provenance_structures": [],
+        "generator_provenance_matches": [],
+        "known_generated_hash_match": None,
+        "container_format": None,
+        "extension_matches_container": None,
+        "exif_present": False,
+        "c2pa_present": False,
+        "camera_capture_corroborated": False,
+    }
+    if not path.exists():
+        return finding
+
+    raw = path.read_bytes()
+    finding["inspected"] = True
+    finding["sha256"] = hashlib.sha256(raw).hexdigest()
+
+    if raw[:4] == b"\x89PNG":
+        finding["container_format"] = "PNG"
+    elif raw[:3] == b"\xff\xd8\xff":
+        finding["container_format"] = "JPEG"
+    else:
+        finding["container_format"] = "UNKNOWN"
+
+    expected = {".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG"}.get(path.suffix.lower())
+    finding["extension_matches_container"] = (
+        None if expected is None else expected == finding["container_format"]
+    )
+    finding["exif_present"] = (
+        b"Exif\x00\x00" in raw[:65536] or b"eXIf" in raw[:65536]
+    )
+    finding["c2pa_present"] = b"caBX" in raw or b"c2pa" in raw[:200000]
+    finding["camera_capture_corroborated"] = any(m in raw for m in CAMERA_CAPTURE_MARKERS)
+
+    # --- Signal A: independently recorded as generated -------------------------------
+    registry = load_known_generated_hashes() if known_generated is None else known_generated
+    source = registry.get(finding["sha256"])
+    if source:
+        finding["known_generated_hash_match"] = source
+        finding["decisive_signals"].append({
+            "signal": "KNOWN_GENERATED_HASH_MATCH",
+            "detail": (
+                f"SHA-256 {finding['sha256']} is byte-identical to {source}, already "
+                "classified SYNTHETIC / GENERATED_IMAGE in another provenance manifest."
+            ),
+        })
+
+    # --- Signal B: a recognized provenance structure says so -------------------------
+    # Scoped deliberately: producer names are searched ONLY inside extracted metadata
+    # structures, never across raw bytes. A photograph containing the text "midjourney"
+    # on a poster in frame is still a photograph.
+    regions = extract_provenance_regions(raw)
+    finding["provenance_structures"] = [name for name, _ in regions]
+    matches: list[dict[str, str]] = []
+    for structure, payload in regions:
+        for marker in GENERATED_MEDIA_MARKERS:
+            if marker in payload:
+                matches.append({"marker": marker.decode("latin-1"), "structure": structure})
+    finding["generator_provenance_matches"] = matches
+    finding["markers"] = sorted({m["marker"] for m in matches})
+    if matches:
+        located = ", ".join(f"{m['marker']} in {m['structure']}" for m in matches)
+        finding["decisive_signals"].append({
+            "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+            "detail": (
+                "A recognized provenance structure names a generative producer or the "
+                f"IPTC trainedAlgorithmicMedia source type: {located}."
+            ),
+        })
+
+    # --- Diagnostics: recorded, never decisive ---------------------------------------
+    if finding["extension_matches_container"] is False:
+        finding["anomalies"].append({
+            "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+            "decisive": False,
+            "detail": (
+                f"Container is {finding['container_format']} but the filename claims "
+                f"{path.suffix}. An integrity/content-type anomaly worth fixing; it does "
+                "not indicate AI generation."
+            ),
+        })
+    if not finding["exif_present"]:
+        finding["anomalies"].append({
+            "anomaly": "NO_EXIF",
+            "decisive": False,
+            "detail": (
+                "No EXIF block found. Real photographs routinely lose EXIF to messaging "
+                "apps, editors, export pipelines, privacy stripping, and conversion, so "
+                "this is not evidence of generation."
+            ),
+        })
+
+    finding["is_generated"] = bool(finding["decisive_signals"])
+    return finding
+
+
 def load_fixture_provenance(fixtures_dir: Path) -> dict[str, Any]:
     """Read the fixture provenance declaration, or an empty mapping if absent."""
     manifest = fixtures_dir / "provenance.json"
@@ -323,10 +564,19 @@ def collect_fixture_status(fixtures_dir: Path) -> dict[str, Any]:
     not discharge T064 and cannot contribute to a GO verdict.
     """
     provenance = load_fixture_provenance(fixtures_dir)
+    # Exclude this directory's own manifest: a hash match must be corroboration from an
+    # independent record, never a file vouching for its own classification.
+    known_generated = load_known_generated_hashes(exclude_dir=fixtures_dir)
     required = {}
     for name in EXPECTED_BY_FIXTURE:
         path = fixtures_dir / name
         classification, satisfies = classify_fixture(name, provenance)
+        content = detect_generated_media(path, known_generated)
+        # Asymmetric by design: positive generator provenance can DISQUALIFY, but clean
+        # content never qualifies anything. REAL_PHYSICAL still requires the operator
+        # declaration and the physical-capture rules in classify_fixture().
+        if content["is_generated"]:
+            satisfies = False
         required[name] = {
             "path": _repo_relative(path),
             "present": path.exists(),
@@ -335,9 +585,15 @@ def collect_fixture_status(fixtures_dir: Path) -> dict[str, Any]:
             "capture_method": (provenance.get(name) or {}).get(
                 "capture_method", UNDECLARED_CLASSIFICATION
             ),
+            "content_inspection": content,
             "satisfies_t064_physical_capture": satisfies and path.exists(),
         }
     satisfied = all(f["satisfies_t064_physical_capture"] for f in required.values())
+    rejected = sorted(
+        name
+        for name, f in required.items()
+        if f["present"] and f["content_inspection"]["is_generated"]
+    )
     return {
         "directory": str(fixtures_dir),
         "directory_exists": fixtures_dir.exists(),
@@ -346,11 +602,17 @@ def collect_fixture_status(fixtures_dir: Path) -> dict[str, Any]:
         "provenance_manifest_present": bool(provenance),
         "all_present": all(f["present"] for f in required.values()),
         "physical_capture_satisfied": satisfied,
+        "rejected_as_generated": rejected,
         "note": (
             "Presence is not provenance. Synthetic images may not substitute for the "
             "required physical capture, and an undeclared fixture fails closed as "
             "non-physical. The observation must come from visible evidence only — no "
-            "filename, EXIF, directory, watermark, or prompt hint may encode the answer."
+            "filename, EXIF, directory, watermark, or prompt hint may encode the answer. "
+            "Each file is additionally inspected for embedded generator provenance "
+            "(C2PA content credentials, IPTC digitalSourceType) and against the registry "
+            "of hashes already classified generated; a positive finding disqualifies it "
+            "regardless of its declaration. Missing EXIF and container/extension mismatch "
+            "are recorded as non-decisive anomalies only."
         ),
     }
 

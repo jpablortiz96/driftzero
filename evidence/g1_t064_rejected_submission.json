@@ -1,0 +1,165 @@
+{
+  "schema": "driftzero.g1.t064_rejected_submission.v1",
+  "task": "T064 — physical fixture capture: rejected submission record",
+  "status": "REJECTED_NOT_A_PHYSICAL_CAPTURE",
+  "record_type": "HISTORICAL_EVIDENCE",
+  "record_type_warning": "This artifact records a submission that was REJECTED on 2026-08-21. It is a permanent audit record and MUST NOT be read as the current fixture state. Current state lives in fixtures/multimodal/provenance.json.",
+  "submitted_on": "2026-08-21",
+  "submitted_as": "PHYSICAL_CAMERA_CAPTURE (operator attestation)",
+  "recorded_on": "2026-08-23",
+  "decisive_signal_definitions": {
+    "KNOWN_GENERATED_HASH_MATCH": "Content hash is byte-identical to media another provenance manifest already classifies SYNTHETIC / GENERATED_IMAGE. Independently sufficient to disqualify.",
+    "EMBEDDED_GENERATOR_PROVENANCE": "A recognized provenance/content-credential structure (C2PA/JUMBF, IPTC digitalSourceType, structured softwareAgent metadata) names a generative producer or trainedAlgorithmicMedia. Independently sufficient to disqualify."
+  },
+  "what_is_NOT_proof_of_generation": [
+    "Missing EXIF is NOT proof of generation. Real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and format conversion.",
+    "A container/extension mismatch (PNG bytes under a .jpg name) is NOT proof of generation. It is a content-type/integrity anomaly only.",
+    "File mtime is NOT proof of generation. Timestamps are trivially alterable and carry no provenance weight.",
+    "Missing Make, Model, or DateTimeOriginal is NOT proof of generation and is not evaluated at all.",
+    "A producer name appearing in arbitrary raw bytes or in ordinary textual image content is NOT proof of generation. Producer-name matching is valid only inside a recognized provenance structure."
+  ],
+  "asymmetry_rule": "Positive generated provenance MAY disqualify REAL_PHYSICAL. Absence of generated provenance MUST NOT establish REAL_PHYSICAL. Qualification always requires a valid operator provenance declaration plus the physical-capture gate.",
+  "submissions": [
+    {
+      "original_canonical_path": "fixtures/multimodal/label_left_01.jpg",
+      "expected_observation": "LEFT",
+      "sha256": "e4a895f69b674b3394c5552673116448781111cf4204cf8689b3e813d6f3ab70",
+      "bytes": 2284892,
+      "known_synthetic_counterpart": {
+        "path": "fixtures/multimodal/synthetic/label_left_synthetic_01.jpg",
+        "sha256": "e4a895f69b674b3394c5552673116448781111cf4204cf8689b3e813d6f3ab70",
+        "hash_identical": true,
+        "recorded_at_commit": "8997fae",
+        "recorded_before_this_submission": true
+      },
+      "decisive_generated_media_signals": [
+        {
+          "signal": "KNOWN_GENERATED_HASH_MATCH",
+          "detail": "SHA-256 e4a895f69b674b3394c5552673116448781111cf4204cf8689b3e813d6f3ab70 is byte-identical to synthetic/label_left_synthetic_01.jpg, recorded as SYNTHETIC / GENERATED_IMAGE in fixtures/multimodal/synthetic/provenance.json at commit 8997fae — before this submission."
+        },
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "Embedded C2PA content credentials name softwareAgent 'gpt-image' 2.0 and claim generator 'OpenAI Media Service API', with IPTC digitalSourceType http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia — the code for media created by a trained AI model."
+        }
+      ],
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+          "decisive": false,
+          "detail": "Container is PNG while the filename claims .jpg. A content-type/integrity anomaly worth fixing; by itself it does not indicate AI generation."
+        },
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block present. NOT evidence of generation: real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and format conversion."
+        },
+        {
+          "anomaly": "MTIME_PREDATES_SUBMISSION",
+          "decisive": false,
+          "detail": "File mtime matches the earlier synthetic generation time. Timestamps are trivially alterable and are recorded as context only."
+        }
+      ],
+      "disposition": "DELETED_FROM_CANONICAL_PATH — the byte-identical generated original remains at fixtures/multimodal/synthetic/label_left_synthetic_01.jpg, so no content was lost."
+    },
+    {
+      "original_canonical_path": "fixtures/multimodal/label_top_right_01.jpg",
+      "expected_observation": "TOP_RIGHT",
+      "sha256": "0877d6801d4f9a46117b2546852f7e9e276ca2374d2c01831ecf236a62b01e74",
+      "bytes": 2136871,
+      "known_synthetic_counterpart": {
+        "path": "fixtures/multimodal/synthetic/label_top_right_synthetic_01.jpg",
+        "sha256": "0877d6801d4f9a46117b2546852f7e9e276ca2374d2c01831ecf236a62b01e74",
+        "hash_identical": true,
+        "recorded_at_commit": "8997fae",
+        "recorded_before_this_submission": true
+      },
+      "decisive_generated_media_signals": [
+        {
+          "signal": "KNOWN_GENERATED_HASH_MATCH",
+          "detail": "SHA-256 0877d6801d4f9a46117b2546852f7e9e276ca2374d2c01831ecf236a62b01e74 is byte-identical to synthetic/label_top_right_synthetic_01.jpg, recorded as SYNTHETIC / GENERATED_IMAGE in fixtures/multimodal/synthetic/provenance.json at commit 8997fae — before this submission."
+        },
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "Embedded C2PA content credentials name softwareAgent 'gpt-image' 2.0 and claim generator 'OpenAI Media Service API', with IPTC digitalSourceType http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia — the code for media created by a trained AI model."
+        }
+      ],
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+          "decisive": false,
+          "detail": "Container is PNG while the filename claims .jpg. A content-type/integrity anomaly worth fixing; by itself it does not indicate AI generation."
+        },
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block present. NOT evidence of generation: real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and format conversion."
+        },
+        {
+          "anomaly": "MTIME_PREDATES_SUBMISSION",
+          "decisive": false,
+          "detail": "File mtime matches the earlier synthetic generation time. Timestamps are trivially alterable and are recorded as context only."
+        }
+      ],
+      "disposition": "DELETED_FROM_CANONICAL_PATH — the byte-identical generated original remains at fixtures/multimodal/synthetic/label_top_right_synthetic_01.jpg, so no content was lost."
+    },
+    {
+      "original_canonical_path": "fixtures/multimodal/label_ambiguous_01.jpg",
+      "expected_observation": "INCONCLUSIVE",
+      "sha256": "bb56aab20b6770a6e0d88bafcc292b2bd95961d3bb151e87e766b031f44bc08b",
+      "bytes": 1868173,
+      "known_synthetic_counterpart": {
+        "path": "fixtures/multimodal/synthetic/label_ambiguous_synthetic_01.jpg",
+        "sha256": "bb56aab20b6770a6e0d88bafcc292b2bd95961d3bb151e87e766b031f44bc08b",
+        "hash_identical": true,
+        "recorded_at_commit": "8997fae",
+        "recorded_before_this_submission": true
+      },
+      "decisive_generated_media_signals": [
+        {
+          "signal": "KNOWN_GENERATED_HASH_MATCH",
+          "detail": "SHA-256 bb56aab20b6770a6e0d88bafcc292b2bd95961d3bb151e87e766b031f44bc08b is byte-identical to synthetic/label_ambiguous_synthetic_01.jpg, recorded as SYNTHETIC / GENERATED_IMAGE in fixtures/multimodal/synthetic/provenance.json at commit 8997fae — before this submission."
+        },
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "Embedded C2PA content credentials name softwareAgent 'gpt-image' 2.0 and claim generator 'OpenAI Media Service API', with IPTC digitalSourceType http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia — the code for media created by a trained AI model."
+        }
+      ],
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+          "decisive": false,
+          "detail": "Container is PNG while the filename claims .jpg. A content-type/integrity anomaly worth fixing; by itself it does not indicate AI generation."
+        },
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block present. NOT evidence of generation: real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and format conversion."
+        },
+        {
+          "anomaly": "MTIME_PREDATES_SUBMISSION",
+          "decisive": false,
+          "detail": "File mtime matches the earlier synthetic generation time. Timestamps are trivially alterable and are recorded as context only."
+        }
+      ],
+      "disposition": "DELETED_FROM_CANONICAL_PATH — the byte-identical generated original remains at fixtures/multimodal/synthetic/label_ambiguous_synthetic_01.jpg, so no content was lost."
+    }
+  ],
+  "outcome": {
+    "real_physical_fixtures_accepted": 0,
+    "t064_remained_open": true,
+    "t064_status_after": "AWAITING_REAL_PHYSICAL_CAPTURE",
+    "g1_verdict_after": "NOT_YET_DECIDABLE",
+    "task_checkboxes_changed": false,
+    "tasks_still_open": [
+      "T063",
+      "T064",
+      "T066",
+      "T067",
+      "T068"
+    ],
+    "canonical_paths_cleared": true,
+    "synthetic_fixtures_modified": false,
+    "note": "No REAL_PHYSICAL fixture was accepted. The canonical slots were cleared so no generated media occupies a path reserved for physical evidence."
+  },
+  "action_required": "Capture genuine photographs of a real box with a real printed label, save them to the three canonical paths, and declare them in fixtures/multimodal/provenance.json with classification [\"REAL\"], capture_method PHYSICAL_CAMERA_CAPTURE, generated false, and satisfies_t064_physical_capture true."
+}

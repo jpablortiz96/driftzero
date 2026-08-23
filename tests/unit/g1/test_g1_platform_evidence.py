@@ -15,8 +15,11 @@ Entirely offline: no subprocess, no network, no cloud SDK.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 import pytest
@@ -34,6 +37,7 @@ from g1_gemma_probe import (  # noqa: E402
     classify_fixture,
     collect_fixture_status,
     derive_outcome_flags,
+    detect_generated_media,
     load_fixture_provenance,
     load_platform_session,
     qualifying_records,
@@ -159,15 +163,20 @@ def test_only_a_real_physical_camera_capture_satisfies_t064() -> None:
     assert satisfies is True
 
 
-def test_canonical_real_physical_paths_are_absent() -> None:
-    """The generated images must not occupy paths reserved for physical evidence."""
-    for name in CANONICAL_NAMES:
-        assert not (FIXTURES_DIR / name).exists(), f"{name} occupies a REAL_PHYSICAL path"
+def test_no_generated_media_may_hold_a_canonical_real_physical_path() -> None:
+    """Files may sit at these paths, but generated media can never qualify there.
 
-
-def test_missing_real_fixture_paths_fail_closed() -> None:
-    """Absence is not neutral: it leaves T064 unsatisfied."""
+    Files ARE currently present at all three canonical paths (a rejected submission);
+    what matters is that none of them satisfies T064.
+    """
     status = collect_fixture_status(FIXTURES_DIR)
+    for name in CANONICAL_NAMES:
+        assert status["required"][name]["satisfies_t064_physical_capture"] is False, name
+
+
+def test_missing_real_fixture_paths_fail_closed(tmp_path: Path) -> None:
+    """Absence is not neutral: an empty canonical directory leaves T064 unsatisfied."""
+    status = collect_fixture_status(tmp_path)
     assert status["all_present"] is False
     assert status["physical_capture_satisfied"] is False
     for name, entry in status["required"].items():
@@ -624,7 +633,10 @@ def test_written_evidence_file_reflects_the_true_state() -> None:
     ]
     holds = [hold["code"] for hold in doc["operational_holds"]]
     assert holds == ["BILLING_DISABLED"]
+    # The canonical slots are now empty; the rejected submission lives in history.
+    assert doc["fixtures"]["physical_capture_satisfied"] is False
     assert doc["fixtures"]["all_present"] is False
+    assert doc["fixtures"]["rejected_as_generated"] == []
     assert (
         doc["quota_findings"]["cloud_quotas_family"]["effective_numeric_quota"]
         == "UNKNOWN_NOT_RETURNED"
@@ -740,3 +752,442 @@ def test_reconciliation_changed_no_product_requirement(session: dict) -> None:
     reconciliation = session["planning_reconciliation"]
     assert "No product requirement" in reconciliation["scope"]
     assert session["quota_findings"]["route_supersession"]["product_requirements_changed"] is False
+
+
+# ==================== content evidence outranks declarations (T064) ==================
+
+PNG_MAGIC = bytes([0x89]) + b"PNG" + bytes([0x0D, 0x0A, 0x1A, 0x0A])
+REJECTED_SUBMISSION = REPO_ROOT / "evidence" / "g1_t064_rejected_submission.json"
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", crc)
+
+
+def make_png(*chunks: bytes) -> bytes:
+    """A structurally valid PNG so the chunk parser can actually walk it."""
+    return (
+        PNG_MAGIC
+        + _png_chunk(b"IHDR", bytes(13))
+        + b"".join(chunks)
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+def make_jpeg(*segments: bytes, scan_data: bytes = b"") -> bytes:
+    """A structurally valid JPEG; ``scan_data`` lands after SOS, i.e. in pixel data."""
+    body = b"".join(segments)
+    if scan_data:
+        body += bytes([0xFF, 0xDA]) + struct.pack(">H", 2) + scan_data
+    return bytes([0xFF, 0xD8]) + body + bytes([0xFF, 0xD9])
+
+
+def jpeg_segment(marker: int, payload: bytes) -> bytes:
+    return bytes([0xFF, marker]) + struct.pack(">H", len(payload) + 2) + payload
+
+
+# Generated media declared through a *recognized provenance structure*.
+C2PA_GENERATED = make_png(
+    _png_chunk(b"caBX", b"jumb" + b"trainedAlgorithmicMedia" + b"gpt-image")
+)
+GENERATED_JPEG = make_jpeg(
+    jpeg_segment(0xEB, b"jumb" + b"c2pa" + b"trainedAlgorithmicMedia")
+)
+# A clean, EXIF-free photograph-shaped JPEG: no provenance structure at all.
+CLEAN_JPEG_NO_EXIF = make_jpeg(jpeg_segment(0xE0, b"JFIF" + bytes(12)))
+
+
+def _write_declared_real(directory: Path, names: tuple[str, ...], payload: bytes) -> None:
+    """Place files and the strongest possible REAL declaration over them."""
+    for name in names:
+        (directory / name).write_bytes(payload)
+    (directory / "provenance.json").write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    name: {
+                        "classification": ["REAL"],
+                        "capture_method": PHYSICAL_CAPTURE_METHOD,
+                        "generated": False,
+                        "satisfies_t064_physical_capture": True,
+                    }
+                    for name in names
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_detector_flags_c2pa_trained_algorithmic_media(tmp_path: Path) -> None:
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(C2PA_GENERATED)
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["is_generated"] is True
+    assert "trainedAlgorithmicMedia" in finding["markers"]
+    assert "gpt-image" in finding["markers"]
+
+
+def test_container_extension_mismatch_alone_never_classifies_as_generated(
+    tmp_path: Path,
+) -> None:
+    """Requirement 3. A PNG named .jpg is a content-type anomaly, not a generator claim."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["container_format"] == "PNG"
+    assert finding["extension_matches_container"] is False
+    assert finding["is_generated"] is False, "an anomaly must not become a verdict"
+    assert finding["decisive_signals"] == []
+    anomalies = {a["anomaly"] for a in finding["anomalies"]}
+    assert "CONTAINER_EXTENSION_MISMATCH" in anomalies
+    assert all(a["decisive"] is False for a in finding["anomalies"])
+
+
+def test_missing_exif_alone_never_classifies_as_generated(tmp_path: Path) -> None:
+    """Requirement 2. Real photos lose EXIF to messaging apps, editors, and exports."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 256)
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["exif_present"] is False
+    assert finding["is_generated"] is False
+    assert finding["decisive_signals"] == []
+    assert "NO_EXIF" in {a["anomaly"] for a in finding["anomalies"]}
+
+
+def test_no_camera_metadata_signal_is_ever_decisive(tmp_path: Path) -> None:
+    """Absence of Make/Model/DateTimeOriginal must never be a decisive signal."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 256)
+    finding = detect_generated_media(target, known_generated={})
+    decisive = {signal["signal"] for signal in finding["decisive_signals"]}
+    assert decisive <= {"KNOWN_GENERATED_HASH_MATCH", "EMBEDDED_GENERATOR_PROVENANCE"}
+    for forbidden in ("EXIF", "MAKE", "MODEL", "DATETIME", "MTIME", "EXTENSION"):
+        assert not any(forbidden in signal for signal in decisive)
+
+
+def test_detector_does_not_flag_a_plain_jpeg(tmp_path: Path) -> None:
+    """The detector must not reject an ordinary photograph."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(b"\xff\xd8\xff\xe1" + b"Exif\x00\x00" + b"\x00" * 128)
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["container_format"] == "JPEG"
+    assert finding["extension_matches_container"] is True
+    assert finding["exif_present"] is True
+    assert finding["is_generated"] is False
+    assert finding["markers"] == []
+
+
+def test_detector_is_inert_on_a_missing_file(tmp_path: Path) -> None:
+    finding = detect_generated_media(tmp_path / "absent.jpg", known_generated={})
+    assert finding["inspected"] is False
+    assert finding["is_generated"] is False
+
+
+def test_a_real_declaration_cannot_override_generator_provenance(tmp_path: Path) -> None:
+    """The decisive guarantee: bytes beat attestations.
+
+    Even a declaration asserting REAL + PHYSICAL_CAMERA_CAPTURE + generated:false over
+    files carrying C2PA trainedAlgorithmicMedia must leave T064 unsatisfied.
+    """
+    _write_declared_real(tmp_path, CANONICAL_NAMES, C2PA_GENERATED)
+    status = collect_fixture_status(tmp_path)
+    assert status["all_present"] is True
+    assert status["provenance_manifest_present"] is True
+    assert status["physical_capture_satisfied"] is False
+    assert sorted(status["rejected_as_generated"]) == sorted(CANONICAL_NAMES)
+
+
+def test_a_declaration_alone_still_satisfies_t064_for_clean_content(tmp_path: Path) -> None:
+    """The gate must remain passable by a genuine capture — not closed forever."""
+    _write_declared_real(
+        tmp_path, CANONICAL_NAMES, b"\xff\xd8\xff\xe1" + b"Exif\x00\x00" + b"\x00" * 128
+    )
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is True
+    assert status["rejected_as_generated"] == []
+
+
+# ==================== the submitted files are the synthetic ones =====================
+
+
+def test_rejected_submission_remains_auditable_after_cleanup() -> None:
+    """Requirement 1. Deleting the files must not delete the record of why."""
+    assert REJECTED_SUBMISSION.exists(), "the rejection history artifact is missing"
+    doc = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))
+    assert doc["status"] == "REJECTED_NOT_A_PHYSICAL_CAPTURE"
+    assert doc["record_type"] == "HISTORICAL_EVIDENCE"
+    assert len(doc["submissions"]) == 3
+    for entry in doc["submissions"]:
+        assert entry["original_canonical_path"].startswith("fixtures/multimodal/label_")
+        assert len(entry["sha256"]) == 64
+        signals = {s["signal"] for s in entry["decisive_generated_media_signals"]}
+        assert signals == {"KNOWN_GENERATED_HASH_MATCH", "EMBEDDED_GENERATOR_PROVENANCE"}
+        assert entry["non_decisive_diagnostics"]
+        assert all(a["decisive"] is False for a in entry["non_decisive_diagnostics"])
+
+
+def test_rejected_submission_records_the_synthetic_counterpart_hashes() -> None:
+    doc = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))
+    for entry in doc["submissions"]:
+        counterpart = entry["known_synthetic_counterpart"]
+        assert counterpart["hash_identical"] is True
+        assert counterpart["sha256"] == entry["sha256"]
+        assert (REPO_ROOT / counterpart["path"]).exists(), "the generated original is retained"
+
+
+def test_rejected_submission_states_what_is_not_proof_of_generation() -> None:
+    """The artifact must not re-introduce the invalid EXIF invariant."""
+    doc = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))
+    disclaimers = " ".join(doc["what_is_NOT_proof_of_generation"]).lower()
+    for topic in ("exif", "extension", "mtime", "raw bytes"):
+        assert topic in disclaimers, f"missing disclaimer about {topic}"
+    assert "must not establish real_physical" in doc["asymmetry_rule"].lower()
+
+
+def test_rejected_submission_records_the_unchanged_outcome() -> None:
+    """Requirement 12/13 as recorded history: nothing advanced."""
+    outcome = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))["outcome"]
+    assert outcome["real_physical_fixtures_accepted"] == 0
+    assert outcome["t064_remained_open"] is True
+    assert outcome["g1_verdict_after"] == "NOT_YET_DECIDABLE"
+    assert outcome["task_checkboxes_changed"] is False
+    assert outcome["synthetic_fixtures_modified"] is False
+    assert set(outcome["tasks_still_open"]) == {"T063", "T064", "T066", "T067", "T068"}
+
+
+def test_rejection_history_is_not_read_as_current_state() -> None:
+    """Historical evidence must be labelled so it cannot be mistaken for the present."""
+    doc = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))
+    assert "MUST NOT be read as the current fixture state" in doc["record_type_warning"]
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    history = manifest["historical_rejections"][0]
+    assert history["is_current_state"] is False
+    assert history["evidence"] == "evidence/g1_t064_rejected_submission.json"
+
+
+def test_canonical_real_physical_paths_are_absent_after_cleanup() -> None:
+    """Requirement 2. No generated media may occupy a REAL_PHYSICAL slot."""
+    for name in CANONICAL_NAMES:
+        assert not (FIXTURES_DIR / name).exists(), f"{name} still occupies a canonical path"
+
+
+def test_current_provenance_reports_awaiting_real_physical_capture() -> None:
+    """Requirement 3. The manifest describes now, not the rejected submission."""
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    assert manifest["t064_status"] == "AWAITING_REAL_PHYSICAL_CAPTURE"
+    assert manifest["physical_capture_satisfied"] is False
+    assert manifest["all_present"] is False
+    for name in CANONICAL_NAMES:
+        entry = manifest["fixtures"][name]
+        assert entry["status"] == "AWAITING_REAL_PHYSICAL_CAPTURE"
+        assert entry["present"] is False
+        assert entry["classification"] == []
+        assert entry["satisfies_t064_physical_capture"] is False
+
+
+def test_no_current_canonical_fixture_is_classified_real() -> None:
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    for name, entry in manifest["fixtures"].items():
+        assert "REAL" not in entry["classification"], name
+
+
+def test_t064_is_unsatisfied_in_the_live_gate() -> None:
+    """Requirement 4. Not just the manifest — the computed gate agrees."""
+    status = collect_fixture_status(FIXTURES_DIR)
+    assert status["all_present"] is False
+    assert status["physical_capture_satisfied"] is False
+    assert status["rejected_as_generated"] == []
+
+
+def test_synthetic_fixtures_survived_the_cleanup() -> None:
+    """Only the canonical slots were cleared; the generated originals are retained."""
+    for relative in SYNTHETIC_COUNTERPARTS.values():
+        assert (FIXTURES_DIR / relative).exists(), relative
+
+
+
+def test_t064_remains_incomplete() -> None:
+    assert _task_line("T064").startswith("- [ ] ")
+
+
+# ============ asymmetry: positive evidence disqualifies, clean content never qualifies ==
+
+
+def test_clean_jpeg_without_exif_can_still_satisfy_t064(tmp_path: Path) -> None:
+    """Requirement 1. EXIF-stripped photographs are ordinary and must remain usable."""
+    _write_declared_real(tmp_path, CANONICAL_NAMES, b"\xff\xd8\xff\xe0" + b"JFIF" + b"\x00" * 256)
+    status = collect_fixture_status(tmp_path)
+    for name, entry in status["required"].items():
+        assert entry["content_inspection"]["exif_present"] is False, name
+        assert entry["content_inspection"]["is_generated"] is False, name
+    assert status["physical_capture_satisfied"] is True
+    assert status["rejected_as_generated"] == []
+
+
+def test_known_synthetic_hash_rejects_despite_a_real_declaration(tmp_path: Path) -> None:
+    """Requirement 4. Hash identity with recorded synthetic media is decisive."""
+    payload = (SYNTHETIC_DIR / "label_left_synthetic_01.jpg").read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
+    _write_declared_real(tmp_path, CANONICAL_NAMES, payload)
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is False
+    finding = status["required"]["label_left_01.jpg"]["content_inspection"]
+    assert finding["sha256"] == digest
+    assert finding["known_generated_hash_match"]
+    assert "KNOWN_GENERATED_HASH_MATCH" in {s["signal"] for s in finding["decisive_signals"]}
+
+
+def test_trained_algorithmic_media_rejects_despite_a_real_declaration(
+    tmp_path: Path,
+) -> None:
+    """Requirement 5. Embedded generator provenance is decisive on a valid JPEG too."""
+    _write_declared_real(tmp_path, CANONICAL_NAMES, GENERATED_JPEG)
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is False
+    finding = status["required"]["label_left_01.jpg"]["content_inspection"]
+    # No confounders: valid JPEG container, matching extension, no hash match.
+    assert finding["container_format"] == "JPEG"
+    assert finding["extension_matches_container"] is True
+    assert finding["known_generated_hash_match"] is None
+    assert {s["signal"] for s in finding["decisive_signals"]} == {
+        "EMBEDDED_GENERATOR_PROVENANCE"
+    }
+
+
+def test_positive_generated_evidence_overrides_the_operator_declaration(
+    tmp_path: Path,
+) -> None:
+    """Requirement 6. The strongest possible declaration still loses to the bytes."""
+    _write_declared_real(tmp_path, CANONICAL_NAMES, GENERATED_JPEG)
+    manifest = json.loads((tmp_path / "provenance.json").read_text(encoding="utf-8"))
+    declaration = manifest["fixtures"]["label_left_01.jpg"]
+    assert declaration["classification"] == ["REAL"]
+    assert declaration["capture_method"] == PHYSICAL_CAPTURE_METHOD
+    assert declaration["generated"] is False
+    assert declaration["satisfies_t064_physical_capture"] is True
+
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is False
+    assert sorted(status["rejected_as_generated"]) == sorted(CANONICAL_NAMES)
+
+
+def test_clean_content_alone_never_establishes_real_physical(tmp_path: Path) -> None:
+    """Requirement 7. Absence of generated evidence is not presence of a photograph."""
+    for name in CANONICAL_NAMES:
+        (tmp_path / name).write_bytes(b"\xff\xd8\xff\xe0" + b"JFIF" + b"\x00" * 256)
+    status = collect_fixture_status(tmp_path)
+    assert status["all_present"] is True
+    for entry in status["required"].values():
+        assert entry["content_inspection"]["is_generated"] is False
+    assert status["provenance_manifest_present"] is False
+    assert status["physical_capture_satisfied"] is False, (
+        "clean bytes must never qualify a fixture on their own"
+    )
+
+
+def test_a_synthetic_declaration_still_fails_on_clean_content(tmp_path: Path) -> None:
+    """The declaration rules survive intact: SYNTHETIC stays disqualifying."""
+    for name in CANONICAL_NAMES:
+        (tmp_path / name).write_bytes(b"\xff\xd8\xff\xe0" + b"JFIF" + b"\x00" * 256)
+    (tmp_path / "provenance.json").write_text(
+        json.dumps(
+            {
+                "fixtures": {
+                    name: {
+                        "classification": ["SYNTHETIC"],
+                        "capture_method": "GENERATED_IMAGE",
+                        "satisfies_t064_physical_capture": False,
+                    }
+                    for name in CANONICAL_NAMES
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert collect_fixture_status(tmp_path)["physical_capture_satisfied"] is False
+
+
+# ============ producer names are decisive only inside a provenance structure ==========
+
+
+def test_producer_name_in_raw_bytes_alone_is_not_generated_evidence(tmp_path: Path) -> None:
+    """Requirement 7. Arbitrary raw-byte occurrence must not classify media."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(make_png() + b"gpt-image OpenAI Media Service midjourney")
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["is_generated"] is False, "a raw-byte hit must not become a verdict"
+    assert finding["markers"] == []
+    assert finding["decisive_signals"] == []
+
+
+def test_producer_name_in_pixel_data_is_not_generated_evidence(tmp_path: Path) -> None:
+    """Requirement 8. Image content is not a provenance claim.
+
+    A photograph may legitimately show a poster reading "midjourney", or carry the text
+    in its scan data. That is picture content, not a content credential.
+    """
+    png_target = tmp_path / "label_left_01.jpg"
+    png_target.write_bytes(make_png(_png_chunk(b"IDAT", b"OpenAI Media Service" * 4)))
+    png_finding = detect_generated_media(png_target, known_generated={})
+    assert png_finding["is_generated"] is False
+    assert png_finding["provenance_structures"] == []
+
+    jpeg_target = tmp_path / "label_top_right_01.jpg"
+    jpeg_target.write_bytes(make_jpeg(scan_data=b"stable-diffusion imagen dall-e"))
+    jpeg_finding = detect_generated_media(jpeg_target, known_generated={})
+    assert jpeg_finding["is_generated"] is False
+    assert jpeg_finding["markers"] == []
+
+
+def test_producer_name_in_a_provenance_structure_is_decisive(tmp_path: Path) -> None:
+    """The counterpart: the same string inside C2PA/JUMBF does disqualify."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(make_png(_png_chunk(b"caBX", b"jumb" + b"gpt-image")))
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["is_generated"] is True
+    assert finding["provenance_structures"] == ["PNG_caBX"]
+    assert finding["generator_provenance_matches"][0]["structure"] == "PNG_caBX"
+
+
+def test_raw_bytes_and_structure_are_distinguished_on_the_same_marker(
+    tmp_path: Path,
+) -> None:
+    """Same producer name, two locations, opposite verdicts."""
+    loose = tmp_path / "label_left_01.jpg"
+    loose.write_bytes(make_png() + b"trainedAlgorithmicMedia")
+    structured = tmp_path / "label_top_right_01.jpg"
+    structured.write_bytes(make_png(_png_chunk(b"caBX", b"trainedAlgorithmicMedia")))
+    assert detect_generated_media(loose, known_generated={})["is_generated"] is False
+    assert detect_generated_media(structured, known_generated={})["is_generated"] is True
+
+
+def test_a_declared_real_fixture_with_a_loose_producer_name_still_qualifies(
+    tmp_path: Path,
+) -> None:
+    """A genuine photo of a poster reading "midjourney" must remain usable."""
+    _write_declared_real(
+        tmp_path, CANONICAL_NAMES, CLEAN_JPEG_NO_EXIF + b"midjourney poster in frame"
+    )
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is True
+    assert status["rejected_as_generated"] == []
+
+
+# ============ the gate as a whole, after cleanup ======================================
+
+
+def test_g1_verdict_remains_not_yet_decidable(session: dict) -> None:
+    """Requirement 12."""
+    report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
+    assert report.verdict == "NOT_YET_DECIDABLE"
+    codes = [blocker["code"] for blocker in report.decision_blockers]
+    assert "T064_PHYSICAL_FIXTURES" in codes
+
+
+def test_all_open_g1_tasks_remain_open() -> None:
+    """Requirement 13."""
+    for task in ("T063", "T064", "T066", "T067", "T068"):
+        assert _task_line(task).startswith("- [ ] "), f"{task} must remain open"
+    assert _task_line("T065").startswith("- [x] "), "T065 stays complete"

@@ -14,40 +14,61 @@
     "An undeclared fixture fails closed and is classified UNDECLARED.",
     "A declaration carrying the SYNTHETIC label can never satisfy T064, whatever else it asserts.",
     "Directory placement confers nothing: moving a generated image into this directory does not make it REAL.",
-    "Declaration alone confers nothing: labelling a generated image REAL does not make it a physical capture. The declaration must be internally consistent AND truthful, and truthfulness is a human attestation this repository cannot verify from bytes."
+    "Declaration alone confers nothing: labelling a generated image REAL does not make it a physical capture. The declaration must be internally consistent AND truthful, and truthfulness is a human attestation this repository cannot verify from bytes.",
+    "Bytes outrank declarations, but only on positive evidence: a fixture is classified generated ONLY when its hash matches media another manifest already classifies as generated, or when a RECOGNIZED provenance structure (C2PA/JUMBF, IPTC digitalSourceType, structured softwareAgent metadata) names trainedAlgorithmicMedia or a generative producer. Producer names found in arbitrary raw bytes or in ordinary image content prove nothing. Missing EXIF, missing Make/Model/DateTimeOriginal, container/extension mismatch, and unusual mtimes are diagnostics only.",
+    "Qualification stays asymmetric: positive generated provenance may DISQUALIFY, but clean content never establishes REAL_PHYSICAL on its own. Qualification still requires the operator provenance declaration and the physical-capture rules."
   ],
   "fixtures": {
     "label_left_01.jpg": {
-      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
       "present": false,
       "classification": [],
       "capture_method": "NOT_YET_CAPTURED",
+      "generated": null,
       "satisfies_t064_physical_capture": false,
       "expected_observation": "LEFT",
+      "sha256": null,
       "synthetic_counterpart": "synthetic/label_left_synthetic_01.jpg"
     },
     "label_top_right_01.jpg": {
-      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
       "present": false,
       "classification": [],
       "capture_method": "NOT_YET_CAPTURED",
+      "generated": null,
       "satisfies_t064_physical_capture": false,
       "expected_observation": "TOP_RIGHT",
+      "sha256": null,
       "synthetic_counterpart": "synthetic/label_top_right_synthetic_01.jpg"
     },
     "label_ambiguous_01.jpg": {
-      "status": "AWAITING_PHYSICAL_CAPTURE",
+      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
       "present": false,
       "classification": [],
       "capture_method": "NOT_YET_CAPTURED",
+      "generated": null,
       "satisfies_t064_physical_capture": false,
       "expected_observation": "INCONCLUSIVE",
+      "sha256": null,
       "synthetic_counterpart": "synthetic/label_ambiguous_synthetic_01.jpg"
     }
   },
-  "t064_status": "PENDING — all three required physical captures are outstanding. No file occupies any canonical path.",
+  "t064_status": "AWAITING_REAL_PHYSICAL_CAPTURE",
   "when_capturing": {
     "declare": "Set classification to [\"REAL\"], capture_method to \"PHYSICAL_CAMERA_CAPTURE\", satisfies_t064_physical_capture to true, present to true, and status to \"CAPTURED\".",
     "answer_leakage_rule": "The observation must be derivable from visible evidence alone. No filename, EXIF field, QR code, watermark, directory name exposed to the model, or prompt hint may encode the answer. Filenames are used only by the harness to look up the expected value and are never sent to the model."
-  }
+  },
+  "physical_capture_satisfied": false,
+  "all_present": false,
+  "current_state_note": "No file occupies any canonical REAL_PHYSICAL path. No current canonical fixture is classified REAL. All three physical captures are outstanding.",
+  "historical_rejections": [
+    {
+      "submitted_on": "2026-08-21",
+      "status": "REJECTED_NOT_A_PHYSICAL_CAPTURE",
+      "evidence": "evidence/g1_t064_rejected_submission.json",
+      "summary": "Three files submitted as physical camera captures were rejected: each was byte-identical to a recorded synthetic fixture and carried C2PA content credentials naming gpt-image 2.0 / trainedAlgorithmicMedia. They were removed from the canonical slots; the generated originals remain under synthetic/.",
+      "is_current_state": false,
+      "note": "HISTORICAL only. Must not be read as the current fixture state."
+    }
+  ]
 }
