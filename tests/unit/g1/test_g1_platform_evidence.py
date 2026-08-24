@@ -633,7 +633,7 @@ def test_written_evidence_file_reflects_the_true_state() -> None:
     ]
     holds = [hold["code"] for hold in doc["operational_holds"]]
     assert holds == ["BILLING_DISABLED"]
-    # The canonical slots are now empty; the rejected submission lives in history.
+    # The canonical slots are empty again; both rejections live in history.
     assert doc["fixtures"]["physical_capture_satisfied"] is False
     assert doc["fixtures"]["all_present"] is False
     assert doc["fixtures"]["rejected_as_generated"] == []
@@ -967,10 +967,15 @@ def test_rejection_history_is_not_read_as_current_state() -> None:
     assert history["evidence"] == "evidence/g1_t064_rejected_submission.json"
 
 
-def test_canonical_real_physical_paths_are_absent_after_cleanup() -> None:
-    """Requirement 2. No generated media may occupy a REAL_PHYSICAL slot."""
+def test_no_canonical_path_holds_a_qualifying_fixture() -> None:
+    """No generated media may ever *qualify* in a REAL_PHYSICAL slot.
+
+    Files occupy these paths again (submission 02, rejected). The invariant is not that
+    the slots are empty but that nothing in them discharges T064.
+    """
+    status = collect_fixture_status(FIXTURES_DIR)
     for name in CANONICAL_NAMES:
-        assert not (FIXTURES_DIR / name).exists(), f"{name} still occupies a canonical path"
+        assert status["required"][name]["satisfies_t064_physical_capture"] is False, name
 
 
 def test_current_provenance_reports_awaiting_real_physical_capture() -> None:
@@ -984,6 +989,7 @@ def test_current_provenance_reports_awaiting_real_physical_capture() -> None:
         assert entry["status"] == "AWAITING_REAL_PHYSICAL_CAPTURE"
         assert entry["present"] is False
         assert entry["classification"] == []
+        assert entry["capture_method"] == "NOT_YET_CAPTURED"
         assert entry["satisfies_t064_physical_capture"] is False
 
 
@@ -994,7 +1000,7 @@ def test_no_current_canonical_fixture_is_classified_real() -> None:
 
 
 def test_t064_is_unsatisfied_in_the_live_gate() -> None:
-    """Requirement 4. Not just the manifest — the computed gate agrees."""
+    """Not just the manifest — the computed gate agrees."""
     status = collect_fixture_status(FIXTURES_DIR)
     assert status["all_present"] is False
     assert status["physical_capture_satisfied"] is False
@@ -1191,3 +1197,143 @@ def test_all_open_g1_tasks_remain_open() -> None:
     for task in ("T063", "T064", "T066", "T067", "T068"):
         assert _task_line(task).startswith("- [ ] "), f"{task} must remain open"
     assert _task_line("T065").startswith("- [x] "), "T065 stays complete"
+
+
+# ============ submission 02: new files, rejected on embedded provenance alone =========
+
+REJECTED_SUBMISSION_02 = REPO_ROOT / "evidence" / "g1_t064_rejected_submission_02.json"
+
+
+def _submission_02() -> list[dict]:
+    return json.loads(REJECTED_SUBMISSION_02.read_text(encoding="utf-8"))["submissions"]
+
+
+def test_submission_02_files_are_not_known_synthetic() -> None:
+    """The hash signal did NOT fire on submission 02 — these were genuinely new files.
+
+    Read from the preserved artifact: the files themselves were deleted in cleanup, and
+    the record is what must survive.
+    """
+    synthetic_hashes = {
+        hashlib.sha256((SYNTHETIC_DIR / name).read_bytes()).hexdigest()
+        for name in (
+            "label_left_synthetic_01.jpg",
+            "label_top_right_synthetic_01.jpg",
+            "label_ambiguous_synthetic_01.jpg",
+        )
+    }
+    for entry in _submission_02():
+        assert entry["sha256"] not in synthetic_hashes
+        assert entry["known_synthetic_hash_match"] is None
+
+
+def test_submission_02_containers_were_valid_jpegs() -> None:
+    """None of submission 01's anomalies applied: real JPEGs, matching extensions."""
+    for entry in _submission_02():
+        assert entry["container_format"] == "JPEG"
+        assert entry["extension_matches_container"] is True
+
+
+def test_submission_02_rejected_solely_on_embedded_generator_provenance() -> None:
+    """One decisive signal, sourced from a parsed APP11/JUMBF structure."""
+    for entry in _submission_02():
+        signals = {s["signal"] for s in entry["decisive_generated_media_signals"]}
+        assert signals == {"EMBEDDED_GENERATOR_PROVENANCE"}
+        assert entry["provenance_structures_found"] == ["APP11_JUMBF_C2PA"]
+        findings = entry["c2pa_manifest_findings"]
+        assert findings["action"] == "c2pa.created"
+        assert findings["action_description"] == "Created by Google Generative AI."
+        assert findings["digital_source_type"].endswith("trainedAlgorithmicMedia")
+        assert findings["camera_capture_assertion_present"] is False
+
+
+def test_submission_02_was_not_rejected_on_any_non_decisive_diagnostic() -> None:
+    """EXIF absence was present but must not have done the work."""
+    for entry in _submission_02():
+        assert entry["non_decisive_diagnostics"]
+        assert all(a["decisive"] is False for a in entry["non_decisive_diagnostics"])
+        assert {a["anomaly"] for a in entry["non_decisive_diagnostics"]} == {"NO_EXIF"}
+
+
+def test_submission_02_hashes_survive_the_deletion() -> None:
+    """Deleting the files must not delete the ability to identify them later."""
+    for entry in _submission_02():
+        assert len(entry["sha256"]) == 64
+        assert entry["bytes"] > 0
+        assert not (REPO_ROOT / entry["original_canonical_path"]).exists()
+
+
+def test_operator_attestation_cannot_override_a_creation_claim(tmp_path: Path) -> None:
+    """The attestation is necessary provenance, never sufficient against positive evidence."""
+    payload = make_jpeg(
+        jpeg_segment(
+            0xEB,
+            b"jumb"
+            + b"c2pa.created"
+            + b"Created by Google Generative AI."
+            + b"trainedAlgorithmicMedia",
+        )
+    )
+    _write_declared_real(tmp_path, CANONICAL_NAMES, payload)
+    status = collect_fixture_status(tmp_path)
+    assert status["all_present"] is True
+    assert status["physical_capture_satisfied"] is False
+    assert sorted(status["rejected_as_generated"]) == sorted(CANONICAL_NAMES)
+
+
+def test_a_c2pa_created_generative_claim_is_decisive(tmp_path: Path) -> None:
+    """A synthetic reproduction of the exact structure submission 02 carries."""
+    target = tmp_path / "label_left_01.jpg"
+    target.write_bytes(
+        make_jpeg(
+            jpeg_segment(
+                0xEB,
+                b"jumb"
+                + b"c2pa.created"
+                + b"Created by Google Generative AI."
+                + b"trainedAlgorithmicMedia",
+            )
+        )
+    )
+    finding = detect_generated_media(target, known_generated={})
+    assert finding["is_generated"] is True
+    assert finding["provenance_structures"] == ["APP11_JUMBF_C2PA"]
+
+
+def test_submission_02_record_is_auditable_and_historical() -> None:
+    assert REJECTED_SUBMISSION_02.exists()
+    doc = json.loads(REJECTED_SUBMISSION_02.read_text(encoding="utf-8"))
+    assert doc["status"] == "REJECTED_NOT_A_PHYSICAL_CAPTURE"
+    assert doc["submission_sequence"] == 2
+    assert doc["previous_submission_record"] == "evidence/g1_t064_rejected_submission.json"
+    assert len(doc["submissions"]) == 3
+    for entry in doc["submissions"]:
+        assert entry["known_synthetic_hash_match"] is None
+        signals = {s["signal"] for s in entry["decisive_generated_media_signals"]}
+        assert signals == {"EMBEDDED_GENERATOR_PROVENANCE"}
+    assert doc["outcome"]["real_physical_fixtures_accepted"] == 0
+    assert doc["outcome"]["g1_verdict_after"] == "NOT_YET_DECIDABLE"
+    assert doc["outcome"]["inference_records_created"] == 0
+
+
+def test_submission_01_record_is_preserved_unchanged() -> None:
+    """The first rejection record must survive the second submission untouched."""
+    doc = json.loads(REJECTED_SUBMISSION.read_text(encoding="utf-8"))
+    assert doc["status"] == "REJECTED_NOT_A_PHYSICAL_CAPTURE"
+    assert "submission_sequence" not in doc, "submission 01 must not have been rewritten"
+    for entry in doc["submissions"]:
+        assert entry["known_synthetic_counterpart"]["hash_identical"] is True
+
+
+def test_both_rejections_are_listed_in_the_manifest_history() -> None:
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    records = manifest["historical_rejections"]
+    assert len(records) == 2
+    assert records[0]["evidence"] == "evidence/g1_t064_rejected_submission.json"
+    assert records[1]["evidence"] == "evidence/g1_t064_rejected_submission_02.json"
+
+
+def test_no_inference_record_was_created_by_this_step() -> None:
+    doc = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    assert doc["records"] == []
+    assert doc["stability"] == {}

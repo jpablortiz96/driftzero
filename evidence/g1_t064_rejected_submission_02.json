@@ -1,0 +1,149 @@
+{
+  "schema": "driftzero.g1.t064_rejected_submission.v1",
+  "task": "T064 — physical fixture capture: rejected submission record (submission 02)",
+  "submission_sequence": 2,
+  "previous_submission_record": "evidence/g1_t064_rejected_submission.json",
+  "status": "REJECTED_NOT_A_PHYSICAL_CAPTURE",
+  "record_type": "HISTORICAL_EVIDENCE",
+  "record_type_warning": "This artifact records a submission REJECTED on 2026-08-24. It is a permanent audit record and MUST NOT be read as the current fixture state. Current state lives in fixtures/multimodal/provenance.json.",
+  "submitted_on": "2026-08-24",
+  "submitted_as": "PHYSICAL_CAMERA_CAPTURE via phone/camera (operator attestation)",
+  "recorded_on": "2026-08-24",
+  "how_this_differs_from_submission_01": [
+    "These are genuinely NEW files: all three SHA-256 values are new and match no known synthetic fixture.",
+    "The containers are real JPEGs and the extensions match, so none of submission 01's anomalies apply.",
+    "KNOWN_GENERATED_HASH_MATCH did NOT fire. The sole decisive signal is EMBEDDED_GENERATOR_PROVENANCE.",
+    "The generator differs: submission 01 was gpt-image 2.0 (OpenAI Media Service API); submission 02 carries a Google C2PA Core Generator Library manifest."
+  ],
+  "decisive_basis": "Every file carries a C2PA APP11/JUMBF manifest whose c2pa.created action is described as 'Created by Google Generative AI.' with digitalSourceType trainedAlgorithmicMedia — the IPTC code for media created by a trained AI model. No camera-capture assertion (digitalCapture / capturedWithDevice) appears in any of the three.",
+  "operator_attestation_outcome": "The attestation stated a real cardboard box photographed with a phone/camera. It is NECESSARY provenance but NOT SUFFICIENT to override positive generated-media evidence, and the embedded creation claim contradicts it. The attestation therefore did not qualify these files.",
+  "what_is_NOT_proof_of_generation": [
+    "Missing EXIF is NOT proof of generation and was NOT used to reject these files. All three lack EXIF; that was recorded only as a non-decisive diagnostic.",
+    "Container/extension mismatch is NOT proof of generation, and did not occur here — all three are valid JPEGs with matching extensions.",
+    "File mtime is NOT proof of generation and was not used.",
+    "A producer name in arbitrary raw bytes is NOT proof. The evidence here came from a parsed APP11 JUMBF structure."
+  ],
+  "answer_leakage_check": {
+    "literal_answer_tokens_found": false,
+    "detail": "No literal LEFT / TOP_RIGHT / INCONCLUSIVE / PASS / FAIL token appears in any file's bytes. Not a factor in the rejection; recorded for completeness."
+  },
+  "submissions": [
+    {
+      "original_canonical_path": "fixtures/multimodal/label_left_01.jpg",
+      "expected_observation": "LEFT",
+      "sha256": "339b8848bb3355523ec2621fe68cab103d0ce4312b1ee133e00821001557116b",
+      "bytes": 3662400,
+      "container_format": "JPEG",
+      "extension_matches_container": true,
+      "provenance_structures_found": [
+        "APP11_JUMBF_C2PA"
+      ],
+      "known_synthetic_hash_match": null,
+      "decisive_generated_media_signals": [
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "A recognized provenance structure names a generative producer or the IPTC trainedAlgorithmicMedia source type: trainedAlgorithmicMedia in APP11_JUMBF_C2PA."
+        }
+      ],
+      "c2pa_manifest_findings": {
+        "claim_generator": "Google C2PA Core Generator Library",
+        "action": "c2pa.created",
+        "action_description": "Created by Google Generative AI.",
+        "digital_source_type": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+        "camera_capture_assertion_present": false
+      },
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block found. Real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and conversion, so this is not evidence of generation."
+        }
+      ],
+      "disposition": "LEFT_IN_PLACE — not deleted. Unlike submission 01 these files exist nowhere else, so removing them would destroy the only copy. The operator should relocate them out of the canonical REAL_PHYSICAL slots."
+    },
+    {
+      "original_canonical_path": "fixtures/multimodal/label_top_right_01.jpg",
+      "expected_observation": "TOP_RIGHT",
+      "sha256": "4cf285371f0a82c8205a2f9a2ecc9c7a9d5844ede0ba096407c2512d8ea5b819",
+      "bytes": 3718585,
+      "container_format": "JPEG",
+      "extension_matches_container": true,
+      "provenance_structures_found": [
+        "APP11_JUMBF_C2PA"
+      ],
+      "known_synthetic_hash_match": null,
+      "decisive_generated_media_signals": [
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "A recognized provenance structure names a generative producer or the IPTC trainedAlgorithmicMedia source type: trainedAlgorithmicMedia in APP11_JUMBF_C2PA."
+        }
+      ],
+      "c2pa_manifest_findings": {
+        "claim_generator": "Google C2PA Core Generator Library",
+        "action": "c2pa.created",
+        "action_description": "Created by Google Generative AI.",
+        "digital_source_type": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+        "camera_capture_assertion_present": false
+      },
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block found. Real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and conversion, so this is not evidence of generation."
+        }
+      ],
+      "disposition": "LEFT_IN_PLACE — not deleted. Unlike submission 01 these files exist nowhere else, so removing them would destroy the only copy. The operator should relocate them out of the canonical REAL_PHYSICAL slots."
+    },
+    {
+      "original_canonical_path": "fixtures/multimodal/label_ambiguous_01.jpg",
+      "expected_observation": "INCONCLUSIVE",
+      "sha256": "1dc0f1055d8a3d321a81b9832ed99c0b0ec8553851a26ac1e0fe9ebd598e852d",
+      "bytes": 3154928,
+      "container_format": "JPEG",
+      "extension_matches_container": true,
+      "provenance_structures_found": [
+        "APP11_JUMBF_C2PA"
+      ],
+      "known_synthetic_hash_match": null,
+      "decisive_generated_media_signals": [
+        {
+          "signal": "EMBEDDED_GENERATOR_PROVENANCE",
+          "detail": "A recognized provenance structure names a generative producer or the IPTC trainedAlgorithmicMedia source type: trainedAlgorithmicMedia in APP11_JUMBF_C2PA."
+        }
+      ],
+      "c2pa_manifest_findings": {
+        "claim_generator": "Google C2PA Core Generator Library",
+        "action": "c2pa.created",
+        "action_description": "Created by Google Generative AI.",
+        "digital_source_type": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+        "camera_capture_assertion_present": false
+      },
+      "non_decisive_diagnostics": [
+        {
+          "anomaly": "NO_EXIF",
+          "decisive": false,
+          "detail": "No EXIF block found. Real photographs routinely lose EXIF to messaging apps, editors, export pipelines, privacy stripping, and conversion, so this is not evidence of generation."
+        }
+      ],
+      "disposition": "LEFT_IN_PLACE — not deleted. Unlike submission 01 these files exist nowhere else, so removing them would destroy the only copy. The operator should relocate them out of the canonical REAL_PHYSICAL slots."
+    }
+  ],
+  "outcome": {
+    "real_physical_fixtures_accepted": 0,
+    "t064_remained_open": true,
+    "t064_status_after": "AWAITING_REAL_PHYSICAL_CAPTURE",
+    "g1_verdict_after": "NOT_YET_DECIDABLE",
+    "task_checkboxes_changed": false,
+    "tasks_still_open": [
+      "T063",
+      "T064",
+      "T066",
+      "T067",
+      "T068"
+    ],
+    "canonical_paths_cleared": false,
+    "synthetic_fixtures_modified": false,
+    "inference_records_created": 0
+  },
+  "action_required": "Photograph a real cardboard box with a real printed label using a phone or camera, and transfer the files without passing them through any generative-AI edit, export, or 'enhance' step that stamps a c2pa.created / trainedAlgorithmicMedia claim. The gate accepts an EXIF-free JPEG, so ordinary metadata stripping is not a problem."
+}

@@ -56,11 +56,12 @@
   "t064_status": "AWAITING_REAL_PHYSICAL_CAPTURE",
   "when_capturing": {
     "declare": "Set classification to [\"REAL\"], capture_method to \"PHYSICAL_CAMERA_CAPTURE\", satisfies_t064_physical_capture to true, present to true, and status to \"CAPTURED\".",
-    "answer_leakage_rule": "The observation must be derivable from visible evidence alone. No filename, EXIF field, QR code, watermark, directory name exposed to the model, or prompt hint may encode the answer. Filenames are used only by the harness to look up the expected value and are never sent to the model."
+    "answer_leakage_rule": "The observation must be derivable from visible evidence alone. No filename, EXIF field, QR code, watermark, directory name exposed to the model, or prompt hint may encode the answer. Filenames are used only by the harness to look up the expected value and are never sent to the model.",
+    "avoid_generative_pipelines": "Transfer captures directly (cable, plain file copy, unedited attachment). Routing a genuine photograph through a generative-AI edit, 'enhance', or export step can stamp a c2pa.created / trainedAlgorithmicMedia claim into the file, which the gate treats as decisive. An EXIF-free JPEG is accepted, so ordinary metadata stripping in transit is not a problem."
   },
   "physical_capture_satisfied": false,
   "all_present": false,
-  "current_state_note": "No file occupies any canonical REAL_PHYSICAL path. No current canonical fixture is classified REAL. All three physical captures are outstanding.",
+  "current_state_note": "No file occupies any canonical REAL_PHYSICAL path. No current canonical fixture is classified REAL. All three physical captures are outstanding. Two submissions have been rejected to date; see historical_rejections.",
   "historical_rejections": [
     {
       "submitted_on": "2026-08-21",
@@ -69,6 +70,14 @@
       "summary": "Three files submitted as physical camera captures were rejected: each was byte-identical to a recorded synthetic fixture and carried C2PA content credentials naming gpt-image 2.0 / trainedAlgorithmicMedia. They were removed from the canonical slots; the generated originals remain under synthetic/.",
       "is_current_state": false,
       "note": "HISTORICAL only. Must not be read as the current fixture state."
+    },
+    {
+      "submitted_on": "2026-08-24",
+      "status": "REJECTED_NOT_A_PHYSICAL_CAPTURE",
+      "evidence": "evidence/g1_t064_rejected_submission_02.json",
+      "summary": "Three genuinely new JPEGs (new hashes, valid containers, no synthetic hash match) were rejected on embedded generator provenance alone: each carries a Google C2PA manifest with c2pa.created 'Created by Google Generative AI.' and trainedAlgorithmicMedia.",
+      "is_current_state": false,
+      "note": "HISTORICAL only. The rejected files were deleted from the canonical slots after their hashes and C2PA findings were preserved in the evidence artifact. They were not moved or duplicated into any other canonical fixture location."
     }
   ]
 }
