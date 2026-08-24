@@ -71,6 +71,7 @@ class MutationRejection(StrEnum):
     """Deterministic reason codes. Every one implies zero further dispatch."""
 
     CAPABILITY_MISSING = "CAPABILITY_MISSING"
+    CAPABILITY_NOT_ISSUED = "CAPABILITY_NOT_ISSUED"
     CAPABILITY_SCOPE_VIOLATION = "CAPABILITY_SCOPE_VIOLATION"
     CAPABILITY_CONTEXT_MISMATCH = "CAPABILITY_CONTEXT_MISMATCH"
     MALFORMED_REQUEST = "MALFORMED_REQUEST"
@@ -108,9 +109,13 @@ class MutationCapability:
     """An unforgeable-by-construction grant to mutate specific artifacts.
 
     ``holder`` is an opaque logical identity. This tool deliberately does **not** know
-    which identity is allowed to hold a capability — minting policy is T074's concern.
-    What the tool enforces is narrower and entirely mechanical: a capability must be
-    present, must name this artifact, and must match the change it was issued for.
+    which identity is allowed to hold a capability — minting policy belongs to the
+    broker. What the tool enforces is narrower and entirely mechanical: a capability
+    must be present, must **verify as broker-issued**, must name this artifact, and must
+    match the change it was issued for.
+
+    Verification is what stops a caller from forging authority by constructing this
+    dataclass directly with a privileged-looking ``holder`` string.
     """
 
     capability_id: str
@@ -118,6 +123,8 @@ class MutationCapability:
     authorized_artifact_ids: frozenset[str]
     change_id: str
     source_version: str
+    grant_token: str
+    """Broker-issued integrity material. A hand-built value cannot verify."""
 
 
 @runtime_checkable
@@ -194,11 +201,16 @@ class MutationToolContext:
 
     ``change`` and ``source_version_applicable`` exist solely so reconciliation can be
     delegated to the frozen T034 implementation; the tool never re-derives either.
+
+    ``capability_verifier`` has no default on purpose: an optional authorization check
+    is one forgotten argument away from no authorization check.
     """
 
     ledger: ActionLedger
     repository: ArtifactRepository
     capability: MutationCapability | None
+    capability_verifier: Callable[[MutationCapability], bool]
+    """Broker verification hook. Required — no call site may skip authorization."""
     workflow_id: str
     change: ApprovedChange
     source_version_applicable: bool
@@ -282,6 +294,14 @@ def apply_authorized_artifact_patch(
     capability = context.capability
     if capability is None:
         return _reject(MutationRejection.CAPABILITY_MISSING, detail="no capability presented")
+    if not context.capability_verifier(capability):
+        return _reject(
+            MutationRejection.CAPABILITY_NOT_ISSUED,
+            detail=(
+                "capability did not verify as broker-issued; a constructed or revoked "
+                "capability confers no authority"
+            ),
+        )
     if artifact_id not in capability.authorized_artifact_ids:
         return _reject(
             MutationRejection.CAPABILITY_SCOPE_VIOLATION,

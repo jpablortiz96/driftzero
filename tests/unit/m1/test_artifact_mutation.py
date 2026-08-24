@@ -16,6 +16,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from driftzero.capabilities import AgentIdentity, MutationCapabilityBroker  # noqa: E402
 from driftzero.models.action import ActionStatus, ActionType  # noqa: E402
 from driftzero.models.artifact import DownstreamArtifact  # noqa: E402
 from driftzero.models.remediation import MutationEvidence, NoOpEvidence  # noqa: E402
@@ -75,33 +76,47 @@ def make_hero_artifact(**overrides: object) -> DownstreamArtifact:
     return DownstreamArtifact(**defaults)
 
 
-def make_capability(**overrides: object) -> MutationCapability:
-    defaults: dict[str, object] = {
-        "capability_id": "cap-001",
-        "holder": "logical://remediation-context",
-        "authorized_artifact_ids": frozenset({ARTIFACT_ID}),
-        "change_id": CHANGE_ID,
-        "source_version": "v3",
-    }
-    defaults.update(overrides)
-    return MutationCapability(**defaults)
+def make_capability(
+    broker: MutationCapabilityBroker,
+    *,
+    artifact_id: str = ARTIFACT_ID,
+    change_id: str = CHANGE_ID,
+    source_version: str = "v3",
+) -> MutationCapability:
+    """Mint through the real broker — a hand-built capability would not verify."""
+    return broker.issue(
+        holder=AgentIdentity.REMEDIATION,
+        artifact_id=artifact_id,
+        change_id=change_id,
+        source_version=source_version,
+    )
+
+
+_DEFAULT = object()
 
 
 def make_context(
     artifact: DownstreamArtifact | None = None,
     *,
-    capability: MutationCapability | None = "default",  # type: ignore[assignment]
+    capability: object = _DEFAULT,
+    capability_kwargs: dict[str, str] | None = None,
     repository: object | None = None,
     ledger: ActionLedger | None = None,
     source_version_applicable: bool = True,
+    broker: MutationCapabilityBroker | None = None,
 ) -> MutationToolContext:
     art = make_hero_artifact() if artifact is None else artifact
     repo = InMemoryArtifactRepository({art.artifact_id: art}) if repository is None else repository
-    cap = make_capability() if capability == "default" else capability
+    issuer = broker or MutationCapabilityBroker()
+    if capability is _DEFAULT:
+        cap = make_capability(issuer, **(capability_kwargs or {}))
+    else:
+        cap = capability  # type: ignore[assignment]
     return MutationToolContext(
         ledger=ledger or ActionLedger(),
         repository=repo,  # type: ignore[arg-type]
-        capability=cap,
+        capability=cap,  # type: ignore[arg-type]
+        capability_verifier=issuer.verify,
         workflow_id=WORKFLOW_ID,
         change=make_change(),
         source_version_applicable=source_version_applicable,
@@ -246,16 +261,14 @@ def test_unauthenticated_invocation_writes_nothing() -> None:
 
 
 def test_capability_not_granting_the_artifact_writes_nothing() -> None:
-    context = make_context(
-        capability=make_capability(authorized_artifact_ids=frozenset({"WI-999"}))
-    )
+    context = make_context(capability_kwargs={"artifact_id": "WI-999"})
     result = call(context)
     assert result.rejection is MutationRejection.CAPABILITY_SCOPE_VIOLATION
     assert context.repository.dispatch_count == 0  # type: ignore[union-attr]
 
 
 def test_capability_for_a_different_change_writes_nothing() -> None:
-    context = make_context(capability=make_capability(change_id="CHG-OTHER"))
+    context = make_context(capability_kwargs={"change_id": "CHG-OTHER"})
     result = call(context)
     assert result.rejection is MutationRejection.CAPABILITY_CONTEXT_MISMATCH
     assert context.repository.dispatch_count == 0  # type: ignore[union-attr]
@@ -347,12 +360,20 @@ def test_same_action_id_with_a_different_payload_fails_closed() -> None:
 def test_same_action_id_targeting_a_different_artifact_fails_closed() -> None:
     other = make_hero_artifact(artifact_id="WI-220")
     repo = InMemoryArtifactRepository({ARTIFACT_ID: make_hero_artifact(), "WI-220": other})
-    context = make_context(
+    # One capability per artifact, both broker-issued, sharing a ledger: the conflict
+    # must come from the reused action_id, not from an authorization gap.
+    issuer = MutationCapabilityBroker()
+    ledger = ActionLedger()
+    first = make_context(repository=repo, ledger=ledger, broker=issuer)
+    call(first)
+
+    second = make_context(
         repository=repo,
-        capability=make_capability(authorized_artifact_ids=frozenset({ARTIFACT_ID, "WI-220"})),
+        ledger=ledger,
+        broker=issuer,
+        capability_kwargs={"artifact_id": "WI-220"},
     )
-    call(context)
-    conflicting = call(context, artifact_id="WI-220")
+    conflicting = call(second, artifact_id="WI-220")
     assert conflicting.rejection is MutationRejection.ACTION_PAYLOAD_CONFLICT
     assert repo.dispatch_count == 1
 
