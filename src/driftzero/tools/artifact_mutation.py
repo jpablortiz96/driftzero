@@ -171,6 +171,7 @@ class InMemoryArtifactRepository:
 
     def __init__(self, artifacts: dict[str, DownstreamArtifact] | None = None) -> None:
         self._artifacts: dict[str, DownstreamArtifact] = dict(artifacts or {})
+        self._revision: dict[str, int] = {}
         self.dispatch_count = 0
         self.read_count = 0
 
@@ -195,7 +196,16 @@ class InMemoryArtifactRepository:
 
         requirements = dict(artifact.requirements)
         requirements[requirement_id] = new_value
-        update: dict[str, object] = {"requirements": requirements}
+        # A mutation must leave the before-state independently retrievable: Crossing 2
+        # requires before_ref != after_ref so both states can be fetched and hashed. A
+        # store that overwrites in place under one ref cannot satisfy that, so the
+        # committed artifact gets its own versioned reference.
+        self._revision[artifact_id] = self._revision.get(artifact_id, 1) + 1
+        base = artifact.content_ref.split("#v")[0]
+        update: dict[str, object] = {
+            "requirements": requirements,
+            "content_ref": f"{base}#v{self._revision[artifact_id]}",
+        }
         if requirement_id == artifact.requirement_id:
             # Keep the model coherent: current_value tracks the artifact's own
             # requirement, and reconciliation compares against exactly that field.

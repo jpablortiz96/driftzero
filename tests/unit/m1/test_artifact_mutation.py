@@ -181,8 +181,12 @@ def test_every_unrelated_structured_field_is_preserved() -> None:
         "instructions": UNRELATED_PROSE,
         "packing_mode": "STANDARD",
     }
-    unchanged = before.model_dump(exclude={"requirements", "current_value"})
-    assert after.model_dump(exclude={"requirements", "current_value"}) == unchanged
+    # content_ref legitimately changes: Crossing 2 requires the before-state to stay
+    # independently retrievable, so the committed artifact gets its own versioned ref.
+    ignored = {"requirements", "current_value", "content_ref"}
+    assert after.model_dump(exclude=ignored) == before.model_dump(exclude=ignored)
+    assert after.content_ref != before.content_ref
+    assert after.content_ref.startswith(before.content_ref)
 
 
 def test_the_primary_current_value_tracks_the_mutated_requirement() -> None:
