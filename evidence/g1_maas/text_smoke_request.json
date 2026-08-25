@@ -1,0 +1,11 @@
+{
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Reply with exactly DRIFTZERO_MAAS_OK"
+    }
+  ],
+  "max_tokens": 32,
+  "stream": false
+}

@@ -1,0 +1,18 @@
+{
+  "createTime": "2026-08-24T21:53:34.499777898Z",
+  "dimensions": {
+    "gpu_family": "NVIDIA_RTX_PRO_6000",
+    "region": "us-central1"
+  },
+  "etag": "lKSxF2-RKoGDr6YwWA_eEWi1_xZ_sHcdVNeDSlNjRfI",
+  "name": "projects/driftzero-runtime-2026/locations/global/quotaPreferences/driftzero-rtxpro6000-uscentral1",
+  "quotaConfig": {
+    "grantedValue": "0",
+    "preferredValue": "1",
+    "stateDetail": "Quota request denied",
+    "traceId": "8e774f8b-2e2a-4d68-9858-5769a1fafcdc"
+  },
+  "quotaId": "GPUS-PER-GPU-FAMILY-per-project-region",
+  "service": "compute.googleapis.com",
+  "updateTime": "2026-08-24T21:53:37.867050875Z"
+}

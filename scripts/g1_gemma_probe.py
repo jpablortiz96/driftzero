@@ -52,6 +52,7 @@ from driftzero.models.verification import ObservedPosition  # noqa: E402
 DEFAULT_EVIDENCE = REPO_ROOT / "evidence" / "g1_gemma_feasibility.json"
 DEFAULT_FIXTURES = REPO_ROOT / "fixtures" / "multimodal"
 DEFAULT_PLATFORM_SESSION = REPO_ROOT / "evidence" / "g1_platform_session.json"
+DEFAULT_INFERENCE_RUN = REPO_ROOT / "evidence" / "g1_maas_inference_run.json"
 
 DEFAULT_SYNTHETIC_FIXTURES = DEFAULT_FIXTURES / "synthetic"
 """Generated engineering fixtures. Never evidence, never a T064 discharge."""
@@ -310,6 +311,16 @@ PNG_PROVENANCE_CHUNKS = (b"caBX", b"eXIf", b"iTXt", b"tEXt", b"zTXt")
 JPEG_PROVENANCE_SEGMENTS = {0xE1: "APP1_EXIF_OR_XMP", 0xEB: "APP11_JUMBF_C2PA", 0xED: "APP13_IPTC"}
 """JPEG application segments that carry provenance."""
 
+ISOBMFF_PROVENANCE_BOXES = (b"meta", b"uuid")
+"""ISO-BMFF (HEIF/HEIC/AVIF) top-level boxes that carry provenance.
+
+``mdat`` is deliberately excluded: it holds the coded image, and scanning picture data
+for producer names is exactly the false-positive path this detector refuses to take.
+"""
+
+C2PA_ITEM_DECLARATION = b"application/c2pa"
+"""Content type declaring a C2PA manifest item inside an ISO-BMFF ``meta`` box."""
+
 
 def extract_provenance_regions(raw: bytes) -> list[tuple[str, bytes]]:
     """Return ``(structure_name, payload)`` for each recognized metadata structure.
@@ -337,6 +348,24 @@ def extract_provenance_regions(raw: bytes) -> list[tuple[str, bytes]]:
             if chunk_type == b"IEND":
                 break
             offset += 12 + length
+        return regions
+
+    if len(raw) > 8 and raw[4:8] == b"ftyp":
+        # ISO base media file format: HEIF/HEIC (iPhone) and AVIF.
+        offset = 0
+        while offset + 8 <= len(raw):
+            size = int.from_bytes(raw[offset : offset + 4], "big")
+            box_type = raw[offset + 4 : offset + 8]
+            if size < 8 or offset + size > len(raw):
+                break
+            if box_type in ISOBMFF_PROVENANCE_BOXES:
+                regions.append(
+                    (
+                        f"ISOBMFF_{box_type.decode('latin-1')}",
+                        raw[offset + 8 : offset + size],
+                    )
+                )
+            offset += size
         return regions
 
     if raw[:3] == bytes([0xFF, 0xD8, 0xFF]):
@@ -429,6 +458,8 @@ def detect_generated_media(
         "markers": [],
         "provenance_structures": [],
         "generator_provenance_matches": [],
+        "parser_coverage": None,
+        "unparsed_provenance_payload": False,
         "known_generated_hash_match": None,
         "container_format": None,
         "extension_matches_container": None,
@@ -447,10 +478,16 @@ def detect_generated_media(
         finding["container_format"] = "PNG"
     elif raw[:3] == b"\xff\xd8\xff":
         finding["container_format"] = "JPEG"
+    elif len(raw) > 12 and raw[4:8] == b"ftyp":
+        # ISO base media file format: HEIF/HEIC (iPhone) and AVIF.
+        finding["container_format"] = raw[8:12].decode("latin-1").strip().upper() or "ISOBMFF"
     else:
         finding["container_format"] = "UNKNOWN"
 
-    expected = {".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG"}.get(path.suffix.lower())
+    expected = {
+        ".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG",
+        ".heic": "HEIC", ".heif": "HEIC", ".avif": "AVIF",
+    }.get(path.suffix.lower())
     finding["extension_matches_container"] = (
         None if expected is None else expected == finding["container_format"]
     )
@@ -479,6 +516,17 @@ def detect_generated_media(
     # on a poster in frame is still a photograph.
     regions = extract_provenance_regions(raw)
     finding["provenance_structures"] = [name for name, _ in regions]
+    finding["parser_coverage"] = (
+        "FULL"
+        if finding["container_format"] in {"PNG", "JPEG"}
+        else "META_ONLY" if regions else "NONE"
+    )
+    # An ISO-BMFF file may declare a C2PA item whose payload lives in ``mdat`` behind an
+    # ``iloc`` offset table this parser does not resolve. Declaring that openly matters:
+    # an unread payload is unknown, not clean, and must not be mistaken for a pass.
+    if any(C2PA_ITEM_DECLARATION in payload for _, payload in regions):
+        finding["unparsed_provenance_payload"] = True
+        finding["c2pa_present"] = True
     matches: list[dict[str, str]] = []
     for structure, payload in regions:
         for marker in GENERATED_MEDIA_MARKERS:
@@ -497,6 +545,16 @@ def detect_generated_media(
         })
 
     # --- Diagnostics: recorded, never decisive ---------------------------------------
+    if finding["unparsed_provenance_payload"]:
+        finding["anomalies"].append({
+            "anomaly": "UNPARSED_C2PA_PAYLOAD",
+            "decisive": False,
+            "detail": (
+                "The container declares a C2PA item whose payload this parser does not "
+                "resolve. Not evidence of generation, but the fixture must not be "
+                "accepted as clean without a manual read of that manifest."
+            ),
+        })
     if finding["extension_matches_container"] is False:
         finding["anomalies"].append({
             "anomaly": "CONTAINER_EXTENSION_MISMATCH",
@@ -627,6 +685,44 @@ def load_platform_session(path: Path = DEFAULT_PLATFORM_SESSION) -> dict[str, An
         return {}
 
 
+def load_recorded_records(path: Path = DEFAULT_INFERENCE_RUN) -> list[ProbeRecord]:
+    """Rebuild probe records from a captured inference run.
+
+    Lets an evaluation performed outside this harness be adjudicated by the same gate.
+    Only fields present in the artifact are used; latency was not captured and is
+    recorded as unknown rather than invented.
+    """
+    if not path.exists():
+        return []
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # pragma: no cover - malformed run fails closed
+        return []
+    records: list[ProbeRecord] = []
+    for entry in doc.get("records", []):
+        # A record whose image did not hash-match the fixture is not evidence about
+        # that fixture, so it is dropped rather than silently counted.
+        if not entry.get("fixture_binding_verified"):
+            continue
+        records.append(
+            ProbeRecord(
+                fixture_id=entry["fixture_id"],
+                fixture_classification=entry.get(
+                    "fixture_classification", UNDECLARED_CLASSIFICATION
+                ),
+                expected_observation=entry.get("expected_observation", ""),
+                raw_output=entry.get("raw_output", ""),
+                normalized_output=entry.get("normalized_output"),
+                normalization_succeeded=bool(entry.get("normalization_succeeded")),
+                latency_seconds=entry.get("latency_seconds"),
+                latency_label=entry.get("latency_label", str(AccessState.NOT_TESTED)),
+                matched_expected=entry.get("matched_expected"),
+                attempt=int(entry.get("attempt", 1)),
+            )
+        )
+    return records
+
+
 def derive_outcome_flags(session: dict[str, Any]) -> dict[str, Any]:
     """The four distinct platform outcomes, never collapsed into one another.
 
@@ -643,6 +739,7 @@ def derive_outcome_flags(session: dict[str, Any]) -> dict[str, Any]:
         "PLATFORM_ATTEMPTED",
         "DEPLOYMENT_SUCCEEDED",
         "INFERENCE_SUCCEEDED",
+        "SERVING_ROUTE_AVAILABLE",
     ):
         entry = recorded.get(name) or {}
         flags[name] = {
@@ -798,6 +895,10 @@ def summarize_stability(records: list[ProbeRecord]) -> dict[str, Any]:
             "attempts": len(values),
             "distinct_normalized_outputs": sorted({str(v) for v in values}),
             "stable": len({str(v) for v in values}) <= 1,
+            # One attempt cannot demonstrate stability. Reporting ``stable: true`` for a
+            # single sample would present a vacuous truth as a measurement, so the
+            # distinction is made explicit and the gate consumes this flag, not ``stable``.
+            "measured": len(values) >= 2,
         }
         for fixture, values in by_fixture.items()
     }
@@ -819,6 +920,9 @@ def build_report(
     """
     session = load_platform_session() if session is None else session
     verified_config = session.get("verified_deployment_configuration", {})
+    if not records:
+        # No live probe this run: adjudicate whatever captured evaluation exists.
+        records = load_recorded_records()
 
     report = ProbeReport(
         generated_at=datetime.now(UTC).isoformat(),
@@ -885,15 +989,47 @@ def build_report(
                 "substitute — neither by declaration nor by directory placement."
             ),
         })
-    if not flags["DEPLOYMENT_SUCCEEDED"]["value"]:
+    # A serverless route has nothing to deploy, so "no deployment" only blocks when the
+    # selected route actually requires one. Treating it as universal would keep a
+    # satisfied gate closed on a step this route never has to perform.
+    route_requires_deployment = bool(
+        session.get("route_decision", {}).get("requires_self_deployment", True)
+    )
+    serving_available = flags["SERVING_ROUTE_AVAILABLE"]["value"]
+    if route_requires_deployment and not flags["DEPLOYMENT_SUCCEEDED"]["value"]:
         blockers.append({
             "code": "T066_DEPLOYMENT",
             "task": "T066",
             "summary": "no successful Gemma deployment",
             "detail": (
-                "The platform admitted the configuration and real attempts were made, but "
-                "no deployed model ever existed. PLATFORM_SUPPORTED and PLATFORM_ATTEMPTED "
-                "are true; DEPLOYMENT_SUCCEEDED is false."
+                "The selected route requires a self-deployment and none ever succeeded. "
+                "PLATFORM_SUPPORTED and PLATFORM_ATTEMPTED are true; "
+                "DEPLOYMENT_SUCCEEDED is false."
+            ),
+        })
+    elif not route_requires_deployment and not serving_available:
+        blockers.append({
+            "code": "T066_SERVING_ROUTE",
+            "task": "T066",
+            "summary": "no serving route has answered",
+            "detail": (
+                "The selected route is serverless and needs no deployment, but no "
+                "successful inference proves it can serve this workload."
+            ),
+        })
+    unmeasured = sorted(
+        fixture for fixture, v in report.stability.items() if not v.get("measured")
+    )
+    if qualifying and unmeasured:
+        blockers.append({
+            "code": "T067_STABILITY",
+            "task": "T067",
+            "summary": "repeat stability not measured",
+            "detail": (
+                "Each of these fixtures was evaluated once, so agreement with the expected "
+                f"observation is a single sample, not a stability result: {unmeasured}. "
+                "Re-run with --repeat (default 3), or record an explicit operator decision "
+                "to accept single-attempt evidence."
             ),
         })
     if not flags["INFERENCE_SUCCEEDED"]["value"] or not qualifying:
@@ -909,23 +1045,47 @@ def build_report(
         })
 
     # --- operational holds: deliberate controls, not technical infeasibility ---
-    if report.billing_state.get("billing_enabled") is False:
+    # Billing is reported per project. A hold is raised only when the project the active
+    # route actually runs in has billing disabled — a legacy project's disabled billing
+    # says nothing about the route in use, and stating it globally would be false.
+    billing = report.billing_state
+    active = billing.get("active_runtime_project", {})
+    legacy = billing.get("legacy_project", {})
+    if active and active.get("billing_enabled") is False:
         holds.append({
-            "code": "BILLING_DISABLED",
-            "summary": (
-                "billing intentionally disabled on "
-                f"{report.billing_state.get('project_id', 'the project')}"
-            ),
+            "code": "ACTIVE_PROJECT_BILLING_DISABLED",
+            "summary": f"billing disabled on active runtime {active.get('project_id')}",
+            "intentional": bool(active.get("intentional")),
+            "financial_safety_control": True,
+            "infrastructure_defect": False,
+            "blocks_g1_decision": False,
+            "detail": "The project serving the selected route has billing disabled.",
+        })
+    if legacy and legacy.get("billing_enabled") is False:
+        holds.append({
+            "code": "LEGACY_PROJECT_BILLING_DISABLED",
+            "summary": f"billing intentionally disabled on legacy {legacy.get('project_id')}",
             "intentional": True,
             "financial_safety_control": True,
             "infrastructure_defect": False,
             "blocks_g1_decision": False,
+            "describes_active_route": False,
             "detail": (
-                "A deliberate cost control adopted to stop an uncancellable GPU "
-                "provisioning operation from accruing cost. Vertex calls now return "
-                "PERMISSION_DENIED/BILLING_DISABLED. This says nothing about whether "
-                "Gemma is technically feasible and is not evidence of model infeasibility."
+                "A deliberate cost control on the legacy self-deploy project, adopted "
+                "after an uncancellable GPU provisioning operation. It does not describe "
+                "the active MaaS runtime project and is not evidence of model "
+                "infeasibility."
             ),
+        })
+    elif billing.get("billing_enabled") is False:  # pragma: no cover - pre-split shape
+        holds.append({
+            "code": "BILLING_DISABLED",
+            "summary": f"billing disabled on {billing.get('project_id', 'the project')}",
+            "intentional": True,
+            "financial_safety_control": True,
+            "infrastructure_defect": False,
+            "blocks_g1_decision": False,
+            "detail": "Legacy single-project billing shape.",
         })
 
     report.decision_blockers = blockers
@@ -936,12 +1096,12 @@ def build_report(
         report.verdict = "NOT_YET_DECIDABLE"
     else:  # pragma: no cover - requires a live deployed route and physical fixtures
         all_matched = all(r.matched_expected for r in qualifying)
-        all_stable = all(v["stable"] for v in report.stability.values())
+        all_stable = all(v["stable"] and v["measured"] for v in report.stability.values())
         report.verdict = "GO" if (all_matched and all_stable) else "FALLBACK"
         report.verdict_reasoning = [
             f"qualifying_records={len(qualifying)}",
             f"all_fixtures_matched_expected={all_matched}",
-            f"all_fixtures_stable_across_repeats={all_stable}",
+            f"all_fixtures_stable_across_measured_repeats={all_stable}",
         ]
     return report
 

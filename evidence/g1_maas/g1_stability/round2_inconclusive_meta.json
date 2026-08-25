@@ -1,0 +1,32 @@
+{
+  "round": 2,
+  "fixture": "label_ambiguous_01.jpg",
+  "fixture_sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+  "expected": "INCONCLUSIVE",
+  "observed": "INCONCLUSIVE",
+  "match": true,
+  "qualifying": true,
+  "http_status": 200,
+  "transport_error": null,
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "response_id": "0d297b34-95ed-47e2-9ba2-d9f772e7d536",
+  "created": 1787614132,
+  "finish_reason": "stop",
+  "traffic_type": "ON_DEMAND",
+  "usage": {
+    "completion_tokens": 4,
+    "extra_properties": {
+      "google": {
+        "traffic_type": "ON_DEMAND"
+      }
+    },
+    "prompt_tokens": 341,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 345
+  },
+  "request_sha256": "b6ee63bdcd52c17d898bad46e9d4dbdaed708caadc7af28b50e58ce49e880d53",
+  "response_sha256": "39d126f3eb693e7f86b027beb70a464bfb4dd32aaf7ddc474250c5614990dd1b",
+  "started_utc": "2026-08-24T23:28:47.536701+00:00"
+}

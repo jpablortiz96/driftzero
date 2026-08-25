@@ -1,0 +1,12 @@
+HTTP/2 200 
+content-type: application/json
+vary: X-Origin
+vary: Referer
+vary: Origin,Accept-Encoding
+date: Mon, 24 Aug 2026 22:45:36 GMT
+server: scaffolding on HTTPServer2
+x-xss-protection: 0
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+accept-ranges: none
+

@@ -166,9 +166,13 @@ def test_instability_across_repeats_is_reported_not_hidden() -> None:
     assert stability["label_left_01.jpg"]["distinct_normalized_outputs"] == ["LEFT", "TOP_RIGHT"]
 
 
-def test_verdict_is_not_decidable_without_access_or_fixtures() -> None:
-    """No access, no fixtures, no inference → the gate must not claim GO."""
-    report = build_report(None, None, REPO_ROOT / "fixtures" / "multimodal", [])
+def test_verdict_is_not_decidable_without_fixtures_or_inference(tmp_path: Path) -> None:
+    """No fixtures, no deployment, no inference: the gate must not claim GO.
+
+    Uses an empty directory so the fail-closed path is exercised on its own terms,
+    independent of whichever submission occupies the real fixture directory.
+    """
+    report = build_report(None, None, tmp_path, [])
     assert report.verdict == "NOT_YET_DECIDABLE"
     assert report.verdict_reasoning, "the blockers must be enumerated"
     assert any("T064" in reason for reason in report.verdict_reasoning)

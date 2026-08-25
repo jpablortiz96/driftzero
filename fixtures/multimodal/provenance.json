@@ -20,48 +20,140 @@
   ],
   "fixtures": {
     "label_left_01.jpg": {
-      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
-      "present": false,
-      "classification": [],
-      "capture_method": "NOT_YET_CAPTURED",
-      "generated": null,
-      "satisfies_t064_physical_capture": false,
+      "status": "CAPTURED",
+      "present": true,
+      "classification": [
+        "REAL"
+      ],
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "generated": false,
+      "satisfies_t064_physical_capture": true,
       "expected_observation": "LEFT",
-      "sha256": null,
-      "synthetic_counterpart": "synthetic/label_left_synthetic_01.jpg"
+      "sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+      "bytes": 696422,
+      "container_format": "HEIC",
+      "synthetic_counterpart": "synthetic/label_left_synthetic_01.jpg",
+      "accepted_on": "2026-08-24",
+      "attestation": {
+        "provenance": "OPERATOR_REPORTED",
+        "statement": "Photographed from a real physical cardboard box with a real printed/paper label using a physical phone camera. Not produced by any generative image system; no generative-AI enhancement, edit, or export intentionally applied.",
+        "expected_answer_not_written_in_image": true
+      },
+      "gate_evidence": {
+        "known_generated_hash_match": null,
+        "decisive_generated_media_signals": [],
+        "provenance_structures_parsed": [
+          "ISOBMFF_meta"
+        ],
+        "parser_coverage": "META_ONLY",
+        "unparsed_provenance_payload": false,
+        "non_decisive_diagnostics": [
+          {
+            "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+            "decisive": false
+          }
+        ],
+        "camera_corroboration": "EXIF present; Apple / iPhone 15 Pro Max. Corroborating only — camera metadata is never what qualifies a fixture."
+      }
     },
     "label_top_right_01.jpg": {
-      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
-      "present": false,
-      "classification": [],
-      "capture_method": "NOT_YET_CAPTURED",
-      "generated": null,
-      "satisfies_t064_physical_capture": false,
+      "status": "CAPTURED",
+      "present": true,
+      "classification": [
+        "REAL"
+      ],
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "generated": false,
+      "satisfies_t064_physical_capture": true,
       "expected_observation": "TOP_RIGHT",
-      "sha256": null,
-      "synthetic_counterpart": "synthetic/label_top_right_synthetic_01.jpg"
+      "sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+      "bytes": 702867,
+      "container_format": "HEIC",
+      "synthetic_counterpart": "synthetic/label_top_right_synthetic_01.jpg",
+      "accepted_on": "2026-08-24",
+      "attestation": {
+        "provenance": "OPERATOR_REPORTED",
+        "statement": "Photographed from a real physical cardboard box with a real printed/paper label using a physical phone camera. Not produced by any generative image system; no generative-AI enhancement, edit, or export intentionally applied.",
+        "expected_answer_not_written_in_image": true
+      },
+      "gate_evidence": {
+        "known_generated_hash_match": null,
+        "decisive_generated_media_signals": [],
+        "provenance_structures_parsed": [
+          "ISOBMFF_meta"
+        ],
+        "parser_coverage": "META_ONLY",
+        "unparsed_provenance_payload": false,
+        "non_decisive_diagnostics": [
+          {
+            "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+            "decisive": false
+          }
+        ],
+        "camera_corroboration": "EXIF present; Apple / iPhone 15 Pro Max. Corroborating only — camera metadata is never what qualifies a fixture."
+      }
     },
     "label_ambiguous_01.jpg": {
-      "status": "AWAITING_REAL_PHYSICAL_CAPTURE",
-      "present": false,
-      "classification": [],
-      "capture_method": "NOT_YET_CAPTURED",
-      "generated": null,
-      "satisfies_t064_physical_capture": false,
+      "status": "CAPTURED",
+      "present": true,
+      "classification": [
+        "REAL"
+      ],
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "generated": false,
+      "satisfies_t064_physical_capture": true,
       "expected_observation": "INCONCLUSIVE",
-      "sha256": null,
-      "synthetic_counterpart": "synthetic/label_ambiguous_synthetic_01.jpg"
+      "sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+      "bytes": 1465013,
+      "container_format": "HEIC",
+      "synthetic_counterpart": "synthetic/label_ambiguous_synthetic_01.jpg",
+      "accepted_on": "2026-08-24",
+      "attestation": {
+        "provenance": "OPERATOR_REPORTED",
+        "statement": "Real physical cardboard box with a real paper label, captured on a physical phone camera. No generative image creation and no generative-AI editing or enhancement.",
+        "reframing": "Deliberately reframed to remove enough box-face geometry that LEFT versus TOP_RIGHT cannot be reliably determined.",
+        "expected_answer_not_written_in_image": true,
+        "no_answer_token_added_to_scene": true
+      },
+      "gate_evidence": {
+        "known_generated_hash_match": null,
+        "decisive_generated_media_signals": [],
+        "provenance_structures_parsed": [
+          "ISOBMFF_meta"
+        ],
+        "parser_coverage": "META_ONLY",
+        "unparsed_provenance_payload": false,
+        "non_decisive_diagnostics": [
+          {
+            "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+            "decisive": false
+          }
+        ],
+        "camera_corroboration": "EXIF present; Apple / iPhone 15 Pro Max. Corroborating only — camera metadata never qualifies a fixture.",
+        "distinct_from_superseded_capture": true
+      },
+      "capture_revision": 2,
+      "supersedes": {
+        "sha256": "21b0a3a775ced7db12b4bb11771a2cc98579edaaaa2e7fcfe517729e1528d3fe",
+        "evidence": "evidence/g1_t064_superseded_physical_fixture_01.json",
+        "reason": "FIXTURE_DESIGN_NOT_ACTUALLY_INCONCLUSIVE"
+      },
+      "semantic_target": {
+        "intended": "INCONCLUSIVE",
+        "authoritative": false,
+        "note": "The intended target is a fixture-design goal. It MUST NOT override the actual model observation recorded at T066, and matching it is not a success criterion the fixture can assert on its own behalf."
+      }
     }
   },
-  "t064_status": "AWAITING_REAL_PHYSICAL_CAPTURE",
+  "t064_status": "CAPTURED — three REAL_PHYSICAL fixtures accepted",
   "when_capturing": {
     "declare": "Set classification to [\"REAL\"], capture_method to \"PHYSICAL_CAMERA_CAPTURE\", satisfies_t064_physical_capture to true, present to true, and status to \"CAPTURED\".",
     "answer_leakage_rule": "The observation must be derivable from visible evidence alone. No filename, EXIF field, QR code, watermark, directory name exposed to the model, or prompt hint may encode the answer. Filenames are used only by the harness to look up the expected value and are never sent to the model.",
     "avoid_generative_pipelines": "Transfer captures directly (cable, plain file copy, unedited attachment). Routing a genuine photograph through a generative-AI edit, 'enhance', or export step can stamp a c2pa.created / trainedAlgorithmicMedia claim into the file, which the gate treats as decisive. An EXIF-free JPEG is accepted, so ordinary metadata stripping in transit is not a problem."
   },
-  "physical_capture_satisfied": false,
-  "all_present": false,
-  "current_state_note": "No file occupies any canonical REAL_PHYSICAL path. No current canonical fixture is classified REAL. All three physical captures are outstanding. Two submissions have been rejected to date; see historical_rejections.",
+  "physical_capture_satisfied": true,
+  "all_present": true,
+  "current_state_note": "Three operator-supplied physical camera captures (HEIC, iPhone) occupy the canonical paths. The ambiguous fixture is at capture revision 2: the first accepted physical capture was superseded as a fixture-design defect (see historical_supersessions). All three are distinct from every known synthetic, rejected, and superseded fixture, carry no positive generated-media provenance, and are declared REAL / PHYSICAL_CAMERA_CAPTURE.",
   "historical_rejections": [
     {
       "submitted_on": "2026-08-21",
@@ -78,6 +170,42 @@
       "summary": "Three genuinely new JPEGs (new hashes, valid containers, no synthetic hash match) were rejected on embedded generator provenance alone: each carries a Google C2PA manifest with c2pa.created 'Created by Google Generative AI.' and trainedAlgorithmicMedia.",
       "is_current_state": false,
       "note": "HISTORICAL only. The rejected files were deleted from the canonical slots after their hashes and C2PA findings were preserved in the evidence artifact. They were not moved or duplicated into any other canonical fixture location."
+    }
+  ],
+  "known_issues": [
+    {
+      "issue": "CONTAINER_EXTENSION_MISMATCH",
+      "detail": "The files are HEIC containers carrying a .jpg extension. Non-decisive for provenance, but a serving route expecting JPEG may reject or mis-decode them.",
+      "blocks_t064": false,
+      "action_for_t066": "Confirm the selected route accepts HEIC, or transcode to real JPEG before the distinguishability run. Any transcode must avoid generative pipelines and be re-registered with new hashes."
+    }
+  ],
+  "accepted_submission": {
+    "submission_sequence": 3,
+    "accepted_on": "2026-08-24",
+    "prior_rejections": [
+      "evidence/g1_t064_rejected_submission.json",
+      "evidence/g1_t064_rejected_submission_02.json"
+    ],
+    "why_this_one_passed": [
+      "All three SHA-256 values are new and match no known synthetic or previously rejected fixture.",
+      "No decisive generated-media signal: no known-generated hash match, and no recognized provenance structure names trainedAlgorithmicMedia or a generative producer.",
+      "A raw-byte superset scan (stricter than the structure-scoped gate) also found no generative marker.",
+      "The operator declaration satisfies the physical-capture rule, which remains necessary — clean content alone never qualifies a fixture."
+    ]
+  },
+  "historical_supersessions": [
+    {
+      "canonical_path": "fixtures/multimodal/label_ambiguous_01.jpg",
+      "superseded_sha256": "21b0a3a775ced7db12b4bb11771a2cc98579edaaaa2e7fcfe517729e1528d3fe",
+      "evidence": "evidence/g1_t064_superseded_physical_fixture_01.json",
+      "reason": "FIXTURE_DESIGN_NOT_ACTUALLY_INCONCLUSIVE",
+      "classification": [
+        "REAL"
+      ],
+      "was_a_provenance_rejection": false,
+      "note": "A genuine physical capture, accepted and later replaced for fixture design. This is NOT a provenance rejection and must not be conflated with the two rejected generated submissions.",
+      "is_current_state": false
     }
   ]
 }

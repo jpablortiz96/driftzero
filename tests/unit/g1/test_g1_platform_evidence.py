@@ -54,6 +54,7 @@ OUTCOME_FLAGS = (
     "PLATFORM_ATTEMPTED",
     "DEPLOYMENT_SUCCEEDED",
     "INFERENCE_SUCCEEDED",
+    "SERVING_ROUTE_AVAILABLE",
 )
 
 
@@ -77,11 +78,16 @@ def test_platform_supported_and_attempted_are_true(session: dict) -> None:
     assert flags["PLATFORM_ATTEMPTED"]["value"] is True
 
 
-def test_deployment_and_inference_are_false(session: dict) -> None:
-    """No deployed model ever existed, so neither may be claimed."""
+def test_deployment_is_still_false_but_serving_and_inference_are_true(session: dict) -> None:
+    """Route convergence: nothing was ever self-deployed, yet the route serves.
+
+    DEPLOYMENT_SUCCEEDED stays false because it remains an accurate statement — the
+    MaaS route simply never required a deployment.
+    """
     flags = derive_outcome_flags(session)
     assert flags["DEPLOYMENT_SUCCEEDED"]["value"] is False
-    assert flags["INFERENCE_SUCCEEDED"]["value"] is False
+    assert flags["SERVING_ROUTE_AVAILABLE"]["value"] is True
+    assert flags["INFERENCE_SUCCEEDED"]["value"] is True
 
 
 def test_every_flag_carries_a_basis(session: dict) -> None:
@@ -163,15 +169,14 @@ def test_only_a_real_physical_camera_capture_satisfies_t064() -> None:
     assert satisfies is True
 
 
-def test_no_generated_media_may_hold_a_canonical_real_physical_path() -> None:
-    """Files may sit at these paths, but generated media can never qualify there.
-
-    Files ARE currently present at all three canonical paths (a rejected submission);
-    what matters is that none of them satisfies T064.
-    """
+def test_no_generated_media_holds_a_canonical_real_physical_path() -> None:
+    """Whatever occupies these paths, generated media must never qualify there."""
     status = collect_fixture_status(FIXTURES_DIR)
+    assert status["rejected_as_generated"] == []
     for name in CANONICAL_NAMES:
-        assert status["required"][name]["satisfies_t064_physical_capture"] is False, name
+        finding = status["required"][name]["content_inspection"]
+        assert finding["is_generated"] is False, name
+        assert finding["decisive_signals"] == [], name
 
 
 def test_missing_real_fixture_paths_fail_closed(tmp_path: Path) -> None:
@@ -298,35 +303,82 @@ def test_perfect_results_on_synthetic_fixtures_still_cannot_reach_go(session: di
         ServingRoute.MODEL_GARDEN,
         "https://example.invalid",
         FIXTURES_DIR,
-        _perfect_records(),
+        _perfect_records("SYNTHETIC"),
         session=session,
         offline=True,
     )
     assert report.verdict == "NOT_YET_DECIDABLE"
-    assert any("T064" in reason for reason in report.verdict_reasoning)
+    assert "T066_INFERENCE" in [b["code"] for b in report.decision_blockers]
+    assert qualifying_records(_perfect_records("SYNTHETIC")) == []
 
 
-def test_verdict_is_not_decidable_and_names_every_open_blocker(session: dict) -> None:
+def test_synthetic_fixtures_in_a_canonical_directory_still_fail_closed(tmp_path: Path) -> None:
+    """The provenance gate is unchanged: generated media never discharges T064."""
+    _write_declared_real(tmp_path, CANONICAL_NAMES, C2PA_GENERATED)
+    status = collect_fixture_status(tmp_path)
+    assert status["physical_capture_satisfied"] is False
+    assert sorted(status["rejected_as_generated"]) == sorted(CANONICAL_NAMES)
+
+
+def test_the_verdict_names_the_evidence_it_rests_on(session: dict) -> None:
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
-    assert report.verdict == "NOT_YET_DECIDABLE"
+    assert report.verdict == "GO"
+    assert report.decision_blockers == [], "the selected MaaS route has no open blocker"
     joined = " | ".join(report.verdict_reasoning)
-    for expected in ("T063", "T064", "T066"):
-        assert expected in joined, f"{expected} is unresolved but not named as a blocker"
+    assert "qualifying_records=9" in joined
+    assert "all_fixtures_matched_expected=True" in joined
+    assert "all_fixtures_stable_across_measured_repeats=True" in joined
 
 
-def test_no_inference_record_exists(session: dict) -> None:
+def test_recorded_inference_records_are_adjudicated(session: dict) -> None:
+    """A run captured outside this harness is judged by the same gate."""
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
-    assert report.records == []
-    assert report.stability == {}
+    assert len(report.records) == 9
+    assert {r["fixture_id"] for r in report.records} == set(CANONICAL_NAMES)
+    assert all(r["matched_expected"] for r in report.records)
+    assert all(r["fixture_classification"] == "REAL" for r in report.records)
 
 
 # ==================== quota is unknown, not invented (T063) ===========================
 
 
-def test_effective_gpu_quota_is_recorded_as_unknown(session: dict) -> None:
+def test_gpu_quota_is_resolved_by_route_supersession(session: dict) -> None:
+    """Answered, not satisfied: the denial stands, the requirement no longer applies."""
     quota = session["quota_findings"]
-    assert quota["resolved"] is False
-    family = quota["cloud_quotas_family"]
+    assert quota["resolved"] is True
+    assert quota["resolution"] == "SUPERSEDED_BY_ROUTE_CHANGE"
+    request = quota["rtx_pro_6000_quota_request"]
+    assert request["granted_value"] == 0
+    assert request["preferred_value"] == 1
+    assert request["state_detail"] == "Quota request denied"
+    assert request["outcome"] == "DENIED"
+    assert request["provenance"] == "MACHINE_CAPTURED_ARTIFACT"
+    assert request["source_artifact"].endswith("rtxpro6000_quota_preference.json")
+
+
+def test_the_quota_denial_is_now_machine_verified(session: dict) -> None:
+    """The captured quotaPreferences response carries the denial verbatim."""
+    request = session["quota_findings"]["rtx_pro_6000_quota_request"]
+    artifact = json.loads(
+        (REPO_ROOT / request["source_artifact"]).read_text(encoding="utf-8")
+    )
+    config = artifact["quotaConfig"]
+    assert int(config["grantedValue"]) == request["granted_value"] == 0
+    assert config["stateDetail"] == request["state_detail"] == "Quota request denied"
+    assert artifact["dimensions"]["gpu_family"] == "NVIDIA_RTX_PRO_6000"
+    assert request["trace_id"] == config["traceId"]
+
+
+def test_the_denial_is_never_restated_as_success(session: dict) -> None:
+    quota = session["quota_findings"]
+    assert quota["resolution"] == "SUPERSEDED_BY_ROUTE_CHANGE"
+    assert "Answered, not satisfied" in quota["resolution_detail"]
+    assert "DENIED" in quota["rtx_pro_6000_quota_request"]["outcome"]
+
+
+def test_the_original_project_quota_family_record_is_retained(session: dict) -> None:
+    """The first project's quota-family capture stays on file as history."""
+    family = session["quota_findings"]["cloud_quotas_family"]
     assert family["gpu_family"] == "NVIDIA_RTX_PRO_6000"
     assert family["family_entry_present"] is True
     assert family["applicable_locations_include_us_central1"] is True
@@ -351,9 +403,9 @@ def test_the_l4_limit_is_not_treated_as_satisfying_the_selected_route(session: d
     assert legacy["adjacent_observation"]["relevance"] == "NOT_APPLICABLE_TO_SELECTED_ROUTE"
 
 
-def test_unresolved_quota_blocks_the_gate(session: dict) -> None:
+def test_resolved_quota_no_longer_blocks_the_gate(session: dict) -> None:
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
-    assert any("T063" in reason for reason in report.verdict_reasoning)
+    assert not any("T063" in reason for reason in report.verdict_reasoning)
 
 
 # ==================== deployment attempts and billing =================================
@@ -378,12 +430,38 @@ def test_an_endpoint_without_a_deployed_model_is_not_a_deployment(session: dict)
     assert attempt["deployment_succeeded"] is False
 
 
-def test_billing_is_recorded_as_an_intentional_safety_state(session: dict) -> None:
+def test_billing_is_recorded_per_project(session: dict) -> None:
+    """The two projects must never be collapsed into one billing statement."""
     billing = session["billing_state"]
-    assert billing["billing_enabled"] is False
-    assert billing["intentional"] is True
-    assert billing["not_an_infrastructure_defect"] is True
-    assert billing["remediation_required_now"] is False
+    legacy = billing["legacy_project"]
+    active = billing["active_runtime_project"]
+
+    assert legacy["project_id"] == "driftzero-agentic-2026"
+    assert legacy["billing_enabled"] is False
+    assert legacy["intentional"] is True
+    assert legacy["still_gates_g1"] is False
+
+    assert active["project_id"] == "driftzero-runtime-2026"
+    assert active["billing_enabled"] is True
+    assert active["provenance"] == "MACHINE_CAPTURED_ARTIFACT"
+    assert legacy["project_id"] != active["project_id"]
+
+
+def test_active_project_billing_matches_the_captured_artifact(session: dict) -> None:
+    active = session["billing_state"]["active_runtime_project"]
+    artifact = json.loads(
+        (REPO_ROOT / active["source_artifact"]).read_text(encoding="utf-8")
+    )
+    assert artifact["projectId"] == active["project_id"]
+    assert artifact["billingEnabled"] is active["billing_enabled"] is True
+    assert artifact["billingAccountName"] == active["billing_account_name"]
+
+
+def test_no_dollar_cost_is_invented(session: dict) -> None:
+    cost = session["billing_state"]["cost_model_active_route"]
+    assert cost["traffic_type"] == "ON_DEMAND"
+    assert cost["persistent_serving_resource_running"] is False
+    assert cost["dollar_cost_asserted"] is False
 
 
 def test_billing_is_an_operational_hold_not_a_decision_blocker(session: dict) -> None:
@@ -391,8 +469,8 @@ def test_billing_is_an_operational_hold_not_a_decision_blocker(session: dict) ->
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
 
     holds = {hold["code"]: hold for hold in report.operational_holds}
-    assert "BILLING_DISABLED" in holds
-    hold = holds["BILLING_DISABLED"]
+    assert "LEGACY_PROJECT_BILLING_DISABLED" in holds
+    hold = holds["LEGACY_PROJECT_BILLING_DISABLED"]
     assert hold["intentional"] is True
     assert hold["financial_safety_control"] is True
     assert hold["infrastructure_defect"] is False
@@ -400,15 +478,25 @@ def test_billing_is_an_operational_hold_not_a_decision_blocker(session: dict) ->
 
     codes = [blocker["code"] for blocker in report.decision_blockers]
     assert not any("BILLING" in code for code in codes)
-    assert not any("billing" in reason.lower() for reason in report.verdict_reasoning)
+
+
+def test_no_hold_falsely_describes_the_active_route(session: dict) -> None:
+    """The legacy project's disabled billing must not read as the active route's state."""
+    report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
+    codes = {hold["code"] for hold in report.operational_holds}
+    assert "ACTIVE_PROJECT_BILLING_DISABLED" not in codes
+    legacy = next(h for h in report.operational_holds
+                  if h["code"] == "LEGACY_PROJECT_BILLING_DISABLED")
+    assert legacy["describes_active_route"] is False
 
 
 def test_billing_hold_is_not_evidence_of_model_infeasibility(session: dict) -> None:
-    """Billing being off says nothing about whether Gemma can do the task."""
+    """Billing being off in the legacy project says nothing about Gemma's ability."""
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
-    hold = next(h for h in report.operational_holds if h["code"] == "BILLING_DISABLED")
+    hold = next(h for h in report.operational_holds
+                if h["code"] == "LEGACY_PROJECT_BILLING_DISABLED")
     assert "not evidence of model infeasibility" in hold["detail"]
-    assert report.outcome_flags["PLATFORM_SUPPORTED"]["value"] is True
+    assert report.outcome_flags["SERVING_ROUTE_AVAILABLE"]["value"] is True
 
 
 # ==================== blocker taxonomy ================================================
@@ -417,12 +505,7 @@ def test_billing_hold_is_not_evidence_of_model_infeasibility(session: dict) -> N
 def test_decision_blockers_use_the_four_canonical_codes(session: dict) -> None:
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
     codes = [blocker["code"] for blocker in report.decision_blockers]
-    assert codes == [
-        "T063_QUOTA",
-        "T064_PHYSICAL_FIXTURES",
-        "T066_DEPLOYMENT",
-        "T066_INFERENCE",
-    ]
+    assert codes == [], "GO requires an empty blocker set for the selected route"
 
 
 def test_blocker_codes_are_unique(session: dict) -> None:
@@ -551,12 +634,11 @@ def test_model_access_states_what_it_does_not_prove(session: dict) -> None:
 # ==================== T063: route supersession =======================================
 
 
-def test_quota_requirement_targets_the_selected_route_accelerator(session: dict) -> None:
+def test_quota_requirement_reflects_the_serverless_route(session: dict) -> None:
     requirement = session["quota_findings"]["requirement"]
-    assert "NVIDIA_RTX_PRO_6000" in requirement
-    assert "g4-standard-48" in requirement
-    assert "us-central1" in requirement
-    assert "another accelerator family does not satisfy" in requirement
+    assert "MaaS" in requirement
+    assert "no GPU quota grant" in requirement
+    assert "superseded self-deploy route" in requirement
 
 
 def test_route_supersession_is_traceable(session: dict) -> None:
@@ -567,23 +649,23 @@ def test_route_supersession_is_traceable(session: dict) -> None:
     assert supersession["artifacts_updated"]
 
 
-def test_t063_task_text_names_the_selected_accelerator() -> None:
-    """The authoritative task must not still point at the superseded L4 route."""
+def test_t063_task_text_names_the_active_route() -> None:
+    """The authoritative task must track the route that actually serves."""
     tasks = (REPO_ROOT / "specs" / "001-hero-change-deployment" / "tasks.md").read_text(
         encoding="utf-8"
     )
-    line = next(ln for ln in tasks.splitlines() if ln.startswith("- [ ] T063"))
-    assert "NVIDIA_RTX_PRO_6000" in line
-    assert "g4-standard-48" in line
-    assert "MUST NOT satisfy" in line
-    assert "Supersession" in line
+    line = next(ln for ln in tasks.splitlines() if ln.startswith("- [x] T063"))
+    assert "Vertex AI MaaS" in line
+    assert "no GPU quota grant" in line
+    assert "Supersession chain" in line
+    assert "denied" in line
 
 
-def test_t063_remains_incomplete() -> None:
+def test_t063_is_resolved() -> None:
     tasks = (REPO_ROOT / "specs" / "001-hero-change-deployment" / "tasks.md").read_text(
         encoding="utf-8"
     )
-    assert any(ln.startswith("- [ ] T063") for ln in tasks.splitlines())
+    assert any(ln.startswith("- [x] T063") for ln in tasks.splitlines())
 
 
 # ==================== offline generation touches nothing ==============================
@@ -613,29 +695,25 @@ def test_written_evidence_file_reflects_the_true_state() -> None:
     assert EVIDENCE.exists(), "run: python scripts/g1_gemma_probe.py --access-check-only --offline"
     doc = json.loads(EVIDENCE.read_text(encoding="utf-8"))
 
-    assert doc["verdict"] == "NOT_YET_DECIDABLE"
-    assert doc["records"] == []
+    assert doc["verdict"] == "GO"
+    assert len(doc["records"]) == 9
     assert doc["outcome_flags"]["PLATFORM_SUPPORTED"]["value"] is True
     assert doc["outcome_flags"]["PLATFORM_ATTEMPTED"]["value"] is True
     assert doc["outcome_flags"]["DEPLOYMENT_SUCCEEDED"]["value"] is False
-    assert doc["outcome_flags"]["INFERENCE_SUCCEEDED"]["value"] is False
-    assert doc["fixtures"]["physical_capture_satisfied"] is False
-    assert doc["quota_findings"]["resolved"] is False
-    assert doc["billing_state"]["billing_enabled"] is False
+    assert doc["outcome_flags"]["INFERENCE_SUCCEEDED"]["value"] is True
+    assert doc["outcome_flags"]["SERVING_ROUTE_AVAILABLE"]["value"] is True
+    assert doc["fixtures"]["physical_capture_satisfied"] is True
+    assert doc["quota_findings"]["resolved"] is True
+    assert doc["billing_state"]["active_runtime_project"]["billing_enabled"] is True
+    assert doc["billing_state"]["legacy_project"]["billing_enabled"] is False
     assert len(doc["deployment_attempts"]) == 2
 
-    codes = [blocker["code"] for blocker in doc["decision_blockers"]]
-    assert codes == [
-        "T063_QUOTA",
-        "T064_PHYSICAL_FIXTURES",
-        "T066_DEPLOYMENT",
-        "T066_INFERENCE",
-    ]
+    assert doc["decision_blockers"] == []
     holds = [hold["code"] for hold in doc["operational_holds"]]
-    assert holds == ["BILLING_DISABLED"]
-    # The canonical slots are empty again; both rejections live in history.
-    assert doc["fixtures"]["physical_capture_satisfied"] is False
-    assert doc["fixtures"]["all_present"] is False
+    assert holds == ["LEGACY_PROJECT_BILLING_DISABLED"]
+    # Submission 03 is accepted; both earlier rejections live in history.
+    assert doc["fixtures"]["physical_capture_satisfied"] is True
+    assert doc["fixtures"]["all_present"] is True
     assert doc["fixtures"]["rejected_as_generated"] == []
     assert (
         doc["quota_findings"]["cloud_quotas_family"]["effective_numeric_quota"]
@@ -643,16 +721,25 @@ def test_written_evidence_file_reflects_the_true_state() -> None:
     )
 
 
-def test_written_evidence_records_the_selected_route_and_variant() -> None:
+def test_written_evidence_records_the_converged_route() -> None:
     doc = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-    assert doc["serving_route"] == "vertex_ai_model_garden"
-    assert doc["model_variant"] == "gemma-4-12b"
-    assert doc["route_decision"]["decided"] is True
+    assert doc["serving_route"] == "vertex_ai_maas"
+    decision = doc["route_decision"]
+    assert decision["decided"] is True
+    assert decision["requires_self_deployment"] is False
+    statuses = {r["route"]: r["status"] for r in decision["routes_evaluated"]}
+    assert statuses["vertex_ai_maas"] == "SELECTED"
+    assert statuses["vertex_ai_model_garden"] == "SUPERSEDED"
+    assert decision["route_convergence"]["active_feasible_route"] == "vertex_ai_maas"
+
+
+def test_the_superseded_self_deploy_configuration_is_retained() -> None:
+    """The failed self-deploy record stays on file; it is history, not current state."""
+    doc = json.loads(EVIDENCE.read_text(encoding="utf-8"))
     config = doc["verified_deployment_configuration"]
-    assert config["machine_type"] == "g4-standard-48"
     assert config["accelerator_type"] == "NVIDIA_RTX_PRO_6000"
-    assert config["accelerator_count"] == 1
-    assert "pytorch-vllm-serve" in config["container_image"]
+    assert len(doc["deployment_attempts"]) == 2
+    assert all(a["deployment_succeeded"] is False for a in doc["deployment_attempts"])
 
 
 # ==================== planning reconciliation (G1 route discovery) ====================
@@ -698,10 +785,10 @@ def test_g1_dependency_chain_is_explicit() -> None:
     assert "parallel" in chain, "T063/T064 independence must stay documented"
 
 
-def test_g1_gate_tasks_remain_incomplete() -> None:
-    """This reconciliation must not have advanced any gate."""
-    for task in ("T063", "T064", "T066", "T067", "T068"):
-        assert _task_line(task).startswith("- [ ] "), f"{task} must remain incomplete"
+def test_only_the_conditional_fallback_remains_open() -> None:
+    """T068 is conditional on FALLBACK; T067 returned GO, so it is not triggered."""
+    assert _task_line("T068").startswith("- [ ] ")
+    assert "NOT TRIGGERED" in _task_line("T068")
 
 
 def test_quickstart_no_longer_prescribes_the_superseded_accelerator() -> None:
@@ -967,43 +1054,48 @@ def test_rejection_history_is_not_read_as_current_state() -> None:
     assert history["evidence"] == "evidence/g1_t064_rejected_submission.json"
 
 
-def test_no_canonical_path_holds_a_qualifying_fixture() -> None:
-    """No generated media may ever *qualify* in a REAL_PHYSICAL slot.
-
-    Files occupy these paths again (submission 02, rejected). The invariant is not that
-    the slots are empty but that nothing in them discharges T064.
-    """
+def test_accepted_fixtures_are_declared_real_physical_captures() -> None:
+    """Submission 03 was accepted: declared REAL, and no generated evidence against it."""
     status = collect_fixture_status(FIXTURES_DIR)
     for name in CANONICAL_NAMES:
-        assert status["required"][name]["satisfies_t064_physical_capture"] is False, name
+        entry = status["required"][name]
+        assert entry["present"] is True, name
+        assert entry["classification"] == "REAL", name
+        assert entry["capture_method"] == PHYSICAL_CAPTURE_METHOD, name
+        assert entry["satisfies_t064_physical_capture"] is True, name
 
 
-def test_current_provenance_reports_awaiting_real_physical_capture() -> None:
-    """Requirement 3. The manifest describes now, not the rejected submission."""
+def test_current_provenance_reports_captured_real_fixtures() -> None:
+    """The manifest describes now: three accepted physical captures."""
     manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
-    assert manifest["t064_status"] == "AWAITING_REAL_PHYSICAL_CAPTURE"
-    assert manifest["physical_capture_satisfied"] is False
-    assert manifest["all_present"] is False
+    assert manifest["physical_capture_satisfied"] is True
+    assert manifest["all_present"] is True
     for name in CANONICAL_NAMES:
         entry = manifest["fixtures"][name]
-        assert entry["status"] == "AWAITING_REAL_PHYSICAL_CAPTURE"
-        assert entry["present"] is False
-        assert entry["classification"] == []
-        assert entry["capture_method"] == "NOT_YET_CAPTURED"
-        assert entry["satisfies_t064_physical_capture"] is False
+        assert entry["status"] == "CAPTURED"
+        assert entry["present"] is True
+        assert entry["classification"] == ["REAL"]
+        assert entry["capture_method"] == "PHYSICAL_CAMERA_CAPTURE"
+        assert entry["generated"] is False
+        assert entry["satisfies_t064_physical_capture"] is True
+        assert len(entry["sha256"]) == 64
 
 
-def test_no_current_canonical_fixture_is_classified_real() -> None:
+def test_accepted_fixtures_record_no_decisive_generated_signal() -> None:
+    """Acceptance rests on the absence of positive evidence plus a declaration."""
     manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
     for name, entry in manifest["fixtures"].items():
-        assert "REAL" not in entry["classification"], name
+        gate = entry["gate_evidence"]
+        assert gate["decisive_generated_media_signals"] == [], name
+        assert gate["known_generated_hash_match"] is None, name
+        assert all(a["decisive"] is False for a in gate["non_decisive_diagnostics"]), name
 
 
-def test_t064_is_unsatisfied_in_the_live_gate() -> None:
+def test_t064_is_satisfied_in_the_live_gate() -> None:
     """Not just the manifest — the computed gate agrees."""
     status = collect_fixture_status(FIXTURES_DIR)
-    assert status["all_present"] is False
-    assert status["physical_capture_satisfied"] is False
+    assert status["all_present"] is True
+    assert status["physical_capture_satisfied"] is True
     assert status["rejected_as_generated"] == []
 
 
@@ -1014,8 +1106,8 @@ def test_synthetic_fixtures_survived_the_cleanup() -> None:
 
 
 
-def test_t064_remains_incomplete() -> None:
-    assert _task_line("T064").startswith("- [ ] ")
+def test_t064_is_complete() -> None:
+    assert _task_line("T064").startswith("- [x] ")
 
 
 # ============ asymmetry: positive evidence disqualifies, clean content never qualifies ==
@@ -1184,19 +1276,17 @@ def test_a_declared_real_fixture_with_a_loose_producer_name_still_qualifies(
 # ============ the gate as a whole, after cleanup ======================================
 
 
-def test_g1_verdict_remains_not_yet_decidable(session: dict) -> None:
-    """Requirement 12."""
+def test_g1_verdict_is_go(session: dict) -> None:
+    """The exit gate passes on measured evidence, with no open blocker."""
     report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
-    assert report.verdict == "NOT_YET_DECIDABLE"
-    codes = [blocker["code"] for blocker in report.decision_blockers]
-    assert "T064_PHYSICAL_FIXTURES" in codes
+    assert report.verdict == "GO"
+    assert report.decision_blockers == []
 
 
-def test_all_open_g1_tasks_remain_open() -> None:
-    """Requirement 13."""
-    for task in ("T063", "T064", "T066", "T067", "T068"):
-        assert _task_line(task).startswith("- [ ] "), f"{task} must remain open"
-    assert _task_line("T065").startswith("- [x] "), "T065 stays complete"
+def test_every_g1_gate_task_is_complete() -> None:
+    for task in ("T061", "T062", "T063", "T064", "T065", "T066", "T067"):
+        assert _task_line(task).startswith("- [x] "), f"{task} is complete"
+    assert _task_line("T068").startswith("- [ ] "), "T068 stays untriggered under GO"
 
 
 # ============ submission 02: new files, rejected on embedded provenance alone =========
@@ -1255,12 +1345,19 @@ def test_submission_02_was_not_rejected_on_any_non_decisive_diagnostic() -> None
         assert {a["anomaly"] for a in entry["non_decisive_diagnostics"]} == {"NO_EXIF"}
 
 
-def test_submission_02_hashes_survive_the_deletion() -> None:
-    """Deleting the files must not delete the ability to identify them later."""
+def test_submission_02_hashes_remain_identifiable() -> None:
+    """The rejected files are gone; their identities are still on record.
+
+    The canonical paths now hold accepted submission 03, so the check is that the
+    rejected hashes differ from whatever occupies those paths today.
+    """
     for entry in _submission_02():
         assert len(entry["sha256"]) == 64
         assert entry["bytes"] > 0
-        assert not (REPO_ROOT / entry["original_canonical_path"]).exists()
+        current = REPO_ROOT / entry["original_canonical_path"]
+        assert current.exists(), "submission 03 occupies this path"
+        live = hashlib.sha256(current.read_bytes()).hexdigest()
+        assert live != entry["sha256"], "the rejected file must not have returned"
 
 
 def test_operator_attestation_cannot_override_a_creation_claim(tmp_path: Path) -> None:
@@ -1333,7 +1430,182 @@ def test_both_rejections_are_listed_in_the_manifest_history() -> None:
     assert records[1]["evidence"] == "evidence/g1_t064_rejected_submission_02.json"
 
 
-def test_no_inference_record_was_created_by_this_step() -> None:
-    doc = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-    assert doc["records"] == []
-    assert doc["stability"] == {}
+def test_every_recorded_inference_is_bound_to_its_fixture() -> None:
+    """A record whose image did not hash-match its fixture is not evidence about it."""
+    run = json.loads(
+        (REPO_ROOT / "evidence" / "g1_maas_inference_run.json").read_text(encoding="utf-8")
+    )
+    for entry in run["records"]:
+        live = hashlib.sha256(
+            (FIXTURES_DIR / entry["fixture_id"]).read_bytes()
+        ).hexdigest()
+        assert entry["image_sha256_sent_to_model"] == live, entry["fixture_id"]
+        assert entry["fixture_binding_verified"] is True
+
+
+def test_stability_is_measured_with_three_attempts_per_fixture(session: dict) -> None:
+    report = build_report(None, None, FIXTURES_DIR, [], session=session, offline=True)
+    assert report.verdict == "GO"
+    for name, entry in report.stability.items():
+        assert entry["attempts"] == 3, name
+        assert entry["measured"] is True, name
+        assert entry["stable"] is True, name
+        assert len(entry["distinct_normalized_outputs"]) == 1, name
+
+
+def test_a_single_attempt_still_cannot_emit_go(session: dict) -> None:
+    """The n=1 guard survives: one sample is never a stability measurement."""
+    single = [
+        ProbeRecord(
+            fixture_id=name,
+            fixture_classification="REAL",
+            expected_observation=expected,
+            raw_output=expected,
+            normalized_output=expected,
+            normalization_succeeded=True,
+            latency_seconds=None,
+            latency_label="NOT_RECORDED",
+            matched_expected=True,
+            attempt=1,
+        )
+        for name, expected in (
+            ("label_left_01.jpg", "LEFT"),
+            ("label_top_right_01.jpg", "TOP_RIGHT"),
+            ("label_ambiguous_01.jpg", "INCONCLUSIVE"),
+        )
+    ]
+    report = build_report(None, None, FIXTURES_DIR, single, session=session, offline=True)
+    assert report.verdict == "NOT_YET_DECIDABLE"
+    assert [b["code"] for b in report.decision_blockers] == ["T067_STABILITY"]
+
+
+def test_the_transport_failure_is_excluded_from_qualifying_records() -> None:
+    run = json.loads(
+        (REPO_ROOT / "evidence" / "g1_maas_inference_run.json").read_text(encoding="utf-8")
+    )
+    failure = run["non_qualifying_events"][0]
+    assert failure["classification"] == "TRANSPORT_FAILURE"
+    assert failure["qualifying_inference"] is False
+    assert len(run["records"]) == 9
+    assert failure["reason"] not in {r["raw_output"] for r in run["records"]}
+
+
+def test_smoke_results_are_not_claimed_as_machine_verified() -> None:
+    """Only the smoke requests were captured; their outcomes stay operator-reported."""
+    run = json.loads(
+        (REPO_ROOT / "evidence" / "g1_maas_inference_run.json").read_text(encoding="utf-8")
+    )
+    smoke = run["smoke_artifacts"]
+    assert smoke["responses_captured"] is False
+    assert "OPERATOR_REPORTED" in smoke["note"]
+
+
+def test_maas_route_asserts_no_persistent_serving_resource() -> None:
+    """Cost honesty: on-demand, nothing left running."""
+    run = json.loads(
+        (REPO_ROOT / "evidence" / "g1_maas_inference_run.json").read_text(encoding="utf-8")
+    )
+    route = run["route"]
+    assert route["traffic_type"] == "ON_DEMAND"
+    assert route["requires_self_deployment"] is False
+    assert route["persistent_serving_resource"] is False
+
+
+# ============ superseded physical fixture (capture revision 2) ========================
+
+SUPERSEDED_FIXTURE = REPO_ROOT / "evidence" / "g1_t064_superseded_physical_fixture_01.json"
+SUPERSEDED_SHA = "21b0a3a775ced7db12b4bb11771a2cc98579edaaaa2e7fcfe517729e1528d3fe"
+
+
+def _superseded() -> dict:
+    return json.loads(SUPERSEDED_FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_the_superseded_physical_fixture_history_is_preserved() -> None:
+    """A replaced fixture must not vanish from the record."""
+    assert SUPERSEDED_FIXTURE.exists()
+    doc = _superseded()
+    assert doc["record_type"] == "HISTORICAL_EVIDENCE"
+    assert doc["old_sha256"] == SUPERSEDED_SHA
+    assert doc["old_canonical_path"] == "fixtures/multimodal/label_ambiguous_01.jpg"
+    assert doc["classification"] == ["REAL"]
+    assert doc["capture_method"] == "PHYSICAL_CAMERA_CAPTURE"
+    assert doc["generated"] is False
+    assert doc["was_accepted"] is True
+
+
+def test_the_supersession_reason_is_a_fixture_defect_not_a_model_failure() -> None:
+    """Gemma reported what was visible; the fixture was mislabelled at design time."""
+    doc = _superseded()
+    assert doc["superseded_reason"] == "FIXTURE_DESIGN_NOT_ACTUALLY_INCONCLUSIVE"
+    assert doc["historical_model_observation"] == "LEFT"
+    assert doc["historical_model"] == "google/gemma-4-26b-a4b-it-maas"
+    assert doc["historical_inference_was_real"] is True
+    assert doc["does_not_qualify_for_current_inconclusive_fixture"] is True
+
+    defect = doc["defect_classification"]
+    assert defect["category"] == "FIXTURE_DESIGN_DEFECT"
+    assert defect["is_model_failure"] is False
+
+
+def test_the_superseded_record_invents_no_inference_metadata() -> None:
+    """No timestamp or request id existed, so none was fabricated."""
+    doc = _superseded()
+    provenance = doc["provenance_of_this_record"]
+    assert provenance["historical_observation"].startswith("OPERATOR_REPORTED")
+    for absent in ("inference timestamp", "request id", "raw model response"):
+        assert absent in provenance["not_recorded"]
+    blob = json.dumps(doc)
+    for fabricated in ("request_id", "inference_timestamp", "latency_seconds"):
+        assert fabricated not in blob
+
+
+def test_a_supersession_is_not_a_provenance_rejection() -> None:
+    """Two distinct histories: rejected generated media vs a replaced genuine capture."""
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    supersession = manifest["historical_supersessions"][0]
+    assert supersession["was_a_provenance_rejection"] is False
+    assert supersession["classification"] == ["REAL"]
+    assert supersession["is_current_state"] is False
+    # The two rejected submissions remain separately recorded and unconflated.
+    assert len(manifest["historical_rejections"]) == 2
+
+
+def test_the_replacement_fixture_is_distinct_from_the_superseded_capture() -> None:
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    entry = manifest["fixtures"]["label_ambiguous_01.jpg"]
+    live = hashlib.sha256((FIXTURES_DIR / "label_ambiguous_01.jpg").read_bytes()).hexdigest()
+
+    assert entry["sha256"] == live
+    assert entry["sha256"] != SUPERSEDED_SHA
+    assert entry["capture_revision"] == 2
+    assert entry["supersedes"]["sha256"] == SUPERSEDED_SHA
+    assert entry["supersedes"]["evidence"].endswith("g1_t064_superseded_physical_fixture_01.json")
+
+
+def test_the_replacement_still_satisfies_the_physical_gate() -> None:
+    status = collect_fixture_status(FIXTURES_DIR)
+    entry = status["required"]["label_ambiguous_01.jpg"]
+    assert entry["classification"] == "REAL"
+    assert entry["satisfies_t064_physical_capture"] is True
+    assert entry["content_inspection"]["is_generated"] is False
+    assert entry["content_inspection"]["decisive_signals"] == []
+
+
+def test_the_intended_semantic_target_is_not_authoritative() -> None:
+    """INCONCLUSIVE is a design goal; it must never pre-empt the observed result."""
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    target = manifest["fixtures"]["label_ambiguous_01.jpg"]["semantic_target"]
+    assert target["intended"] == "INCONCLUSIVE"
+    assert target["authoritative"] is False
+    assert "MUST NOT override" in target["note"]
+
+
+def test_the_other_two_fixtures_were_not_disturbed() -> None:
+    """Only the ambiguous slot was replaced."""
+    manifest = json.loads((FIXTURES_DIR / "provenance.json").read_text(encoding="utf-8"))
+    for name in ("label_left_01.jpg", "label_top_right_01.jpg"):
+        entry = manifest["fixtures"][name]
+        live = hashlib.sha256((FIXTURES_DIR / name).read_bytes()).hexdigest()
+        assert entry["sha256"] == live, name
+        assert "capture_revision" not in entry, f"{name} was not replaced"

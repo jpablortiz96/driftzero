@@ -1,0 +1,32 @@
+{
+  "round": 3,
+  "fixture": "label_left_01.jpg",
+  "fixture_sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+  "expected": "LEFT",
+  "observed": "LEFT",
+  "match": true,
+  "qualifying": true,
+  "http_status": 200,
+  "transport_error": null,
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "response_id": "d7d1b3c0-e40b-4198-af67-4ce0ba12f247",
+  "created": 1787614138,
+  "finish_reason": "stop",
+  "traffic_type": "ON_DEMAND",
+  "usage": {
+    "completion_tokens": 2,
+    "extra_properties": {
+      "google": {
+        "traffic_type": "ON_DEMAND"
+      }
+    },
+    "prompt_tokens": 341,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 343
+  },
+  "request_sha256": "1b9edfa9b1189c133858e52d0abc4db21c859a14c84bd83f00baab58fc51a33b",
+  "response_sha256": "bc8ed9fc5ac728810b55793f6b7b082be29e138947ea9526c1320cd890c71c08",
+  "started_utc": "2026-08-24T23:28:56.558342+00:00"
+}

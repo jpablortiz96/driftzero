@@ -1,0 +1,202 @@
+{
+  "project": "driftzero-runtime-2026",
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "route": "VERTEX_AI_MAAS",
+  "traffic_type_expected": "ON_DEMAND",
+  "new_attempts_planned": 6,
+  "automatic_retries": 0,
+  "records": [
+    {
+      "round": 2,
+      "fixture": "label_left_01.jpg",
+      "fixture_sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+      "expected": "LEFT",
+      "observed": "LEFT",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "9df5c0eb-286b-46b1-bd02-244cb0ee6a3a",
+      "created": 1787614117,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 2,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "total_tokens": 343
+      },
+      "request_sha256": "1b9edfa9b1189c133858e52d0abc4db21c859a14c84bd83f00baab58fc51a33b",
+      "response_sha256": "b9b8bb8004cfe8bbb44f1612fe4a3fa30a1b51c9d811fad444cb4372b6ffb7cb",
+      "started_utc": "2026-08-24T23:28:33.260377+00:00"
+    },
+    {
+      "round": 2,
+      "fixture": "label_top_right_01.jpg",
+      "fixture_sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+      "expected": "TOP_RIGHT",
+      "observed": "TOP_RIGHT",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "bf001799-d2b8-4004-b27e-791aac88ef58",
+      "created": 1787614123,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 4,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "total_tokens": 345
+      },
+      "request_sha256": "4d0ab15c8386800bf853f6aaa6785922625ca7687044e3a43f506dee3d41823c",
+      "response_sha256": "0aec77c5c48dba658d7047edb7b74ea6df59765ffbce3456167fb9093ba32b01",
+      "started_utc": "2026-08-24T23:28:41.034853+00:00"
+    },
+    {
+      "round": 2,
+      "fixture": "label_ambiguous_01.jpg",
+      "fixture_sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+      "expected": "INCONCLUSIVE",
+      "observed": "INCONCLUSIVE",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "0d297b34-95ed-47e2-9ba2-d9f772e7d536",
+      "created": 1787614132,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 4,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "total_tokens": 345
+      },
+      "request_sha256": "b6ee63bdcd52c17d898bad46e9d4dbdaed708caadc7af28b50e58ce49e880d53",
+      "response_sha256": "39d126f3eb693e7f86b027beb70a464bfb4dd32aaf7ddc474250c5614990dd1b",
+      "started_utc": "2026-08-24T23:28:47.536701+00:00"
+    },
+    {
+      "round": 3,
+      "fixture": "label_left_01.jpg",
+      "fixture_sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+      "expected": "LEFT",
+      "observed": "LEFT",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "d7d1b3c0-e40b-4198-af67-4ce0ba12f247",
+      "created": 1787614138,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 2,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "total_tokens": 343
+      },
+      "request_sha256": "1b9edfa9b1189c133858e52d0abc4db21c859a14c84bd83f00baab58fc51a33b",
+      "response_sha256": "bc8ed9fc5ac728810b55793f6b7b082be29e138947ea9526c1320cd890c71c08",
+      "started_utc": "2026-08-24T23:28:56.558342+00:00"
+    },
+    {
+      "round": 3,
+      "fixture": "label_top_right_01.jpg",
+      "fixture_sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+      "expected": "TOP_RIGHT",
+      "observed": "TOP_RIGHT",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "e9667d4c-c9e7-4313-af39-a642f969a7b1",
+      "created": 1787614144,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 4,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "total_tokens": 345
+      },
+      "request_sha256": "4d0ab15c8386800bf853f6aaa6785922625ca7687044e3a43f506dee3d41823c",
+      "response_sha256": "6cfa97afad15314b25aa94a56ca0f33b478594a4d5e2e2d728fdfc27e1931ec1",
+      "started_utc": "2026-08-24T23:29:02.875865+00:00"
+    },
+    {
+      "round": 3,
+      "fixture": "label_ambiguous_01.jpg",
+      "fixture_sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+      "expected": "INCONCLUSIVE",
+      "observed": "INCONCLUSIVE",
+      "match": true,
+      "qualifying": true,
+      "http_status": 200,
+      "transport_error": null,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "response_id": "31f12e23-c3f6-4048-acef-dbb8f96d491b",
+      "created": 1787614152,
+      "finish_reason": "stop",
+      "traffic_type": "ON_DEMAND",
+      "usage": {
+        "completion_tokens": 4,
+        "extra_properties": {
+          "google": {
+            "traffic_type": "ON_DEMAND"
+          }
+        },
+        "prompt_tokens": 341,
+        "prompt_tokens_details": {
+          "cached_tokens": 64
+        },
+        "total_tokens": 345
+      },
+      "request_sha256": "b6ee63bdcd52c17d898bad46e9d4dbdaed708caadc7af28b50e58ce49e880d53",
+      "response_sha256": "4fd53a5e56deea79f1570196ab29abeb047418c1ba8cfaea825e1c4d07a0935c",
+      "started_utc": "2026-08-24T23:29:08.741704+00:00"
+    }
+  ]
+}

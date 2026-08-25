@@ -1,0 +1,9 @@
+{
+    "reason":  "GoogleSorry automated-query interception; no model response returned",
+    "timestamp_utc":  "2026-08-24T22:16:52.7298495Z",
+    "classification":  "TRANSPORT_FAILURE",
+    "fixture":  "fixtures/multimodal/label_ambiguous_01.jpg",
+    "model":  "google/gemma-4-26b-a4b-it-maas",
+    "qualifying_inference":  false,
+    "endpoint":  "global"
+}

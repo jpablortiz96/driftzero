@@ -1,0 +1,12 @@
+PROJECT_ID: driftzero-runtime-2026
+MODEL: google/gemma-4-26b-a4b-it-maas
+IMAGE_PATH_LOCAL: fixtures/multimodal/label_ambiguous_01.jpg
+IMAGE_SHA256: 0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76
+HTTP_STATUS: 200
+OBSERVATION: INCONCLUSIVE
+FINISH_REASON: stop
+PROMPT_TOKENS: 341
+COMPLETION_TOKENS: 4
+TOTAL_TOKENS: 345
+TRAFFIC_TYPE: ON_DEMAND
+NOTE: Physical real fixture revision 2; response obtained via Vertex AI MaaS OpenAPI chat/completions endpoint.

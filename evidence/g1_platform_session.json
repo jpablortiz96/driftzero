@@ -35,31 +35,48 @@
     },
     "what_this_does_NOT_prove": "It does not prove the model was deployed, served, or invoked. Backend INTERNAL failure occurred after admission."
   },
-  "selected_route": "vertex_ai_model_garden",
+  "selected_route": "vertex_ai_maas",
   "route_decision": {
     "task": "T062",
     "decided": true,
-    "selected_route": "vertex_ai_model_garden",
-    "selected_route_label": "Vertex AI Model Garden self-deploy",
-    "provenance": "OPERATOR_REPORTED",
+    "selected_route": "vertex_ai_maas",
+    "selected_route_label": "Vertex AI MaaS OpenAPI chat/completions (serverless, on-demand)",
+    "provenance": "MACHINE_CAPTURED_ARTIFACT",
     "routes_evaluated": [
       {
-        "route": "vertex_ai_model_garden",
+        "route": "vertex_ai_maas",
         "status": "SELECTED",
-        "basis": "Vertex AI admitted a real deploy request for gemma4@gemma-4-12b-it and returned a concrete supported machine/accelerator/container configuration. This is the only route for which the platform empirically confirmed a supported deployment shape."
+        "basis": "Three qualifying multimodal inferences returned HTTP 200 with in-domain observations, each cryptographically bound to the fixture on disk. This is the only route that has actually served this workload."
+      },
+      {
+        "route": "vertex_ai_model_garden",
+        "status": "SUPERSEDED",
+        "basis": "Two self-deploy attempts failed (INTERNAL, then an uncancellable operation with no deployed model), and the RTX PRO 6000 quota preference required for the accepted configuration was denied. Not the active feasible route."
       },
       {
         "route": "cloud_run_vllm",
         "status": "NOT_SELECTED",
-        "basis": "research.md R-008 originally recommended Cloud Run + vLLM on NVIDIA L4 for scale-to-zero cost control. It was not exercised: the Model Garden self-deploy path was the one the platform actually accepted for this publisher model. No Cloud Run deployment was attempted."
+        "basis": "Never exercised. Superseded candidate from pre-G1 desk research."
       }
     ],
-    "model_variant": "gemma-4-12b",
-    "model_variant_qualifier": "it (instruction-tuned), as gemma4@gemma-4-12b-it",
-    "quantization_decision": "MODEL_GARDEN_DEFAULT_NO_OVERRIDE",
-    "quantization_basis": "The configuration the platform accepted carried no quantization parameter, so the decision is to use the route default published for the pytorch-vllm-serve container. The effective numeric precision was never observed because no deployment completed, and none is asserted.",
-    "what_this_decision_establishes": "PLATFORM_SUPPORTED — a route and a supported deployment configuration are known.",
-    "what_this_decision_does_NOT_establish": "It does not establish that the route works end to end. DEPLOYMENT_SUCCEEDED and INFERENCE_SUCCEEDED are both false."
+    "model_variant": "gemma-4-26b-a4b",
+    "model_variant_qualifier": "it-maas, as google/gemma-4-26b-a4b-it-maas",
+    "quantization_decision": "MAAS_MANAGED_NOT_CALLER_CONTROLLED",
+    "quantization_basis": "Serving precision is managed by the MaaS endpoint and is not a caller-side parameter. No numeric precision is asserted.",
+    "what_this_decision_establishes": "SERVING_ROUTE_AVAILABLE — a real route has served this exact workload end to end.",
+    "what_this_decision_does_NOT_establish": "It does not establish repeat stability: each fixture was evaluated once.",
+    "requires_self_deployment": false,
+    "evidence": "evidence/g1_maas_inference_run.json",
+    "route_convergence": {
+      "chain": [
+        "cloud_run_vllm (desk recommendation)",
+        "vertex_ai_model_garden self-deploy (empirically admitted, then failed)",
+        "vertex_ai_maas (empirically serving)"
+      ],
+      "active_feasible_route": "vertex_ai_maas",
+      "self_deploy_status": "NOT_THE_ACTIVE_ROUTE",
+      "self_deploy_reinstatement_condition": "Only if new evidence shows a successful self-deploy AND a granted GPU quota."
+    }
   },
   "verified_deployment_configuration": {
     "provenance": "OPERATOR_REPORTED",
@@ -128,8 +145,8 @@
     }
   ],
   "quota_findings": {
-    "requirement": "Effective GPU quota sufficient for one g4-standard-48 deployment with NVIDIA_RTX_PRO_6000 x1 in us-central1 — the accelerator family of the G1-selected serving route. Quota from another accelerator family does not satisfy this requirement.",
-    "resolved": false,
+    "requirement": "Serving-capacity prerequisite for the G1-selected route. The active route is Vertex AI MaaS, which is serverless and on-demand: it requires no GPU quota grant to the project. The GPU quota requirement applied only to the superseded self-deploy route.",
+    "resolved": true,
     "cloud_quotas_family": {
       "provenance": "MACHINE_CAPTURED_ARTIFACT",
       "source_artifact": "evidence/g1_quota_gpus_per_gpu_family.json",
@@ -176,19 +193,71 @@
       ],
       "product_requirements_changed": false,
       "note": "A planning/task retarget only. No FR, SC, or product requirement was altered."
+    },
+    "resolution": "SUPERSEDED_BY_ROUTE_CHANGE",
+    "resolution_detail": "Answered, not satisfied. The RTX PRO 6000 quota preference was DENIED (grantedValue 0, preferredValue 1, stateDetail 'Quota request denied'), which keeps the self-deploy route infeasible. The active MaaS route requires no such grant and its capacity is demonstrated by nine qualifying inferences.",
+    "rtx_pro_6000_quota_request": {
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_platform/rtxpro6000_quota_preference.json",
+      "quota_preference_name": "projects/driftzero-runtime-2026/locations/global/quotaPreferences/driftzero-rtxpro6000-uscentral1",
+      "project_id": "driftzero-runtime-2026",
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "region": "us-central1",
+      "granted_value": 0,
+      "preferred_value": 1,
+      "state_detail": "Quota request denied",
+      "trace_id": "8e774f8b-2e2a-4d68-9858-5769a1fafcdc",
+      "create_time": "2026-08-24T21:53:34.499777898Z",
+      "update_time": "2026-08-24T21:53:37.867050875Z",
+      "outcome": "DENIED",
+      "consequence": "Self-deploy on NVIDIA_RTX_PRO_6000 is unavailable in this project. The denial is a fact of record and is not restated as a success.",
+      "upgraded_from": "OPERATOR_REPORTED — now machine-verifiable from the captured quotaPreferences response."
+    },
+    "cloud_quotas_family_runtime_project": {
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_quota_gpus_per_gpu_family_runtime.json",
+      "project_number": "1086395542194",
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "applicable_locations_include_us_central1": true,
+      "details": {},
+      "effective_numeric_quota": "UNKNOWN_NOT_RETURNED",
+      "note": "Same empty-details result as the original project. Retained as evidence; it neither confirms nor contradicts the reported denial."
     }
   },
   "billing_state": {
-    "provenance": "OPERATOR_REPORTED",
-    "billing_enabled": false,
-    "billing_account_name": "",
-    "project_id": "driftzero-agentic-2026",
-    "intentional": true,
-    "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
-    "consequence": "Subsequent Vertex AI calls return PERMISSION_DENIED with reason BILLING_DISABLED.",
-    "classification": "INTENTIONAL_COST_SAFETY_STATE",
-    "not_an_infrastructure_defect": true,
-    "remediation_required_now": false
+    "model": "PER_PROJECT — the two projects are not collapsed into one statement",
+    "legacy_project": {
+      "project_id": "driftzero-agentic-2026",
+      "role": "Historical self-deploy experiments only. Not the active runtime.",
+      "billing_enabled": false,
+      "provenance": "OPERATOR_REPORTED",
+      "source_artifact": null,
+      "intentional": true,
+      "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
+      "still_gates_g1": false,
+      "note": "Billing was disabled here as a cost control after an uncancellable GPU provisioning operation. That state describes the legacy project and says nothing about the active MaaS route."
+    },
+    "active_runtime_project": {
+      "project_id": "driftzero-runtime-2026",
+      "role": "Active runtime for the selected Vertex AI MaaS route.",
+      "billing_enabled": true,
+      "billing_account_name": "billingAccounts/017DAD-B6637E-E072D9",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_platform/runtime_billing.json",
+      "still_gates_g1": false,
+      "note": "Billing is enabled here, which is why the MaaS calls succeeded. No global BILLING_DISABLED statement applies to this project."
+    },
+    "cost_model_active_route": {
+      "traffic_type": "ON_DEMAND",
+      "persistent_serving_resource_running": false,
+      "idle_serving_cost_from_this_route": "None — nothing stays provisioned.",
+      "observed_usage": {
+        "qualifying_calls": 9,
+        "total_tokens": 3099
+      },
+      "dollar_cost_asserted": false,
+      "dollar_cost_note": "No rate was captured, so no cost figure is calculated or claimed."
+    }
   },
   "outcome_flags": {
     "PLATFORM_SUPPORTED": {
@@ -197,15 +266,20 @@
     },
     "PLATFORM_ATTEMPTED": {
       "value": true,
-      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND)."
+      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND). A third route, Vertex AI MaaS, was subsequently exercised successfully."
     },
     "DEPLOYMENT_SUCCEEDED": {
       "value": false,
-      "basis": "Attempt 1 ended done=true with error code 13 INTERNAL and left 0 endpoints and no models. Attempt 2 created an endpoint whose deployedModels was null and never finished. No deployed model existed at any point."
+      "basis": "Still false and still accurate: no self-deployment ever succeeded. The active MaaS route requires no deployment, so this flag no longer gates G1.",
+      "gates_g1": false
     },
     "INFERENCE_SUCCEEDED": {
-      "value": false,
-      "basis": "No servable endpoint ever existed, so zero Gemma inference calls were made and zero observations were produced. Billing is now disabled, so no further call is possible."
+      "value": true,
+      "basis": "Three qualifying multimodal inferences against google/gemma-4-26b-a4b-it-maas, each bound by SHA-256 to the fixture on disk."
+    },
+    "SERVING_ROUTE_AVAILABLE": {
+      "value": true,
+      "basis": "Vertex AI MaaS returned HTTP 200 with an in-domain observation for all three REAL_PHYSICAL fixtures (evidence/g1_maas_inference_run.json)."
     }
   },
   "planning_reconciliation": {

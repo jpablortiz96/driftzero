@@ -1,0 +1,32 @@
+{
+  "round": 3,
+  "fixture": "label_top_right_01.jpg",
+  "fixture_sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+  "expected": "TOP_RIGHT",
+  "observed": "TOP_RIGHT",
+  "match": true,
+  "qualifying": true,
+  "http_status": 200,
+  "transport_error": null,
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "response_id": "e9667d4c-c9e7-4313-af39-a642f969a7b1",
+  "created": 1787614144,
+  "finish_reason": "stop",
+  "traffic_type": "ON_DEMAND",
+  "usage": {
+    "completion_tokens": 4,
+    "extra_properties": {
+      "google": {
+        "traffic_type": "ON_DEMAND"
+      }
+    },
+    "prompt_tokens": 341,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 345
+  },
+  "request_sha256": "4d0ab15c8386800bf853f6aaa6785922625ca7687044e3a43f506dee3d41823c",
+  "response_sha256": "6cfa97afad15314b25aa94a56ca0f33b478594a4d5e2e2d728fdfc27e1931ec1",
+  "started_utc": "2026-08-24T23:29:02.875865+00:00"
+}

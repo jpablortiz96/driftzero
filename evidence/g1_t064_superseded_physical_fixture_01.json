@@ -1,0 +1,47 @@
+{
+  "schema": "driftzero.g1.t064_superseded_physical_fixture.v1",
+  "task": "T064 — superseded physical fixture record (physical fixture 01, ambiguous slot)",
+  "record_type": "HISTORICAL_EVIDENCE",
+  "record_type_warning": "This records a REAL physical capture that was ACCEPTED and later superseded. It is a permanent audit record and MUST NOT be read as the current fixture state. Current state lives in fixtures/multimodal/provenance.json.",
+  "old_canonical_path": "fixtures/multimodal/label_ambiguous_01.jpg",
+  "old_sha256": "21b0a3a775ced7db12b4bb11771a2cc98579edaaaa2e7fcfe517729e1528d3fe",
+  "old_bytes": 840072,
+  "old_container_format": "HEIC",
+  "classification": [
+    "REAL"
+  ],
+  "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+  "generated": false,
+  "was_accepted": true,
+  "accepted_on": "2026-08-24",
+  "superseded_on": "2026-08-24",
+  "superseded_reason": "FIXTURE_DESIGN_NOT_ACTUALLY_INCONCLUSIVE",
+  "superseded_detail": "The capture was visually classifiable as LEFT. It did not represent a genuinely inconclusive field observation, so it could not exercise the INCONCLUSIVE path it was created for.",
+  "fixture_design_target_at_capture_time": "INCONCLUSIVE",
+  "historical_model_observation": "LEFT",
+  "historical_model": "google/gemma-4-26b-a4b-it-maas",
+  "historical_inference_was_real": true,
+  "does_not_qualify_for_current_inconclusive_fixture": true,
+  "defect_classification": {
+    "category": "FIXTURE_DESIGN_DEFECT",
+    "is_model_failure": false,
+    "detail": "The model reported what was actually visible. The image showed enough box-face geometry to determine LEFT, so LEFT was a correct observation of that image. The defect is in the fixture, which was labelled INCONCLUSIVE at design time without being genuinely undeterminable. Nothing here counts against Gemma.",
+    "expected_vs_observed_mismatch_cause": "FIXTURE_NOT_ACTUALLY_AMBIGUOUS"
+  },
+  "provenance_of_this_record": {
+    "old_hash": "MACHINE_CAPTURED_ARTIFACT — recorded in fixtures/multimodal/provenance.json before the replacement and re-verified against the operator-supplied value",
+    "historical_observation": "OPERATOR_REPORTED — the real Gemma MaaS observation was made outside this repository; no request id, timestamp, or raw response payload was captured, and none is invented here",
+    "not_recorded": [
+      "inference timestamp",
+      "request id",
+      "raw model response",
+      "latency"
+    ]
+  },
+  "superseded_by": {
+    "canonical_path": "fixtures/multimodal/label_ambiguous_01.jpg",
+    "note": "A new physical capture now occupies this path. Its hash and gate evidence are in fixtures/multimodal/provenance.json."
+  },
+  "file_retained": false,
+  "file_retention_note": "The superseded image itself was replaced in place by the operator and is not retained in this repository. Its SHA-256 above remains sufficient to identify it if it reappears."
+}

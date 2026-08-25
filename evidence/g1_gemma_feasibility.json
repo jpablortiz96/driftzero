@@ -24,16 +24,39 @@
     }
   },
   "billing_state": {
-    "billing_account_name": "",
-    "billing_enabled": false,
-    "classification": "INTENTIONAL_COST_SAFETY_STATE",
-    "consequence": "Subsequent Vertex AI calls return PERMISSION_DENIED with reason BILLING_DISABLED.",
-    "intentional": true,
-    "not_an_infrastructure_defect": true,
-    "project_id": "driftzero-agentic-2026",
-    "provenance": "OPERATOR_REPORTED",
-    "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
-    "remediation_required_now": false
+    "active_runtime_project": {
+      "billing_account_name": "billingAccounts/017DAD-B6637E-E072D9",
+      "billing_enabled": true,
+      "note": "Billing is enabled here, which is why the MaaS calls succeeded. No global BILLING_DISABLED statement applies to this project.",
+      "project_id": "driftzero-runtime-2026",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "role": "Active runtime for the selected Vertex AI MaaS route.",
+      "source_artifact": "evidence/g1_platform/runtime_billing.json",
+      "still_gates_g1": false
+    },
+    "cost_model_active_route": {
+      "dollar_cost_asserted": false,
+      "dollar_cost_note": "No rate was captured, so no cost figure is calculated or claimed.",
+      "idle_serving_cost_from_this_route": "None \u2014 nothing stays provisioned.",
+      "observed_usage": {
+        "qualifying_calls": 9,
+        "total_tokens": 3099
+      },
+      "persistent_serving_resource_running": false,
+      "traffic_type": "ON_DEMAND"
+    },
+    "legacy_project": {
+      "billing_enabled": false,
+      "intentional": true,
+      "note": "Billing was disabled here as a cost control after an uncancellable GPU provisioning operation. That state describes the legacy project and says nothing about the active MaaS route.",
+      "project_id": "driftzero-agentic-2026",
+      "provenance": "OPERATOR_REPORTED",
+      "reason": "Cost-bounded feasibility spike. Billing was disabled deliberately rather than allowing an indefinite, uncancellable GPU provisioning operation to continue accruing cost.",
+      "role": "Historical self-deploy experiments only. Not the active runtime.",
+      "source_artifact": null,
+      "still_gates_g1": false
+    },
+    "model": "PER_PROJECT \u2014 the two projects are not collapsed into one statement"
   },
   "data_classification": {
     "labels": [
@@ -41,32 +64,7 @@
     ],
     "note": "Access-check and platform-session results are REAL observations. No inference was performed unless records are present below. Fixture images currently on disk are SYNTHETIC \u2014 see fixtures.required[*]."
   },
-  "decision_blockers": [
-    {
-      "code": "T063_QUOTA",
-      "detail": "The quota family for the accelerator required by the G1-selected route was returned with an empty details object and no numeric value. Neither >= 1 nor 0 may be asserted.",
-      "summary": "effective NVIDIA_RTX_PRO_6000 quota unknown",
-      "task": "T063"
-    },
-    {
-      "code": "T064_PHYSICAL_FIXTURES",
-      "detail": "The canonical REAL_PHYSICAL paths hold no declared physical capture. Absence fails closed, and generated media in ./synthetic/ can never substitute \u2014 neither by declaration nor by directory placement.",
-      "summary": "no REAL_PHYSICAL fixtures",
-      "task": "T064"
-    },
-    {
-      "code": "T066_DEPLOYMENT",
-      "detail": "The platform admitted the configuration and real attempts were made, but no deployed model ever existed. PLATFORM_SUPPORTED and PLATFORM_ATTEMPTED are true; DEPLOYMENT_SUCCEEDED is false.",
-      "summary": "no successful Gemma deployment",
-      "task": "T066"
-    },
-    {
-      "code": "T066_INFERENCE",
-      "detail": "0 inference record(s) present, 0 of them qualifying. A record qualifies only if it came from a REAL_PHYSICAL fixture and normalized into the closed observation domain.",
-      "summary": "zero successful qualifying Gemma inference records",
-      "task": "T066"
-    }
-  ],
+  "decision_blockers": [],
   "deployment_attempts": [
     {
       "attempt": 1,
@@ -123,90 +121,120 @@
     "python": "3.13.13"
   },
   "fixtures": {
-    "all_present": false,
+    "all_present": true,
     "capture_type_required": "REAL_PHYSICAL_CAPTURE",
     "directory": "D:\\DriftZero\\fixtures\\multimodal",
     "directory_exists": true,
     "note": "Presence is not provenance. Synthetic images may not substitute for the required physical capture, and an undeclared fixture fails closed as non-physical. The observation must come from visible evidence only \u2014 no filename, EXIF, directory, watermark, or prompt hint may encode the answer. Each file is additionally inspected for embedded generator provenance (C2PA content credentials, IPTC digitalSourceType) and against the registry of hashes already classified generated; a positive finding disqualifies it regardless of its declaration. Missing EXIF and container/extension mismatch are recorded as non-decisive anomalies only.",
-    "physical_capture_satisfied": false,
+    "physical_capture_satisfied": true,
     "provenance_manifest_present": true,
     "rejected_as_generated": [],
     "required": {
       "label_ambiguous_01.jpg": {
-        "bytes": 0,
-        "capture_method": "NOT_YET_CAPTURED",
-        "classification": "UNDECLARED",
+        "bytes": 1465013,
+        "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+        "classification": "REAL",
         "content_inspection": {
-          "anomalies": [],
+          "anomalies": [
+            {
+              "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+              "decisive": false,
+              "detail": "Container is HEIC but the filename claims .jpg. An integrity/content-type anomaly worth fixing; it does not indicate AI generation."
+            }
+          ],
           "c2pa_present": false,
           "camera_capture_corroborated": false,
-          "container_format": null,
+          "container_format": "HEIC",
           "decisive_signals": [],
-          "exif_present": false,
-          "extension_matches_container": null,
+          "exif_present": true,
+          "extension_matches_container": false,
           "generator_provenance_matches": [],
-          "inspected": false,
+          "inspected": true,
           "is_generated": false,
           "known_generated_hash_match": null,
           "markers": [],
-          "provenance_structures": [],
-          "sha256": null
+          "parser_coverage": "META_ONLY",
+          "provenance_structures": [
+            "ISOBMFF_meta"
+          ],
+          "sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+          "unparsed_provenance_payload": false
         },
         "path": "fixtures\\multimodal\\label_ambiguous_01.jpg",
-        "present": false,
-        "satisfies_t064_physical_capture": false
+        "present": true,
+        "satisfies_t064_physical_capture": true
       },
       "label_left_01.jpg": {
-        "bytes": 0,
-        "capture_method": "NOT_YET_CAPTURED",
-        "classification": "UNDECLARED",
+        "bytes": 696422,
+        "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+        "classification": "REAL",
         "content_inspection": {
-          "anomalies": [],
+          "anomalies": [
+            {
+              "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+              "decisive": false,
+              "detail": "Container is HEIC but the filename claims .jpg. An integrity/content-type anomaly worth fixing; it does not indicate AI generation."
+            }
+          ],
           "c2pa_present": false,
           "camera_capture_corroborated": false,
-          "container_format": null,
+          "container_format": "HEIC",
           "decisive_signals": [],
-          "exif_present": false,
-          "extension_matches_container": null,
+          "exif_present": true,
+          "extension_matches_container": false,
           "generator_provenance_matches": [],
-          "inspected": false,
+          "inspected": true,
           "is_generated": false,
           "known_generated_hash_match": null,
           "markers": [],
-          "provenance_structures": [],
-          "sha256": null
+          "parser_coverage": "META_ONLY",
+          "provenance_structures": [
+            "ISOBMFF_meta"
+          ],
+          "sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+          "unparsed_provenance_payload": false
         },
         "path": "fixtures\\multimodal\\label_left_01.jpg",
-        "present": false,
-        "satisfies_t064_physical_capture": false
+        "present": true,
+        "satisfies_t064_physical_capture": true
       },
       "label_top_right_01.jpg": {
-        "bytes": 0,
-        "capture_method": "NOT_YET_CAPTURED",
-        "classification": "UNDECLARED",
+        "bytes": 702867,
+        "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+        "classification": "REAL",
         "content_inspection": {
-          "anomalies": [],
+          "anomalies": [
+            {
+              "anomaly": "CONTAINER_EXTENSION_MISMATCH",
+              "decisive": false,
+              "detail": "Container is HEIC but the filename claims .jpg. An integrity/content-type anomaly worth fixing; it does not indicate AI generation."
+            }
+          ],
           "c2pa_present": false,
           "camera_capture_corroborated": false,
-          "container_format": null,
+          "container_format": "HEIC",
           "decisive_signals": [],
-          "exif_present": false,
-          "extension_matches_container": null,
+          "exif_present": true,
+          "extension_matches_container": false,
           "generator_provenance_matches": [],
-          "inspected": false,
+          "inspected": true,
           "is_generated": false,
           "known_generated_hash_match": null,
           "markers": [],
-          "provenance_structures": [],
-          "sha256": null
+          "parser_coverage": "META_ONLY",
+          "provenance_structures": [
+            "ISOBMFF_meta"
+          ],
+          "sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+          "unparsed_provenance_payload": false
         },
         "path": "fixtures\\multimodal\\label_top_right_01.jpg",
-        "present": false,
-        "satisfies_t064_physical_capture": false
+        "present": true,
+        "satisfies_t064_physical_capture": true
       }
     }
   },
-  "generated_at": "2026-08-24T20:31:20.354002+00:00",
+  "generated_at": "2026-08-24T23:41:24.979129+00:00",
   "model_access": {
     "eula_acceptance": {
       "established": "The EULA was accepted as part of the deploy invocation.",
@@ -231,29 +259,34 @@
   "operational_holds": [
     {
       "blocks_g1_decision": false,
-      "code": "BILLING_DISABLED",
-      "detail": "A deliberate cost control adopted to stop an uncancellable GPU provisioning operation from accruing cost. Vertex calls now return PERMISSION_DENIED/BILLING_DISABLED. This says nothing about whether Gemma is technically feasible and is not evidence of model infeasibility.",
+      "code": "LEGACY_PROJECT_BILLING_DISABLED",
+      "describes_active_route": false,
+      "detail": "A deliberate cost control on the legacy self-deploy project, adopted after an uncancellable GPU provisioning operation. It does not describe the active MaaS runtime project and is not evidence of model infeasibility.",
       "financial_safety_control": true,
       "infrastructure_defect": false,
       "intentional": true,
-      "summary": "billing intentionally disabled on driftzero-agentic-2026"
+      "summary": "billing intentionally disabled on legacy driftzero-agentic-2026"
     }
   ],
   "outcome_flags": {
     "DEPLOYMENT_SUCCEEDED": {
-      "basis": "Attempt 1 ended done=true with error code 13 INTERNAL and left 0 endpoints and no models. Attempt 2 created an endpoint whose deployedModels was null and never finished. No deployed model existed at any point.",
+      "basis": "Still false and still accurate: no self-deployment ever succeeded. The active MaaS route requires no deployment, so this flag no longer gates G1.",
       "value": false
     },
     "INFERENCE_SUCCEEDED": {
-      "basis": "No servable endpoint ever existed, so zero Gemma inference calls were made and zero observations were produced. Billing is now disabled, so no further call is possible.",
-      "value": false
+      "basis": "Three qualifying multimodal inferences against google/gemma-4-26b-a4b-it-maas, each bound by SHA-256 to the fixture on disk.",
+      "value": true
     },
     "PLATFORM_ATTEMPTED": {
-      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND).",
+      "basis": "Two real deploy operations were created: 1853041001086582784 (SPOT) and 7737979076664623104 (ON_DEMAND). A third route, Vertex AI MaaS, was subsequently exercised successfully.",
       "value": true
     },
     "PLATFORM_SUPPORTED": {
       "basis": "Vertex AI Model Garden admitted a deploy request for gemma4@gemma-4-12b-it with the g4-standard-48 / NVIDIA_RTX_PRO_6000 x1 / pytorch-vllm-serve configuration, and RTX PRO 6000 availability was observed in three us-central1 zones.",
+      "value": true
+    },
+    "SERVING_ROUTE_AVAILABLE": {
+      "basis": "Vertex AI MaaS returned HTTP 200 with an in-domain observation for all three REAL_PHYSICAL fixtures (evidence/g1_maas_inference_run.json).",
       "value": true
     }
   },
@@ -274,6 +307,16 @@
       },
       "source_artifact": "evidence/g1_quota_gpus_per_gpu_family.json"
     },
+    "cloud_quotas_family_runtime_project": {
+      "applicable_locations_include_us_central1": true,
+      "details": {},
+      "effective_numeric_quota": "UNKNOWN_NOT_RETURNED",
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "note": "Same empty-details result as the original project. Retained as evidence; it neither confirms nor contradicts the reported denial.",
+      "project_number": "1086395542194",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "source_artifact": "evidence/g1_quota_gpus_per_gpu_family_runtime.json"
+    },
     "legacy_compute_regional_listing": {
       "adjacent_observation": {
         "limit": 1.0,
@@ -289,8 +332,10 @@
       "source_artifact": "evidence/g1_quota_compute_regional.json",
       "total_quota_entries": 113
     },
-    "requirement": "Effective GPU quota sufficient for one g4-standard-48 deployment with NVIDIA_RTX_PRO_6000 x1 in us-central1 \u2014 the accelerator family of the G1-selected serving route. Quota from another accelerator family does not satisfy this requirement.",
-    "resolved": false,
+    "requirement": "Serving-capacity prerequisite for the G1-selected route. The active route is Vertex AI MaaS, which is serverless and on-demand: it requires no GPU quota grant to the project. The GPU quota requirement applied only to the superseded self-deploy route.",
+    "resolution": "SUPERSEDED_BY_ROUTE_CHANGE",
+    "resolution_detail": "Answered, not satisfied. The RTX PRO 6000 quota preference was DENIED (grantedValue 0, preferredValue 1, stateDetail 'Quota request denied'), which keeps the self-deploy route infeasible. The active MaaS route requires no such grant and its capacity is demonstrated by nine qualifying inferences.",
+    "resolved": true,
     "route_supersession": {
       "artifacts_updated": [
         "specs/001-hero-change-deployment/tasks.md T063 (quota target)",
@@ -306,9 +351,144 @@
       "product_requirements_changed": false,
       "superseded_by": "Vertex AI Model Garden + NVIDIA RTX PRO 6000",
       "superseded_by_basis": "empirical G1 platform evidence (T062): the configuration Vertex actually admitted"
+    },
+    "rtx_pro_6000_quota_request": {
+      "consequence": "Self-deploy on NVIDIA_RTX_PRO_6000 is unavailable in this project. The denial is a fact of record and is not restated as a success.",
+      "create_time": "2026-08-24T21:53:34.499777898Z",
+      "gpu_family": "NVIDIA_RTX_PRO_6000",
+      "granted_value": 0,
+      "outcome": "DENIED",
+      "preferred_value": 1,
+      "project_id": "driftzero-runtime-2026",
+      "provenance": "MACHINE_CAPTURED_ARTIFACT",
+      "quota_preference_name": "projects/driftzero-runtime-2026/locations/global/quotaPreferences/driftzero-rtxpro6000-uscentral1",
+      "region": "us-central1",
+      "source_artifact": "evidence/g1_platform/rtxpro6000_quota_preference.json",
+      "state_detail": "Quota request denied",
+      "trace_id": "8e774f8b-2e2a-4d68-9858-5769a1fafcdc",
+      "update_time": "2026-08-24T21:53:37.867050875Z",
+      "upgraded_from": "OPERATOR_REPORTED \u2014 now machine-verifiable from the captured quotaPreferences response."
     }
   },
-  "records": [],
+  "records": [
+    {
+      "attempt": 1,
+      "error": null,
+      "expected_observation": "LEFT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_left_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "LEFT",
+      "raw_output": "LEFT"
+    },
+    {
+      "attempt": 1,
+      "error": null,
+      "expected_observation": "TOP_RIGHT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_top_right_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "TOP_RIGHT",
+      "raw_output": "TOP_RIGHT"
+    },
+    {
+      "attempt": 1,
+      "error": null,
+      "expected_observation": "INCONCLUSIVE",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_ambiguous_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "INCONCLUSIVE",
+      "raw_output": "INCONCLUSIVE"
+    },
+    {
+      "attempt": 2,
+      "error": null,
+      "expected_observation": "LEFT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_left_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "LEFT",
+      "raw_output": "LEFT"
+    },
+    {
+      "attempt": 2,
+      "error": null,
+      "expected_observation": "TOP_RIGHT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_top_right_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "TOP_RIGHT",
+      "raw_output": "TOP_RIGHT"
+    },
+    {
+      "attempt": 2,
+      "error": null,
+      "expected_observation": "INCONCLUSIVE",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_ambiguous_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "INCONCLUSIVE",
+      "raw_output": "INCONCLUSIVE"
+    },
+    {
+      "attempt": 3,
+      "error": null,
+      "expected_observation": "LEFT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_left_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "LEFT",
+      "raw_output": "LEFT"
+    },
+    {
+      "attempt": 3,
+      "error": null,
+      "expected_observation": "TOP_RIGHT",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_top_right_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "TOP_RIGHT",
+      "raw_output": "TOP_RIGHT"
+    },
+    {
+      "attempt": 3,
+      "error": null,
+      "expected_observation": "INCONCLUSIVE",
+      "fixture_classification": "REAL",
+      "fixture_id": "label_ambiguous_01.jpg",
+      "latency_label": "NOT_RECORDED",
+      "latency_seconds": null,
+      "matched_expected": true,
+      "normalization_succeeded": true,
+      "normalized_output": "INCONCLUSIVE",
+      "raw_output": "INCONCLUSIVE"
+    }
+  ],
   "route_config": {
     "endpoint": null,
     "max_tokens": 8,
@@ -318,38 +498,79 @@
   },
   "route_decision": {
     "decided": true,
-    "model_variant": "gemma-4-12b",
-    "model_variant_qualifier": "it (instruction-tuned), as gemma4@gemma-4-12b-it",
-    "provenance": "OPERATOR_REPORTED",
-    "quantization_basis": "The configuration the platform accepted carried no quantization parameter, so the decision is to use the route default published for the pytorch-vllm-serve container. The effective numeric precision was never observed because no deployment completed, and none is asserted.",
-    "quantization_decision": "MODEL_GARDEN_DEFAULT_NO_OVERRIDE",
+    "evidence": "evidence/g1_maas_inference_run.json",
+    "model_variant": "gemma-4-26b-a4b",
+    "model_variant_qualifier": "it-maas, as google/gemma-4-26b-a4b-it-maas",
+    "provenance": "MACHINE_CAPTURED_ARTIFACT",
+    "quantization_basis": "Serving precision is managed by the MaaS endpoint and is not a caller-side parameter. No numeric precision is asserted.",
+    "quantization_decision": "MAAS_MANAGED_NOT_CALLER_CONTROLLED",
+    "requires_self_deployment": false,
+    "route_convergence": {
+      "active_feasible_route": "vertex_ai_maas",
+      "chain": [
+        "cloud_run_vllm (desk recommendation)",
+        "vertex_ai_model_garden self-deploy (empirically admitted, then failed)",
+        "vertex_ai_maas (empirically serving)"
+      ],
+      "self_deploy_reinstatement_condition": "Only if new evidence shows a successful self-deploy AND a granted GPU quota.",
+      "self_deploy_status": "NOT_THE_ACTIVE_ROUTE"
+    },
     "routes_evaluated": [
       {
-        "basis": "Vertex AI admitted a real deploy request for gemma4@gemma-4-12b-it and returned a concrete supported machine/accelerator/container configuration. This is the only route for which the platform empirically confirmed a supported deployment shape.",
-        "route": "vertex_ai_model_garden",
+        "basis": "Three qualifying multimodal inferences returned HTTP 200 with in-domain observations, each cryptographically bound to the fixture on disk. This is the only route that has actually served this workload.",
+        "route": "vertex_ai_maas",
         "status": "SELECTED"
       },
       {
-        "basis": "research.md R-008 originally recommended Cloud Run + vLLM on NVIDIA L4 for scale-to-zero cost control. It was not exercised: the Model Garden self-deploy path was the one the platform actually accepted for this publisher model. No Cloud Run deployment was attempted.",
+        "basis": "Two self-deploy attempts failed (INTERNAL, then an uncancellable operation with no deployed model), and the RTX PRO 6000 quota preference required for the accepted configuration was denied. Not the active feasible route.",
+        "route": "vertex_ai_model_garden",
+        "status": "SUPERSEDED"
+      },
+      {
+        "basis": "Never exercised. Superseded candidate from pre-G1 desk research.",
         "route": "cloud_run_vllm",
         "status": "NOT_SELECTED"
       }
     ],
-    "selected_route": "vertex_ai_model_garden",
-    "selected_route_label": "Vertex AI Model Garden self-deploy",
+    "selected_route": "vertex_ai_maas",
+    "selected_route_label": "Vertex AI MaaS OpenAPI chat/completions (serverless, on-demand)",
     "task": "T062",
-    "what_this_decision_does_NOT_establish": "It does not establish that the route works end to end. DEPLOYMENT_SUCCEEDED and INFERENCE_SUCCEEDED are both false.",
-    "what_this_decision_establishes": "PLATFORM_SUPPORTED \u2014 a route and a supported deployment configuration are known."
+    "what_this_decision_does_NOT_establish": "It does not establish repeat stability: each fixture was evaluated once.",
+    "what_this_decision_establishes": "SERVING_ROUTE_AVAILABLE \u2014 a real route has served this exact workload end to end."
   },
-  "serving_route": "vertex_ai_model_garden",
-  "stability": {},
+  "serving_route": "vertex_ai_maas",
+  "stability": {
+    "label_ambiguous_01.jpg": {
+      "attempts": 3,
+      "distinct_normalized_outputs": [
+        "INCONCLUSIVE"
+      ],
+      "measured": true,
+      "stable": true
+    },
+    "label_left_01.jpg": {
+      "attempts": 3,
+      "distinct_normalized_outputs": [
+        "LEFT"
+      ],
+      "measured": true,
+      "stable": true
+    },
+    "label_top_right_01.jpg": {
+      "attempts": 3,
+      "distinct_normalized_outputs": [
+        "TOP_RIGHT"
+      ],
+      "measured": true,
+      "stable": true
+    }
+  },
   "task": "G1 \u2014 Gemma feasibility risk spike (T061-T067)",
-  "verdict": "NOT_YET_DECIDABLE",
+  "verdict": "GO",
   "verdict_reasoning": [
-    "T063_QUOTA: effective NVIDIA_RTX_PRO_6000 quota unknown",
-    "T064_PHYSICAL_FIXTURES: no REAL_PHYSICAL fixtures",
-    "T066_DEPLOYMENT: no successful Gemma deployment",
-    "T066_INFERENCE: zero successful qualifying Gemma inference records"
+    "qualifying_records=9",
+    "all_fixtures_matched_expected=True",
+    "all_fixtures_stable_across_measured_repeats=True"
   ],
   "verified_deployment_configuration": {
     "accelerator_availability_observed_zones": [
