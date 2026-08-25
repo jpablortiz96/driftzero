@@ -1,0 +1,20 @@
+{
+    "total_tokens":  345,
+    "observed_value":  "TOP_RIGHT",
+    "change_id":  "DZ-001",
+    "note":  "Real physical pilot evidence. Deterministic verdict not wired at this milestone.",
+    "change_deployed":  false,
+    "completion_tokens":  4,
+    "expected_requirement_value":  "TOP_RIGHT",
+    "response_id":  "b7bd2af0-c1cf-4100-a8c2-9bee474ee039",
+    "crossing_4":  "ACCEPTED",
+    "model":  "google/gemma-4-26b-a4b-it-maas",
+    "image_sha256":  "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+    "project":  "driftzero-runtime-2026",
+    "actual_mime":  "image/heic",
+    "prompt_tokens":  341,
+    "field_verified":  false,
+    "provider":  "vertex_ai_maas",
+    "pilot_id":  "DZ-PILOT-2026-08-25-001",
+    "traffic_type":  "ON_DEMAND"
+}
