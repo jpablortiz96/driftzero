@@ -4,20 +4,23 @@ Turns an approved (and where available, validated) change into a structured
 :class:`DeltaInstruction` a frontline worker can act on: what changed, from what, to
 what, and what deliberately did **not** change.
 
-Scope boundary with T078
-------------------------
-This agent **composes**. It does not deliver. The delivery mechanism, its resolvable
-receipt, and Crossing 3 belong to T078, so nothing here produces a ``DeliveryResult`` or
-sets ``delivered``. Composing a delta and delivering it are different claims, and a
-receipt this agent invented would be exactly the "agent asserts delivered" failure the
-contract forbids.
+Composition and delivery are separate (T077 / T078)
+---------------------------------------------------
+Composing a delta and delivering it are different claims. The agent composes, then hands
+the payload to a :class:`DeliveryChannel`; the **mechanism** issues the receipt. The
+agent never invents one, and ``DeliveryResult.delivered`` reflects what the channel
+reported — it is still only a claim until Crossing 3 resolves the receipt independently.
+``DeliveryInstruction.delivery_established`` therefore stays False here in every case:
+that flag is set downstream, by validation, never by the agent.
 
 Authority boundary
 ------------------
-READ + compose. The agent never mutates an artifact, never obtains
-``ARTIFACT_MUTATION`` (the authorization policy denies ``driftzero-enablement``), never
-determines PASS/FAIL, never generates a Change Proof, and never alters workflow truth.
-Its output is operational content, not a decision.
+READ + compose + deliver. The agent holds exactly one capability, ``FRONTLINE_DELIVERY``,
+and it must present a broker-issued grant for it on every dispatch. It never mutates an
+artifact, never obtains ``ARTIFACT_MUTATION`` (the authorization policy denies
+``driftzero-enablement``), never observes field evidence, never determines PASS/FAIL,
+never generates a Change Proof, and never alters workflow truth. Its output is
+operational content, not a decision.
 
 Generality
 ----------
@@ -36,15 +39,22 @@ fabrication.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from driftzero.capabilities import AgentIdentity
+from driftzero.capabilities import AgentIdentity, ToolGrant
+from driftzero.delivery.local_channel import (
+    DeliveryChannel,
+    DeliveryReceipt,
+    DeliveryStatus,
+)
 from driftzero.models.artifact import DownstreamArtifact
 from driftzero.models.change import ApprovedChange
+from driftzero.models.delivery import DeliveryResult
 
 AGENT_IDENTITY = AgentIdentity.ENABLEMENT
 """``driftzero-enablement`` — READ + NOTIFY, never mutation."""
@@ -122,6 +132,41 @@ class FrontlineAcknowledgment(BaseModel):
     )
     establishes_delivery: bool = Field(default=False)
     establishes_verification: bool = Field(default=False)
+
+
+def delivery_payload(instruction: DeltaInstruction) -> dict[str, object]:
+    """The exact content handed to the channel.
+
+    Defined in one place so the hash the mechanism records and the hash Crossing 3
+    re-derives are computed over identical material. A payload assembled twice by two
+    different code paths would make the binding meaningless.
+    """
+    return {
+        "instruction_id": instruction.instruction_id,
+        "change_id": instruction.change_id,
+        "artifact_id": instruction.artifact_id,
+        "requirement_id": instruction.requirement_id,
+        "before_value": instruction.before_value,
+        "after_value": instruction.after_value,
+        "concise_instruction": instruction.concise_instruction,
+        "unchanged_context": dict(instruction.unchanged_context),
+        "source_procedure_id": instruction.source_procedure_id,
+        "source_version": instruction.source_version,
+        "previous_version": instruction.previous_version,
+    }
+
+
+@dataclass(frozen=True)
+class DeliveryDispatch:
+    """One delivery attempt: the agent's claim plus the mechanism's receipt."""
+
+    result: DeliveryResult
+    receipt: DeliveryReceipt
+    payload: dict[str, object]
+
+    @property
+    def evidence_ref(self) -> str:
+        return self.receipt.evidence_ref
 
 
 @dataclass(frozen=True)
@@ -217,6 +262,46 @@ class FrontlineEnablementAgent:
             rationale=rationale,
         )
         return DeltaCompositionResult(DeltaStatus.COMPOSED, instruction=instruction)
+
+    def deliver_delta(
+        self,
+        instruction: DeltaInstruction,
+        *,
+        channel: DeliveryChannel,
+        destination_ref: str,
+        occurred_at: datetime,
+        grant: ToolGrant,
+        grant_verifier: Callable[[ToolGrant], bool],
+    ) -> DeliveryDispatch:
+        """Hand the composed delta to a delivery mechanism.
+
+        The agent supplies the payload, the destination, and its ``FRONTLINE_DELIVERY``
+        grant; the channel supplies the receipt. The agent does not check its own
+        authorization — it presents a grant it cannot forge and the mechanism verifies
+        it, which is the only arrangement where a compromised agent gains nothing.
+
+        Nothing here decides that delivery succeeded: ``delivered`` mirrors the
+        mechanism's own status, and Crossing 3 still has to resolve the receipt before
+        anything downstream may treat the delivery as established.
+        """
+        payload = delivery_payload(instruction)
+        receipt = channel.deliver(
+            instruction_id=instruction.instruction_id,
+            change_id=instruction.change_id,
+            payload=payload,
+            destination_ref=destination_ref,
+            occurred_at=occurred_at,
+            grant=grant,
+            grant_verifier=grant_verifier,
+        )
+        result = DeliveryResult(
+            worker_id=destination_ref,
+            delivery_mechanism=channel.channel,
+            delta_content=instruction.concise_instruction,
+            delivered=receipt.status is DeliveryStatus.DELIVERED,
+            delivery_evidence_ref=receipt.evidence_ref,
+        )
+        return DeliveryDispatch(result=result, receipt=receipt, payload=payload)
 
     def acknowledge(
         self,

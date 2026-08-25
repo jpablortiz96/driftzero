@@ -133,3 +133,37 @@ body.frontline { background: var(--bg); }
   .fl-values { flex-direction: row; align-items: stretch; gap: 12px; }
   .fl-arrow { display: flex; align-items: center; transform: rotate(-90deg); }
 }
+
+/* ---------------------------------------------------------------- field evidence */
+
+.fl-evidence[hidden] { display: none; }
+.fl-capture { margin-top: 4px; }
+.fl-capture:disabled { opacity: .55; }
+
+.fl-obs {
+  margin-top: 16px;
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(255, 255, 255, .03);
+  display: block;
+}
+.fl-obs-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  opacity: .6;
+}
+.fl-obs-value {
+  display: block;
+  font-size: 26px;
+  font-weight: 650;
+  margin-top: 6px;
+  line-height: 1.15;
+}
+.fl-obs.ok { border-color: rgba(90, 200, 140, .4); }
+.fl-obs.warn { border-color: rgba(229, 181, 103, .45); }
+.fl-obs.warn .fl-obs-value { font-size: 21px; color: #e5b567; }
+.fl-obs.bad { border-color: rgba(229, 116, 116, .45); }
+.fl-obs.bad .fl-obs-value { font-size: 18px; }

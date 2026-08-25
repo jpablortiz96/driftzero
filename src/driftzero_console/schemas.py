@@ -30,7 +30,9 @@ class HeroState(BaseModel):
     remediation: dict[str, Any] | None = None
     validated_execution: dict[str, Any] | None = None
     crossing_2: dict[str, Any] | None = None
+    delivery: dict[str, Any] | None = None
     frontline: dict[str, Any] | None = None
+    field_verification: dict[str, Any] | None = None
     security: dict[str, Any] | None = None
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     modules: list[dict[str, Any]] = Field(default_factory=list)
@@ -48,10 +50,13 @@ class FrontlineView(BaseModel):
     previous_version: str
     source_version: str
     available: bool
+    composed: bool = False
+    delivery: dict[str, Any] | None = None
     instruction: dict[str, Any] | None = None
     acknowledgment: dict[str, Any] | None = None
     acknowledged: bool = False
     delivery_established: bool = False
+    field_verification: dict[str, Any] | None = None
     delivery_note: str = ""
 
 

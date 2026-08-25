@@ -1,12 +1,12 @@
-"""T074 — logical agent identity and the mutation capability broker.
+"""T074/T075/T079 — logical agent identity, the policy table, and the capability broker.
 
 Scope note
 ----------
-This is the **narrowest** minting/verification mechanism T074 needs so the Artifact
-Mutation Tool cannot be driven by a forged capability. The broader in-process
-authorization broker — keyed on logical identity across *all* tools, with denials
-recorded as evidence — is T075 and lives in ``truth_engine/authz_broker.py``. Nothing
-here anticipates that work.
+:data:`AUTHORIZATION_POLICY` is the single authorization authority for the whole system,
+and :class:`CapabilityBroker` is the single *mechanism* that mints and verifies grants
+against it. Every tool that causes a side effect or leaves the trust boundary goes
+through both: artifact mutation (T073), frontline delivery (T078), and field observation
+(T079). There is no second policy table and no per-tool broker class.
 
 Honesty about what this enforces
 --------------------------------
@@ -68,17 +68,24 @@ class AgentIdentity(StrEnum):
 class ToolCapability(StrEnum):
     """Capabilities an agent may be authorized to exercise.
 
-    One member today. Future tools (frontline delivery, field observation) are added
-    here and to :data:`AUTHORIZATION_POLICY` — never by standing up a second
-    authorization system.
+    One member per *side effect or external call* the system actually performs. A new
+    tool is added here and to :data:`AUTHORIZATION_POLICY` — never by standing up a
+    second authorization system, and never speculatively: a capability exists only once
+    a real mechanism requires it.
     """
 
     ARTIFACT_MUTATION = "ARTIFACT_MUTATION"
+    FRONTLINE_DELIVERY = "FRONTLINE_DELIVERY"
+    """T078's delivery mechanism. A side effect that reaches outside the process."""
+    FIELD_OBSERVATION = "FIELD_OBSERVATION"
+    """T079's model observation call. Billable, and it leaves the trust boundary."""
 
 
 AUTHORIZATION_POLICY: frozenset[tuple[AgentIdentity, ToolCapability]] = frozenset(
     {
         (AgentIdentity.REMEDIATION, ToolCapability.ARTIFACT_MUTATION),
+        (AgentIdentity.ENABLEMENT, ToolCapability.FRONTLINE_DELIVERY),
+        (AgentIdentity.FIELD_VERIFICATION, ToolCapability.FIELD_OBSERVATION),
     }
 )
 """**The** authorization policy. There is no second table anywhere in the system.
@@ -86,6 +93,11 @@ AUTHORIZATION_POLICY: frozenset[tuple[AgentIdentity, ToolCapability]] = frozense
 An allow is an explicit membership. Every other (identity, tool) pair — including
 identities and tools this codebase does not yet know about — is denied. There is no
 wildcard, no default-allow, and no implicit inheritance: the set is the whole policy.
+
+Each agent holds exactly the one capability its own job requires, and nothing else.
+Remediation may write artifacts but may not deliver or call the model; Enablement may
+deliver but may not write; Field Verification may observe but may not write or deliver.
+Separation is the point — three entries, not one identity with three powers.
 
 The orchestrator is deliberately absent. A master/orchestration layer holding write
 authority would defeat the separation this boundary exists to create, and a future UI
@@ -178,24 +190,56 @@ class DenialEvidence:
 
 @dataclass(frozen=True)
 class CapabilityGrant:
-    """Registry entry for one issued capability."""
+    """Registry entry for one issued capability, whatever tool it is for."""
 
     capability_id: str
     holder: str
     tool: ToolCapability
-    artifact_id: str
+    scope_ref: str
+    """What the grant is scoped to: an artifact id, a destination, a change."""
     change_id: str
     source_version: str
     revoked: bool = False
 
+    @property
+    def artifact_id(self) -> str:
+        """Reading name for the mutation case, where the scope *is* an artifact."""
+        return self.scope_ref
 
-class MutationCapabilityBroker:
-    """Mutation-specific adapter over the single authorization authority.
 
-    This is **not** a second policy authority. Every allow/deny decision it makes is
-    delegated to :func:`is_authorized` against :data:`AUTHORIZATION_POLICY`; what this
-    class owns is the capability *mechanism* — HMAC integrity, the grant registry, and
-    revocation — for one tool.
+@dataclass(frozen=True)
+class ToolGrant:
+    """A broker-issued grant for a non-mutation tool.
+
+    The same shape and the same integrity mechanism as
+    :class:`~driftzero.tools.artifact_mutation.MutationCapability`, without pretending
+    the scope is an artifact. A delivery grant is scoped to a destination; a field
+    observation grant is scoped to a change.
+
+    Constructing one by hand yields a ``grant_token`` that cannot verify, which is what
+    stops a caller forging authority by naming a privileged ``holder``.
+    """
+
+    capability_id: str
+    holder: str
+    tool: str
+    scope_refs: frozenset[str]
+    change_id: str
+    source_version: str
+    grant_token: str
+
+    def covers(self, scope_ref: str) -> bool:
+        return scope_ref in self.scope_refs
+
+
+class CapabilityBroker:
+    """The capability *mechanism* for every tool. Not a second policy authority.
+
+    Every allow/deny decision it makes is delegated to :func:`is_authorized` against
+    :data:`AUTHORIZATION_POLICY`. What this class owns is mechanism only — HMAC
+    integrity, the grant registry, revocation, and denial evidence — and it owns that
+    for all tools rather than growing one broker per capability. A second broker class
+    would be a second place for policy to drift into.
 
     The secret exists only in memory for the lifetime of the instance. Two brokers never
     accept each other's tokens, which is what makes a capability non-transferable
@@ -203,7 +247,7 @@ class MutationCapabilityBroker:
     """
 
     tool = ToolCapability.ARTIFACT_MUTATION
-    """The single tool this adapter mints for. Bound into every capability it issues."""
+    """Default tool for :meth:`issue`. Other tools go through :meth:`issue_grant`."""
 
     def __init__(self, clock: Callable[[], datetime] | None = None) -> None:
         self._secret = secrets.token_bytes(32)
@@ -282,7 +326,7 @@ class MutationCapabilityBroker:
             capability_id=capability_id,
             holder=holder_value,
             tool=self.tool,
-            artifact_id=artifact_id,
+            scope_ref=artifact_id,
             change_id=change_id,
             source_version=source_version,
         )
@@ -296,12 +340,157 @@ class MutationCapabilityBroker:
             grant_token=token,
         )
 
+    # -------------------------------------------------------- minting: any tool
+
+    def issue_grant(
+        self,
+        *,
+        holder: AgentIdentity | str,
+        tool: ToolCapability,
+        scope_ref: str,
+        change_id: str,
+        source_version: str,
+    ) -> ToolGrant:
+        """Mint a grant for ``tool``, bound to one identity, scope, change, and version.
+
+        Same policy source, same integrity mechanism, same denial evidence as
+        :meth:`issue`. The only difference is that the scope is named for what it is
+        rather than assumed to be an artifact.
+        """
+        holder_value = str(holder)
+        try:
+            identity = AgentIdentity(holder_value)
+        except ValueError:
+            raise self._deny(
+                holder_value,
+                DenialReason.UNKNOWN_IDENTITY,
+                "identity is not a known logical agent identity",
+                tool=tool,
+                scope_ref=scope_ref,
+                change_id=change_id,
+                source_version=source_version,
+            ) from None
+
+        try:
+            capability = ToolCapability(str(tool))
+        except ValueError:
+            raise self._deny(
+                holder_value,
+                DenialReason.UNKNOWN_TOOL,
+                f"{tool!r} is not a known tool capability",
+                tool=None,
+                scope_ref=scope_ref,
+                change_id=change_id,
+                source_version=source_version,
+            ) from None
+
+        if not is_authorized(identity, capability):
+            raise self._deny(
+                holder_value,
+                DenialReason.IDENTITY_NOT_AUTHORIZED_FOR_TOOL,
+                f"AUTHORIZATION_POLICY has no ({identity}, {capability}) entry; only "
+                f"{sorted(str(i) for i in authorized_identities_for(capability))} may "
+                "hold it",
+                tool=capability,
+                scope_ref=scope_ref,
+                change_id=change_id,
+                source_version=source_version,
+            )
+
+        for name, value in (
+            ("scope_ref", scope_ref),
+            ("change_id", change_id),
+            ("source_version", source_version),
+        ):
+            if not value or not value.strip():
+                raise self._deny(
+                    holder_value,
+                    DenialReason.MALFORMED_REQUEST,
+                    f"{name} must not be blank",
+                    tool=capability,
+                    scope_ref=scope_ref,
+                    change_id=change_id,
+                    source_version=source_version,
+                )
+
+        self._issued_count += 1
+        capability_id = f"cap-{self._issued_count:04d}-{secrets.token_hex(4)}"
+        token = self._sign(
+            capability_id=capability_id,
+            holder=holder_value,
+            tool=capability,
+            artifact_id=scope_ref,
+            change_id=change_id,
+            source_version=source_version,
+        )
+        self._grants[capability_id] = CapabilityGrant(
+            capability_id=capability_id,
+            holder=holder_value,
+            tool=capability,
+            scope_ref=scope_ref,
+            change_id=change_id,
+            source_version=source_version,
+        )
+        return ToolGrant(
+            capability_id=capability_id,
+            holder=holder_value,
+            tool=str(capability),
+            scope_refs=frozenset({scope_ref}),
+            change_id=change_id,
+            source_version=source_version,
+            grant_token=token,
+        )
+
+    def verify_grant(self, grant: ToolGrant, tool: ToolCapability | str) -> bool:
+        """True only for an unrevoked grant this broker issued *for* ``tool``.
+
+        Mirrors :meth:`verify_for_tool`: integrity, registry state, a re-check of the
+        live policy, and the tool binding. A grant minted for delivery can never
+        authorize a field observation, because the tool participates in the signature.
+        """
+        if not isinstance(grant, ToolGrant) or grant.tool != str(tool):
+            return False
+        registered = self._grants.get(grant.capability_id)
+        if registered is None or registered.revoked:
+            return False
+        if (
+            registered.holder != grant.holder
+            or str(registered.tool) != grant.tool
+            or registered.change_id != grant.change_id
+            or registered.source_version != grant.source_version
+            or registered.scope_ref not in grant.scope_refs
+        ):
+            return False
+        if not is_authorized(registered.holder, registered.tool):
+            return False
+        expected = self._sign(
+            capability_id=grant.capability_id,
+            holder=grant.holder,
+            tool=registered.tool,
+            artifact_id=registered.scope_ref,
+            change_id=grant.change_id,
+            source_version=grant.source_version,
+        )
+        return hmac.compare_digest(expected, grant.grant_token)
+
+    def grant_verifier(
+        self, tool: ToolCapability
+    ) -> Callable[[ToolGrant], bool]:
+        """A verifier bound to one tool, for handing to a mechanism.
+
+        A mechanism receives only this callable — never the broker — so it can check a
+        grant without gaining the ability to mint one.
+        """
+        return lambda grant: self.verify_grant(grant, tool)
+
     def _deny(
         self,
         holder: str,
         reason: DenialReason,
         detail: str,
         *,
+        tool: ToolCapability | None = None,
+        scope_ref: str | None = None,
         artifact_id: str | None = None,
         change_id: str | None = None,
         source_version: str | None = None,
@@ -311,10 +500,10 @@ class MutationCapabilityBroker:
         record = DenialEvidence(
             denial_id=f"deny-{self._denied_count:04d}-{secrets.token_hex(4)}",
             requested_by=holder,
-            requested_tool=str(self.tool),
+            requested_tool=str(tool if tool is not None else self.tool),
             reason_code=reason,
             policy_basis=detail,
-            artifact_id=artifact_id or None,
+            artifact_id=artifact_id or scope_ref or None,
             change_id=change_id or None,
             source_version=source_version or None,
             occurred_at=self._clock() if self._clock else None,
@@ -330,7 +519,7 @@ class MutationCapabilityBroker:
                 capability_id=grant.capability_id,
                 holder=grant.holder,
                 tool=grant.tool,
-                artifact_id=grant.artifact_id,
+                scope_ref=grant.scope_ref,
                 change_id=grant.change_id,
                 source_version=grant.source_version,
                 revoked=True,
@@ -439,3 +628,12 @@ class MutationCapabilityBroker:
                 "not Google Cloud IAM or GEAP Agent Identity decisions."
             ),
         }
+
+
+MutationCapabilityBroker = CapabilityBroker
+"""Reading alias retained from T074, when the broker minted one tool.
+
+The same class — not a second authority. It kept the old name while ``ARTIFACT_MUTATION``
+was the only capability; call sites that mint mutation capabilities still read naturally
+through it.
+"""

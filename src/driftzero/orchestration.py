@@ -1,4 +1,4 @@
-"""T072/T076 — the semantic/deterministic boundary for Crossings 1 and 2.
+"""T072/T076/T078/T079 — the semantic/deterministic boundary for Crossings 1 to 4.
 
 Every agent or tool result passes through here before anything downstream sees it. The
 boundary validates and hands off; it owns no authoritative state of its own.
@@ -17,18 +17,28 @@ rejection reference is recorded so the audit trail shows what was refused and wh
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from driftzero.agents.change_intel import ChangeIntelligenceResult, ProposalStatus
+from driftzero.agents.enablement import DeltaInstruction, delivery_payload
+from driftzero.delivery.local_channel import DeliveryChannel, DeliveryReceipt
+from driftzero.delivery.local_channel import payload_hash as delivery_payload_hash
+from driftzero.field.evidence import FieldEvidenceStore
 from driftzero.models.action import ActionStatus
 from driftzero.models.change import ApprovedChange, ChangeSet
+from driftzero.models.delivery import DeliveryResult
 from driftzero.models.remediation import MutationEvidence, NoOpEvidence
+from driftzero.models.verification import FieldObservation, ObservedPosition
 from driftzero.tools.artifact_mutation import ArtifactRepository, artifact_content_hash
 from driftzero.truth_engine.actions import ActionLedger, no_op_admissible
 from driftzero.truth_engine.validation import (
     ValidationLayer,
     ValidationOutcome,
     validate_change_set,
+    validate_delivery_result,
+    validate_field_observation,
     validate_remediation_evidence,
 )
 
@@ -347,5 +357,314 @@ def accept_remediation_evidence(
         outcome=outcome,
         authoritative_before_hash=authoritative_before_hash,
         authoritative_after_hash=authoritative_after_hash,
+        rejection_ref_value=context.rejection_ref,
+    )
+
+
+# ============================ T078 — Crossing 3: DeliveryResult =======================
+
+
+class DeliveryRejection(StrEnum):
+    """Precise M1 reason codes, alongside the M0 ``ValidationLayer`` verdict."""
+
+    RECEIPT_NOT_RESOLVABLE = "RECEIPT_NOT_RESOLVABLE"
+    INSTRUCTION_MISMATCH = "INSTRUCTION_MISMATCH"
+    CHANGE_MISMATCH = "CHANGE_MISMATCH"
+    PAYLOAD_HASH_MISMATCH = "PAYLOAD_HASH_MISMATCH"
+    NOT_DELIVERED = "NOT_DELIVERED"
+    CHANNEL_MISMATCH = "CHANNEL_MISMATCH"
+    RECEIPT_PREDATES_INSTRUCTION = "RECEIPT_PREDATES_INSTRUCTION"
+    LAYER_VALIDATION_FAILED = "LAYER_VALIDATION_FAILED"
+
+
+@dataclass(frozen=True)
+class DeliveryCrossingContext:
+    """The narrowest authoritative context Crossing 3 needs.
+
+    Holds no caller-supplied hash or receipt. The expected payload hash is re-derived
+    here from the authoritative instruction, and the receipt is fetched from the
+    mechanism — an agent supplies the claim, never the yardstick.
+    """
+
+    channel: DeliveryChannel
+    instruction: DeltaInstruction
+    expected_destination_ref: str
+    rejection_ref: str
+    composed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class DeliveryBoundaryResult:
+    """Verdict for one Crossing 3 attempt.
+
+    ``delivery_established`` is the only thing entitled to turn a delivery into a fact,
+    and it is true only on acceptance. An agent's ``delivered=True`` never reaches it.
+    """
+
+    accepted: bool
+    delivery_established: bool
+    accepted_result: DeliveryResult | None
+    receipt: DeliveryReceipt | None
+    outcome: ValidationOutcome | None
+    rejections: tuple[DeliveryRejection, ...] = ()
+    rejection_reason: str | None = None
+    authoritative_payload_hash: str | None = None
+    rejection_ref_value: str = ""
+
+    @property
+    def failed_layers(self) -> tuple[str, ...]:
+        if self.outcome is None:
+            return ()
+        return tuple(str(layer) for layer in self.outcome.failed_layers)
+
+    @property
+    def requires_review(self) -> bool:
+        return not self.accepted
+
+    def evidence_ref(self) -> str | None:
+        """Reference for ``EvidenceManifest.rejected_result_refs``. Nothing persists it."""
+        if self.accepted:
+            return None
+        return (
+            f"crossing3-rejected:{self.rejection_ref_value}:"
+            f"{','.join(str(r) for r in self.rejections)}"
+        )
+
+
+def accept_delivery_result(
+    result: DeliveryResult,
+    *,
+    context: DeliveryCrossingContext,
+) -> DeliveryBoundaryResult:
+    """Validate a delivery at Crossing 3, or fail closed.
+
+    The frozen M0 validator checks provenance, mechanism, and the positive-receipt rule.
+    This wiring adds what it cannot see: that the resolved receipt binds to *this*
+    instruction and change, and that its payload hash equals the hash re-derived from
+    the authoritative :class:`DeltaInstruction`.
+
+    ``delivered=True`` on its own establishes nothing — that is the entire point of the
+    crossing.
+    """
+    reasons: list[DeliveryRejection] = []
+    channel = context.channel
+    instruction = context.instruction
+    expected_hash = delivery_payload_hash(delivery_payload(instruction))
+
+    outcome = validate_delivery_result(
+        result,
+        expected_worker_id=context.expected_destination_ref,
+        expected_mechanism=channel.channel,
+        resolvable_receipt_refs=channel.resolvable_refs(),
+        rejection_ref=context.rejection_ref,
+    )
+    if outcome.rejected:
+        reasons.append(DeliveryRejection.LAYER_VALIDATION_FAILED)
+        if ValidationLayer.POSITIVE_RECEIPT in outcome.failed_layers:
+            reasons.append(DeliveryRejection.RECEIPT_NOT_RESOLVABLE)
+        if ValidationLayer.SEMANTIC_INVARIANT in outcome.failed_layers:
+            reasons.append(DeliveryRejection.CHANNEL_MISMATCH)
+
+    receipt = channel.resolve(result.delivery_evidence_ref)
+    if receipt is None:
+        reasons.append(DeliveryRejection.RECEIPT_NOT_RESOLVABLE)
+    else:
+        if receipt.instruction_id != instruction.instruction_id:
+            reasons.append(DeliveryRejection.INSTRUCTION_MISMATCH)
+        if receipt.change_id != instruction.change_id:
+            reasons.append(DeliveryRejection.CHANGE_MISMATCH)
+        if receipt.payload_hash != expected_hash:
+            reasons.append(DeliveryRejection.PAYLOAD_HASH_MISMATCH)
+        if not receipt.delivered:
+            reasons.append(DeliveryRejection.NOT_DELIVERED)
+        if receipt.channel != channel.channel:
+            reasons.append(DeliveryRejection.CHANNEL_MISMATCH)
+        if context.composed_at is not None and receipt.issued_at < context.composed_at:
+            # A receipt older than the instruction it claims to carry cannot be evidence
+            # of delivering it.
+            reasons.append(DeliveryRejection.RECEIPT_PREDATES_INSTRUCTION)
+
+    if reasons:
+        return DeliveryBoundaryResult(
+            accepted=False,
+            delivery_established=False,
+            accepted_result=None,
+            receipt=None,
+            outcome=outcome,
+            rejections=tuple(dict.fromkeys(reasons)),
+            rejection_reason="Crossing 3 rejected the delivery: "
+            + ", ".join(str(r) for r in dict.fromkeys(reasons)),
+            authoritative_payload_hash=expected_hash,
+            rejection_ref_value=context.rejection_ref,
+        )
+
+    return DeliveryBoundaryResult(
+        accepted=True,
+        delivery_established=True,
+        accepted_result=result,
+        receipt=receipt,
+        outcome=outcome,
+        authoritative_payload_hash=expected_hash,
+        rejection_ref_value=context.rejection_ref,
+    )
+
+
+# ============================ T079 — Crossing 4: FieldObservation =====================
+
+
+class ObservationRejection(StrEnum):
+    """Precise M1 reason codes, alongside the M0 ``ValidationLayer`` verdict."""
+
+    EVIDENCE_NOT_RESOLVABLE = "EVIDENCE_NOT_RESOLVABLE"
+    SUBMISSION_MISMATCH = "SUBMISSION_MISMATCH"
+    CHANGE_MISMATCH = "CHANGE_MISMATCH"
+    SOURCE_VERSION_MISMATCH = "SOURCE_VERSION_MISMATCH"
+    IMAGE_HASH_MISMATCH = "IMAGE_HASH_MISMATCH"
+    OBSERVATION_MISMATCH = "OBSERVATION_MISMATCH"
+    OUT_OF_DOMAIN_OBSERVATION = "OUT_OF_DOMAIN_OBSERVATION"
+    NO_PROVIDER_EVIDENCE = "NO_PROVIDER_EVIDENCE"
+    IDENTITY_NOT_AUTHORIZED = "IDENTITY_NOT_AUTHORIZED"
+    LAYER_VALIDATION_FAILED = "LAYER_VALIDATION_FAILED"
+
+
+@dataclass(frozen=True)
+class ObservationCrossingContext:
+    """The narrowest authoritative context Crossing 4 needs.
+
+    Holds no observation and no image hash supplied by the agent. Both are read back
+    from the independently stored provider evidence, so the thing being checked can
+    never also be the yardstick.
+    """
+
+    store: FieldEvidenceStore
+    expected_change_id: str
+    expected_source_version: str
+    expected_submission_id: str
+    expected_image_sha256: str
+    authorized_identity: str
+    rejection_ref: str
+    known_submission_ids: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class ObservationBoundaryResult:
+    """Verdict for one Crossing 4 attempt.
+
+    Deliberately carries **no** verdict field. There is no ``verification_result``, no
+    ``passed``, no ``change_deployed``, and no ``proof`` here: accepting an observation
+    means "this is a trustworthy record of what the model reported", never "the change
+    is correct". The deterministic comparator decides that, later and elsewhere.
+    """
+
+    accepted: bool
+    accepted_observation: FieldObservation | None
+    outcome: ValidationOutcome | None
+    provider_evidence: dict[str, Any] | None = None
+    rejections: tuple[ObservationRejection, ...] = ()
+    rejection_reason: str | None = None
+    rejection_ref_value: str = ""
+
+    @property
+    def failed_layers(self) -> tuple[str, ...]:
+        if self.outcome is None:
+            return ()
+        return tuple(str(layer) for layer in self.outcome.failed_layers)
+
+    @property
+    def requires_review(self) -> bool:
+        return not self.accepted
+
+    def evidence_ref(self) -> str | None:
+        """Reference for ``EvidenceManifest.rejected_result_refs``."""
+        if self.accepted:
+            return None
+        return (
+            f"crossing4-rejected:{self.rejection_ref_value}:"
+            f"{','.join(str(r) for r in self.rejections)}"
+        )
+
+
+def accept_field_observation(
+    observation: FieldObservation,
+    *,
+    context: ObservationCrossingContext,
+) -> ObservationBoundaryResult:
+    """Validate a field observation at Crossing 4, or fail closed.
+
+    The frozen M0 validator checks the observation domain, the resolvability of the raw
+    evidence reference, and provenance. This wiring adds what it cannot see: that the
+    stored provider evidence at that reference is about *this* change, *this* source
+    version, *this* submission, and *this* image — and that the observation the agent
+    returned is the one the provider evidence actually records.
+
+    That last check is the point of the crossing. A ``FieldObservation`` constructed by
+    hand with ``observed_label_position="TOP_RIGHT"`` resolves to no provider evidence,
+    or resolves to evidence recording something else, and is rejected either way.
+    """
+    reasons: list[ObservationRejection] = []
+    store = context.store
+
+    outcome = validate_field_observation(
+        observation,
+        resolvable_evidence_refs=store.resolvable_refs(),
+        known_submission_ids=context.known_submission_ids,
+        rejection_ref=context.rejection_ref,
+    )
+    if outcome.rejected:
+        reasons.append(ObservationRejection.LAYER_VALIDATION_FAILED)
+        if ValidationLayer.EVIDENCE_REFERENCE in outcome.failed_layers:
+            reasons.append(ObservationRejection.EVIDENCE_NOT_RESOLVABLE)
+        if ValidationLayer.OBSERVATION_DOMAIN in outcome.failed_layers:
+            reasons.append(ObservationRejection.OUT_OF_DOMAIN_OBSERVATION)
+
+    # Belt-and-braces on the closed domain. Pydantic rejects an out-of-enum value at
+    # parse time, but a value that arrived through some other path must not slip past.
+    if not isinstance(observation.observed_label_position, ObservedPosition):
+        reasons.append(ObservationRejection.OUT_OF_DOMAIN_OBSERVATION)
+
+    record = store.resolve(observation.raw_evidence_ref)
+    if record is None:
+        reasons.append(ObservationRejection.EVIDENCE_NOT_RESOLVABLE)
+    else:
+        if not record.get("normalization_succeeded") or not record.get(
+            "normalized_observation"
+        ):
+            reasons.append(ObservationRejection.NO_PROVIDER_EVIDENCE)
+        if record.get("submission_id") != context.expected_submission_id:
+            reasons.append(ObservationRejection.SUBMISSION_MISMATCH)
+        if record.get("change_id") != context.expected_change_id:
+            reasons.append(ObservationRejection.CHANGE_MISMATCH)
+        if record.get("source_version") != context.expected_source_version:
+            reasons.append(ObservationRejection.SOURCE_VERSION_MISMATCH)
+        if record.get("image_sha256") != context.expected_image_sha256:
+            reasons.append(ObservationRejection.IMAGE_HASH_MISMATCH)
+        if record.get("identity") != context.authorized_identity:
+            reasons.append(ObservationRejection.IDENTITY_NOT_AUTHORIZED)
+        if record.get("normalized_observation") != str(
+            observation.observed_label_position
+        ):
+            # The agent's claim disagrees with the independently stored provider record.
+            reasons.append(ObservationRejection.OBSERVATION_MISMATCH)
+
+    if observation.submission_id != context.expected_submission_id:
+        reasons.append(ObservationRejection.SUBMISSION_MISMATCH)
+
+    if reasons:
+        return ObservationBoundaryResult(
+            accepted=False,
+            accepted_observation=None,
+            outcome=outcome,
+            provider_evidence=None,
+            rejections=tuple(dict.fromkeys(reasons)),
+            rejection_reason="Crossing 4 rejected the observation: "
+            + ", ".join(str(r) for r in dict.fromkeys(reasons)),
+            rejection_ref_value=context.rejection_ref,
+        )
+
+    return ObservationBoundaryResult(
+        accepted=True,
+        accepted_observation=observation,
+        outcome=outcome,
+        provider_evidence=record,
         rejection_ref_value=context.rejection_ref,
     )

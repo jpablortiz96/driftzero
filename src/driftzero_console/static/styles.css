@@ -489,3 +489,64 @@ pre.json .b { color: var(--cyan); }
   transition: background 0.15s ease;
 }
 .link-btn:hover { background: rgba(53, 224, 208, 0.18); }
+
+/* ---------------------------------------------------------------- field verification */
+
+.dropzone {
+  border: 1.5px dashed var(--line, #26303f);
+  border-radius: 12px;
+  padding: 26px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+  background: rgba(255, 255, 255, .012);
+}
+.dropzone:hover,
+.dropzone:focus-visible { border-color: var(--accent, #4da3ff); background: rgba(77, 163, 255, .06); }
+.dropzone.dragover { border-color: var(--accent, #4da3ff); background: rgba(77, 163, 255, .1); transform: scale(1.008); }
+.dropzone.busy { opacity: .55; pointer-events: none; }
+.dropzone[hidden] { display: none; }
+.dz-icon { font-size: 22px; opacity: .5; margin-bottom: 6px; }
+.dz-title { font-weight: 600; letter-spacing: .01em; }
+.dz-sub { font-size: 12px; opacity: .6; margin-top: 4px; }
+
+/* The single most important number on the panel: what the model actually reported.
+   Sized and framed as an observation, never as a verdict. */
+.observation {
+  margin-top: 14px;
+  border: 1px solid var(--line, #26303f);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, .015);
+}
+.observation .obs-label {
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .55;
+}
+.observation .obs-value {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.observation.inconclusive .obs-value { color: var(--warn, #e5b567); font-size: 19px; }
+.observation .obs-note { font-size: 12px; opacity: .62; margin-top: 8px; line-height: 1.5; }
+.observation.verdict-gap {
+  border-style: dashed;
+  opacity: .78;
+}
+
+.attempts { margin-top: 12px; }
+.attempt-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--line, #26303f);
+  font-size: 12px;
+}
+.attempt-row .idx { opacity: .45; font-variant-numeric: tabular-nums; min-width: 22px; }
+.attempt-row .hash { font-family: var(--mono, ui-monospace, monospace); opacity: .6; }

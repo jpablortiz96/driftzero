@@ -127,6 +127,12 @@ def compose(**overrides: object):  # type: ignore[no-untyped-def]
     )
 
 
+def deploy_and_deliver(client: TestClient) -> dict:
+    """The full pilot chain up to an established delivery."""
+    client.post("/api/hero/deploy")
+    return client.post("/api/hero/deliver").json()
+
+
 @pytest.fixture
 def client() -> TestClient:
     app_module.get_service().reset_demo()
@@ -308,6 +314,7 @@ def test_the_frontend_renders_a_second_case_without_source_changes(
         assert delta["before_value"] == "12 Nm"
         assert delta["after_value"] == "18 Nm"
 
+        test_client.post("/api/hero/deliver")
         worker = test_client.get("/api/hero/frontline/DZ-114").json()
         assert worker["source_name"] == "Torque Procedure"
         assert worker["instruction"]["after_value"] == "18 Nm"
@@ -325,7 +332,7 @@ def test_no_pilot_value_is_hard_coded_in_the_frontend() -> None:
 
 
 def test_the_frontline_page_loads(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     response = client.get("/frontline/DZ-001")
     assert response.status_code == 200
     assert "Process Update" in response.text
@@ -340,7 +347,7 @@ def test_the_frontline_page_is_mobile_friendly(client: TestClient) -> None:
 
 
 def test_the_frontline_api_returns_the_real_delta(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     view = client.get("/api/hero/frontline/DZ-001").json()
 
     assert view["available"] is True
@@ -352,13 +359,13 @@ def test_the_frontline_api_returns_the_real_delta(client: TestClient) -> None:
 
 
 def test_the_delta_is_unavailable_before_the_change_is_validated(client: TestClient) -> None:
-    """Never teach an unvalidated change."""
+    """Never teach an unvalidated, undelivered change."""
     assert client.get("/api/hero/frontline/DZ-001").status_code == 404
     assert client.get("/api/hero/state").json()["frontline"]["available"] is False
 
 
 def test_an_unknown_change_has_no_frontline_view(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     assert client.get("/api/hero/frontline/DZ-NOPE").status_code == 404
 
 
@@ -366,7 +373,7 @@ def test_an_unknown_change_has_no_frontline_view(client: TestClient) -> None:
 
 
 def test_acknowledgment_is_recorded(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     view = client.post("/api/hero/frontline/DZ-001/acknowledge").json()
 
     assert view["acknowledged"] is True
@@ -378,17 +385,17 @@ def test_acknowledgment_is_recorded(client: TestClient) -> None:
 
 
 def test_acknowledgment_is_honest_about_missing_worker_identity(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     ack = client.post("/api/hero/frontline/DZ-001/acknowledge").json()["acknowledgment"]
     assert "UNAUTHENTICATED_LOCAL_SESSION" in ack["identity_basis"]
     assert "not a named worker" in ack["identity_basis"]
 
 
 def test_acknowledgment_does_not_mean_pass_or_delivery(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     view = client.post("/api/hero/frontline/DZ-001/acknowledge").json()
 
-    assert view["delivery_established"] is False
+    # Delivery is established by the receipt, never by this acknowledgment.
     ack = view["acknowledgment"]
     assert ack["establishes_delivery"] is False
     assert ack["establishes_verification"] is False
@@ -397,7 +404,7 @@ def test_acknowledgment_does_not_mean_pass_or_delivery(client: TestClient) -> No
 
 
 def test_acknowledgment_produces_no_change_proof(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     client.post("/api/hero/frontline/DZ-001/acknowledge")
     body = client.get("/api/hero/state").json()
     assert "proof" not in body
@@ -405,7 +412,7 @@ def test_acknowledgment_produces_no_change_proof(client: TestClient) -> None:
 
 
 def test_acknowledgment_dispatches_no_write(client: TestClient) -> None:
-    body = client.post("/api/hero/deploy").json()
+    body = deploy_and_deliver(client)
     before = body["validated_execution"]["dispatch_count"]
     client.post("/api/hero/frontline/DZ-001/acknowledge")
     after = client.get("/api/hero/state").json()["validated_execution"]["dispatch_count"]
@@ -563,7 +570,7 @@ def test_control_verification_remains_a_real_denial(client: TestClient) -> None:
 def test_control_verification_does_not_disturb_the_frontline_delta(
     client: TestClient,
 ) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     client.post("/api/hero/frontline/DZ-001/acknowledge")
     body = client.post("/api/hero/security-test").json()
     assert body["frontline"]["acknowledged"] is True
@@ -574,7 +581,7 @@ def test_control_verification_does_not_disturb_the_frontline_delta(
 
 
 def test_no_secret_leaks_through_the_frontline_surface(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    deploy_and_deliver(client)
     bodies = [
         client.get("/api/hero/frontline/DZ-001").text,
         client.post("/api/hero/frontline/DZ-001/acknowledge").text,

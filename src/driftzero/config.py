@@ -106,6 +106,103 @@ class GemmaConfig:
             raise ConfigurationError("gemma timeout_seconds must be positive")
 
 
+DEFAULT_FIELD_PROVIDER = "disabled"
+"""Live inference is opt-in. An unconfigured instance makes no billable call."""
+
+FIELD_PROVIDER_VERTEX_MAAS = "vertex_maas"
+FIELD_PROVIDER_DISABLED = "disabled"
+
+DEFAULT_GCP_LOCATION = "global"
+DEFAULT_GEMMA_MODEL = "google/gemma-4-26b-a4b-it-maas"
+"""The model G1 empirically validated. Overridable; never silently substituted."""
+
+MAAS_ENDPOINT_TEMPLATE = (
+    "https://aiplatform.googleapis.com/v1/projects/{project}/locations/{location}"
+    "/endpoints/openapi/chat/completions"
+)
+"""The Vertex AI MaaS OpenAI-compatible endpoint G1 actually reached."""
+
+
+@dataclass(frozen=True)
+class FieldProviderConfig:
+    """T079 — how (and whether) field observation reaches a live model.
+
+    Deployment configuration lives here rather than inside the agent, so switching a
+    project, a region, or a model is a configuration change and never a code change.
+
+    Fails closed: :attr:`enabled` is false unless a provider was explicitly selected,
+    and :meth:`validated` refuses to hand back an incomplete live configuration. A
+    half-configured instance must error, never quietly fall back to a fake observation.
+    """
+
+    provider: str = DEFAULT_FIELD_PROVIDER
+    project: str = ""
+    location: str = DEFAULT_GCP_LOCATION
+    model: str = DEFAULT_GEMMA_MODEL
+    semantic: SemanticModelConfig = SemanticModelConfig(
+        model_id=DEFAULT_GEMMA_MODEL,
+        timeout_seconds=DEFAULT_GEMMA_TIMEOUT_SECONDS,
+        allow_structured_repair=False,
+    )
+    """Call bounds. Structured repair is off: there is no structure to repair, only a
+    single token, and a "repair" round would just be a second billable guess."""
+
+    @property
+    def enabled(self) -> bool:
+        return self.provider not in ("", FIELD_PROVIDER_DISABLED)
+
+    @property
+    def is_live(self) -> bool:
+        return self.provider == FIELD_PROVIDER_VERTEX_MAAS
+
+    @property
+    def endpoint(self) -> str:
+        """The resolved MaaS endpoint. Empty until a project is configured."""
+        if not self.project:
+            return ""
+        return MAAS_ENDPOINT_TEMPLATE.format(
+            project=self.project, location=self.location or DEFAULT_GCP_LOCATION
+        )
+
+    def missing_settings(self) -> tuple[str, ...]:
+        """Configuration a live call needs but does not have."""
+        if not self.is_live:
+            return ()
+        missing = []
+        if not self.project.strip():
+            missing.append(f"{ENV_PREFIX}GCP_PROJECT")
+        if not self.location.strip():
+            missing.append(f"{ENV_PREFIX}GCP_LOCATION")
+        if not self.model.strip():
+            missing.append(f"{ENV_PREFIX}GEMMA_MODEL")
+        return tuple(missing)
+
+    def validated(self) -> FieldProviderConfig:
+        """Return self, or raise if live observation is requested but unusable."""
+        missing = self.missing_settings()
+        if missing:
+            raise ConfigurationError(
+                "live field observation requires " + ", ".join(missing)
+            )
+        return self
+
+    def as_disclosure(self) -> dict[str, object]:
+        """What a UI may honestly say about this configuration. Never a credential."""
+        return {
+            "provider": self.provider,
+            "enabled": self.enabled,
+            "live": self.is_live,
+            "project": self.project or None,
+            "location": self.location or None,
+            "model": self.model or None,
+            "endpoint": self.endpoint or None,
+            "timeout_seconds": self.semantic.timeout_seconds,
+            "max_attempts": self.semantic.max_attempts,
+            "missing_settings": list(self.missing_settings()),
+            "credentials": "APPLICATION_DEFAULT_CREDENTIALS",
+        }
+
+
 @dataclass(frozen=True)
 class DriftZeroConfig:
     """The injectable application configuration.
@@ -117,6 +214,7 @@ class DriftZeroConfig:
     semantic: SemanticModelConfig = SemanticModelConfig()
     side_effect: SideEffectConfig = SideEffectConfig()
     gemma: GemmaConfig = GemmaConfig()
+    field_provider: FieldProviderConfig = FieldProviderConfig()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DriftZeroConfig:
@@ -145,7 +243,13 @@ class DriftZeroConfig:
             except ValueError as exc:
                 raise ConfigurationError(f"{ENV_PREFIX}{name} is not an integer: {raw!r}") from exc
 
+        def _text(name: str, fallback: str) -> str:
+            raw = source.get(f"{ENV_PREFIX}{name}")
+            return raw.strip() if raw and raw.strip() else fallback
+
         model_id = source.get(f"{ENV_PREFIX}SEMANTIC_MODEL_ID") or DEFAULT_SEMANTIC_MODEL_ID
+        gemma_timeout = _float("GEMMA_TIMEOUT_SECONDS", DEFAULT_GEMMA_TIMEOUT_SECONDS)
+        gemma_model = _text("GEMMA_MODEL", DEFAULT_GEMMA_MODEL)
         return cls(
             semantic=SemanticModelConfig(
                 model_id=model_id,
@@ -159,8 +263,18 @@ class DriftZeroConfig:
                     "SIDE_EFFECT_TIMEOUT_SECONDS", DEFAULT_SIDE_EFFECT_TIMEOUT_SECONDS
                 )
             ),
-            gemma=GemmaConfig(
-                timeout_seconds=_float("GEMMA_TIMEOUT_SECONDS", DEFAULT_GEMMA_TIMEOUT_SECONDS)
+            gemma=GemmaConfig(timeout_seconds=gemma_timeout),
+            field_provider=FieldProviderConfig(
+                provider=_text("FIELD_PROVIDER", DEFAULT_FIELD_PROVIDER),
+                project=_text("GCP_PROJECT", ""),
+                location=_text("GCP_LOCATION", DEFAULT_GCP_LOCATION),
+                model=gemma_model,
+                semantic=SemanticModelConfig(
+                    model_id=gemma_model,
+                    timeout_seconds=gemma_timeout,
+                    max_retries=_int("SEMANTIC_MAX_RETRIES", DEFAULT_SEMANTIC_MAX_RETRIES),
+                    allow_structured_repair=False,
+                ),
             ),
         )
 

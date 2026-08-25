@@ -48,6 +48,17 @@
       <button class="fl-ack" id="fl-ack">Acknowledge Change</button>
     </div>
 
+    <section class="fl-card fl-evidence" id="fl-evidence-card" hidden
+             aria-labelledby="fl-evidence-h">
+      <h2 id="fl-evidence-h">Provide field evidence</h2>
+      <p class="fl-note">After you have made the change, photograph the box so the
+        update can be checked against the real thing.</p>
+      <button class="fl-ack fl-capture" id="fl-capture">Take Photo</button>
+      <!-- capture="environment" opens the rear camera directly on a phone. -->
+      <input type="file" id="fl-file" accept="image/*" capture="environment" hidden />
+      <div id="fl-evidence-result"></div>
+    </section>
+
     <p class="fl-footnote" id="fl-footnote"></p>
   </main>
 

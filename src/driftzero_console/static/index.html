@@ -45,6 +45,7 @@
 
             <div class="actions">
               <button class="primary" id="btn-deploy">Deploy Change</button>
+              <button id="btn-deliver">Deliver to Frontline</button>
               <button id="btn-reset">New Change</button>
             </div>
           </div>
@@ -90,12 +91,37 @@
           <div class="body"><div id="evidence-summary"></div></div>
         </section>
 
+        <section class="panel" id="delivery-panel">
+          <header>
+            <h2>Delivery</h2>
+            <span class="chip" id="delivery-chip">PENDING</span>
+          </header>
+          <div class="body"><div id="delivery"></div></div>
+        </section>
+
         <section class="panel" id="frontline-panel">
           <header>
             <h2>Frontline · Teach the Delta</h2>
             <span class="chip" id="frontline-chip">AWAITING VALIDATION</span>
           </header>
           <div class="body"><div id="frontline"></div></div>
+        </section>
+
+        <section class="panel" id="field-panel">
+          <header>
+            <h2>Field Verification</h2>
+            <span class="chip" id="field-chip">AWAITING EVIDENCE</span>
+          </header>
+          <div class="body">
+            <div id="field-drop" class="dropzone" tabindex="0" role="button"
+                 aria-label="Upload physical field evidence">
+              <div class="dz-icon" aria-hidden="true">▣</div>
+              <div class="dz-title">Drop the field photo here</div>
+              <div class="dz-sub" id="field-formats">or click to choose a file</div>
+            </div>
+            <input type="file" id="field-file" accept="image/*" hidden />
+            <div id="field-result"></div>
+          </div>
         </section>
 
         <section class="panel">

@@ -17,6 +17,19 @@ async function call(path, method = "GET") {
   return response.json();
 }
 
+/* Upload transport. The request body is the file itself: no form, no JSON envelope,
+ * and therefore no field a page script could smuggle a model, prompt, identity or
+ * expected answer through. The server derives everything it needs from the bytes. */
+async function upload(path, file) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { Accept: "application/json", "X-Filename": file.name || "field-evidence" },
+    body: file,
+  });
+  if (!response.ok) throw new Error(`upload → ${response.status}`);
+  return response.json();
+}
+
 function toast(message) {
   const el = $("toast");
   el.textContent = message;
@@ -60,7 +73,9 @@ function highlightJson(value) {
 
 function renderEnvironment() {
   const env = state.environment;
-  $("env-badge").textContent = env.is_production ? "Change Ops" : "Change Ops · Development";
+  $("env-badge").textContent = env.is_production
+    ? `Change Ops · ${env.runtime_readiness.replace("_", " ")}`
+    : `Change Ops · Development · ${env.runtime_readiness.replace("_", " ")}`;
   $("btn-reset").textContent = env.session_action_label;
   $("btn-security").textContent = env.control_verification_label;
   $("roadmap-panel").hidden = !env.show_roadmap;
@@ -95,6 +110,7 @@ function renderStages() {
   const c = state.crossing_2;
   const f = state.frontline;
   const dev = state.environment.show_diagnostics;
+  void state.crossing_2;
 
   /* Implemented stages describe real change progress. Unimplemented capabilities are
      development diagnostics — they are never rendered as operational stages, and never
@@ -132,6 +148,16 @@ function renderStages() {
       done: Boolean(v && v.accepted),
     },
     {
+      label: "Delivery Established",
+      sub: state.delivery
+        ? `${state.delivery.channel} · receipt ${state.delivery.receipt_id || "—"}`
+        : "Awaiting composed delta",
+      chip: state.delivery
+        ? chip(state.delivery.status, state.delivery.delivery_established ? "ok" : "bad")
+        : chip("PENDING"),
+      done: Boolean(state.delivery && state.delivery.delivery_established),
+    },
+    {
       label: "Teach the Delta",
       sub: f && f.available
         ? f.acknowledged
@@ -141,12 +167,25 @@ function renderStages() {
       chip: f && f.available ? chip(f.acknowledged ? "ACKNOWLEDGED" : "READY", f.acknowledged ? "ok" : "info") : chip("PENDING"),
       done: Boolean(f && f.acknowledged),
     },
+    {
+      label: "Field Evidence Observed",
+      sub: fieldStageSub(state.field_verification),
+      chip: fieldStageChip(state.field_verification),
+      /* Done means "a validated observation exists", never "the change passed".
+         The comparison that would decide that is not built. */
+      done: Boolean(state.field_verification && state.field_verification.observation),
+    },
+    {
+      label: "Awaiting Deterministic Verdict",
+      sub: "Expected-vs-observed comparison is not wired — the change is not deployed",
+      chip: chip("AWAITING", "warn"),
+      done: false,
+    },
   ];
 
   const notImplemented = [
     { label: "Impact Analysis", sub: "Change Intelligence Agent", chip: chip("NOT IMPLEMENTED", "warn") },
-    { label: "Proven Delivery", sub: "Delivery receipt — T078", chip: chip("NOT IMPLEMENTED", "warn") },
-    { label: "Physical Verification", sub: "Field observation — M3", chip: chip("NOT IMPLEMENTED", "warn") },
+    { label: "Deterministic Verdict", sub: "Expected vs observed — T080", chip: chip("NOT IMPLEMENTED", "warn") },
     { label: "Change Proof", sub: "Seven proof invariants", chip: chip("NOT IMPLEMENTED", "warn") },
   ];
 
@@ -167,6 +206,23 @@ function renderStages() {
   $("pipeline-chip").textContent = `${done} / ${implemented.length} COMPLETE`;
   $("pipeline-chip").className = `chip ${done === implemented.length ? "ok" : "warn"}`;
   void c;
+}
+
+/* Stage text for field evidence. Reports the observation; never grades it. */
+function fieldStageSub(f) {
+  if (!f || f.status === "AWAITING_EVIDENCE") return "Awaiting a physical field photo";
+  if (f.rejected) return `Submission rejected — ${f.rejection_reason}`;
+  if (!f.observation) return "No validated observation yet";
+  return f.inconclusive
+    ? "Model could not distinguish the position — more evidence required"
+    : `Model observed ${f.observation} · Crossing 4 accepted`;
+}
+
+function fieldStageChip(f) {
+  if (!f || f.status === "AWAITING_EVIDENCE") return chip("PENDING");
+  if (f.rejected) return chip("REJECTED", "bad");
+  if (!f.observation) return chip("NOT VALIDATED", "bad");
+  return f.inconclusive ? chip("INCONCLUSIVE", "warn") : chip(f.observation, "ok");
 }
 
 function renderArtifact() {
@@ -353,14 +409,45 @@ function renderFuture() {
     .join("");
 }
 
+function renderDelivery() {
+  const d = state.delivery;
+  if (!d) {
+    $("delivery-chip").textContent = "PENDING";
+    $("delivery-chip").className = "chip";
+    $("delivery").innerHTML =
+      '<div class="empty">Delivery is established by a resolvable mechanism receipt validated at Crossing 3. Compose a change, then press <b>Deliver to Frontline</b>.</div>';
+    return;
+  }
+
+  $("delivery-chip").textContent = d.status;
+  $("delivery-chip").className = `chip ${d.delivery_established ? "ok" : "bad"}`;
+
+  $("delivery").innerHTML = `<div class="rows">
+      ${row("Delivery", chip(d.status, d.delivery_established ? "ok" : "bad"))}
+      ${row("Last request", chip(d.last_request, d.last_request === "REJECTED" ? "bad" : "info"))}
+      ${row("Receipt ID", esc(d.receipt_id || "—"), "mono")}
+      ${row("Receipt integrity", chip(d.receipt_integrity, d.delivery_established ? "ok" : "bad"))}
+      ${row("Payload hash", esc(shortHash(d.authoritative_payload_hash)), "mono")}
+      ${row("Crossing 3", chip(d.crossing_3, d.crossing_3 === "ACCEPTED" ? "ok" : "bad"))}
+      ${row("Channel", esc(d.channel), "mono")}
+      ${row("Destination", esc(d.destination_ref), "mono")}
+      ${row("Dispatch count", `<b>${d.dispatch_count}</b>`, "hl")}
+      ${row("Field verified", chip(String(d.field_verified), "warn"))}
+      ${row("Change deployed", chip(String(d.change_deployed), "warn"))}
+    </div>
+    ${d.identity_basis ? `<div class="callout">${esc(d.identity_basis)}</div>` : ""}`;
+}
+
 function renderFrontline() {
   const f = state.frontline;
   const panel = $("frontline");
   if (!f || !f.available) {
-    $("frontline-chip").textContent = "AWAITING VALIDATION";
-    $("frontline-chip").className = "chip";
-    panel.innerHTML =
-      '<div class="empty">The operational delta is composed once a change is validated at Crossing 2.</div>';
+    const composed = Boolean(f && f.composed);
+    $("frontline-chip").textContent = composed ? "AWAITING DELIVERY" : "AWAITING VALIDATION";
+    $("frontline-chip").className = `chip ${composed ? "warn" : ""}`;
+    panel.innerHTML = composed
+      ? '<div class="empty">Delta composed. The worker view opens once delivery is established at Crossing 3.</div>'
+      : '<div class="empty">The operational delta is composed once a change is validated at Crossing 2.</div>';
     return;
   }
 
@@ -389,6 +476,143 @@ function renderFrontline() {
     <div class="callout">${esc(f.delivery_note)}</div>`;
 }
 
+function renderFieldVerification() {
+  const f = state.field_verification;
+  const chipEl = $("field-chip");
+  const drop = $("field-drop");
+  const out = $("field-result");
+  if (!f) return;
+
+  $("field-formats").textContent =
+    `or click to choose a file · ${(f.accepted_mime_types || []).join(", ")}`;
+
+  /* A production instance with no provider configured hides the control rather than
+     offering an action that cannot work. Development says so plainly instead. */
+  const usable = Boolean(f.provider_configured);
+  if (!usable && state.environment.is_production) {
+    drop.hidden = true;
+  } else {
+    drop.hidden = false;
+    drop.classList.toggle("busy", !usable);
+  }
+
+  const status = f.status || "AWAITING_EVIDENCE";
+  const provider = f.provider || {};
+
+  if (status === "AWAITING_EVIDENCE") {
+    chipEl.textContent = "AWAITING EVIDENCE";
+    chipEl.className = "chip";
+    out.innerHTML = usable
+      ? `<div class="empty">Photograph the physical box and upload it. The model
+         reports only what it observes — it is never asked whether the change passed.</div>`
+      : `<div class="empty">Live field observation is not configured on this instance.
+         Nothing is assumed in its place.</div>`;
+    return;
+  }
+
+  if (f.rejected) {
+    chipEl.textContent = "REJECTED";
+    chipEl.className = "chip bad";
+    out.innerHTML = `<div class="rows">
+        ${row("Submission", chip(f.rejection_reason, "bad"))}
+        ${row("Detail", esc(f.detail || ""))}
+      </div>
+      <div class="callout">No observation was made and nothing was recorded against
+      the change. Upload a supported image to try again.</div>`;
+    return;
+  }
+
+  if (status === "PROVIDER_DISABLED" || status === "PROVIDER_UNAVAILABLE") {
+    chipEl.textContent = "NOT CONFIGURED";
+    chipEl.className = "chip warn";
+    out.innerHTML = `<div class="rows">
+        ${row("Image integrity", esc(shortHash(f.image_sha256)), "mono")}
+        ${row("Container", chip(f.container || "—", "info"))}
+        ${row("Actual MIME", esc(f.mime_type || "—"), "mono")}
+        ${row("Observation", chip("NOT ATTEMPTED", "warn"))}
+      </div>
+      <div class="callout">${esc(f.detail || "")}</div>`;
+    return;
+  }
+
+  const c4 = f.crossing_4;
+  const accepted = Boolean(c4 && c4.accepted);
+  const observation = f.observation;
+
+  chipEl.textContent = accepted
+    ? f.inconclusive
+      ? "MORE EVIDENCE REQUIRED"
+      : "OBSERVATION VALIDATED"
+    : "NOT VALIDATED";
+  chipEl.className = `chip ${accepted ? (f.inconclusive ? "warn" : "ok") : "bad"}`;
+
+  const observationBlock = accepted
+    ? `<div class="observation ${f.inconclusive ? "inconclusive" : ""}">
+         <div class="obs-label">Model observation</div>
+         <div class="obs-value">${esc(f.inconclusive ? "MORE EVIDENCE REQUIRED" : observation)}</div>
+         <div class="obs-note">${
+           f.inconclusive
+             ? "The model looked and could not reliably distinguish the label position. That is a valid observation, not an error — submit a clearer photograph to create a new attempt."
+             : `Reported by ${esc(provider.model || f.model || "the model")}. This is an observation of what is on the box, not a judgement about whether the change is correct.`
+         }</div>
+       </div>`
+    : `<div class="observation">
+         <div class="obs-label">Model observation</div>
+         <div class="obs-value">NOT VALIDATED</div>
+         <div class="obs-note">Crossing 4 rejected the observation, so nothing downstream
+         may read it. ${esc((f.crossing_4?.rejections || []).join(", "))}</div>
+       </div>`;
+
+  out.innerHTML = `<div class="rows">
+      ${row("Evidence", chip("RECEIVED", "ok"))}
+      ${row("Image integrity", esc(shortHash(f.image_sha256)), "mono")}
+      ${row("Container", chip(f.container || "—", "info"))}
+      ${row("Actual MIME", esc(f.mime_type || "—"), "mono")}
+      ${row("Declared type", esc(f.declared_content_type || "—") +
+        (f.declared_type_matched_bytes === false
+          ? ` ${chip("IGNORED", "warn")}`
+          : ""), "mono")}
+      ${row("Provider", esc(providerLabel(f, provider)))}
+      ${row("Attempts", `<b>${f.attempt_count ?? "—"}</b>`, "hl")}
+      ${row("Provider calls", `<b>${f.provider_calls ?? 0}</b>`, "hl")}
+      ${row("Crossing 4", chip(c4 ? c4.verdict : "NOT RUN", accepted ? "ok" : "bad"))}
+      ${row("Field verified", chip(String(f.field_verified), "warn"))}
+      ${row("Change deployed", chip(String(f.change_deployed), "warn"))}
+    </div>
+    ${observationBlock}
+    <div class="observation verdict-gap">
+      <div class="obs-label">Deterministic verdict</div>
+      <div class="obs-value">NOT IMPLEMENTED</div>
+      <div class="obs-note">${esc(f.verdict_note || "")}</div>
+    </div>
+    ${renderAttempts(f)}`;
+}
+
+function providerLabel(f, provider) {
+  const model = provider.model || f.model || "";
+  const route = f.provider_name === "vertex_ai_maas" ? "Vertex AI MaaS" : f.provider_name || "";
+  return [model, route].filter(Boolean).join(" · ") || "—";
+}
+
+function renderAttempts(f) {
+  const history = f.history || [];
+  if (history.length < 2) return "";
+  const rows = history
+    .map(
+      (a, i) => `<div class="attempt-row">
+        <span class="idx">${String(i + 1).padStart(2, "0")}</span>
+        <span class="hash">${esc(shortHash(a.image_sha256))}</span>
+        <span>${esc(a.mime_type || "")}</span>
+        ${chip(a.observation || a.status, a.observation === "INCONCLUSIVE" ? "warn" : "info")}
+      </div>`,
+    )
+    .join("");
+  return `<div class="sub-head" style="margin-top:14px">Submission history</div>
+          <div class="attempts">${rows}</div>
+          <div class="callout">Every attempt is kept. A new photograph is a new attempt,
+          never a replacement for the last one.</div>`;
+}
+
 /* ---------------------------------------------------------------- evidence */
 
 async function showEvidence(id) {
@@ -410,12 +634,14 @@ function render() {
   renderSecurity();
   renderTimeline();
   renderEvidenceBar();
+  renderDelivery();
   renderFrontline();
+  renderFieldVerification();
   renderFuture();
 }
 
 async function refresh(promise) {
-  const buttons = [$("btn-deploy"), $("btn-reset"), $("btn-security")];
+  const buttons = [$("btn-deploy"), $("btn-deliver"), $("btn-reset"), $("btn-security")];
   buttons.forEach((b) => (b.disabled = true));
   try {
     state = await promise;
@@ -428,6 +654,7 @@ async function refresh(promise) {
 }
 
 $("btn-deploy").addEventListener("click", () => refresh(call("/api/hero/deploy", "POST")));
+$("btn-deliver").addEventListener("click", () => refresh(call("/api/hero/deliver", "POST")));
 $("btn-reset").addEventListener("click", () => {
   selectedEvidence = null;
   refresh(call("/api/hero/reset", "POST"));
@@ -435,6 +662,55 @@ $("btn-reset").addEventListener("click", () => {
 $("btn-security").addEventListener("click", () =>
   refresh(call("/api/hero/security-test", "POST")),
 );
+/* ---------------------------------------------------------------- field upload */
+
+const dropZone = $("field-drop");
+const fileInput = $("field-file");
+
+async function submitFieldEvidence(file) {
+  if (!file) return;
+  dropZone.classList.add("busy");
+  try {
+    state = await upload("/api/hero/field-evidence", file);
+    render();
+    const f = state.field_verification || {};
+    toast(
+      f.rejected
+        ? `Rejected: ${f.rejection_reason}`
+        : f.observation
+          ? `Observation: ${f.observation}`
+          : "Evidence submitted",
+    );
+  } catch (error) {
+    toast(String(error.message || error));
+  } finally {
+    dropZone.classList.remove("busy");
+    fileInput.value = "";
+  }
+}
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+["dragenter", "dragover"].forEach((name) =>
+  dropZone.addEventListener(name, (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  }),
+);
+["dragleave", "drop"].forEach((name) =>
+  dropZone.addEventListener(name, (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+  }),
+);
+dropZone.addEventListener("drop", (e) => submitFieldEvidence(e.dataTransfer?.files?.[0]));
+fileInput.addEventListener("change", () => submitFieldEvidence(fileInput.files[0]));
+
 $("btn-copy").addEventListener("click", async () => {
   if (!selectedEvidence) return toast("No evidence selected");
   try {

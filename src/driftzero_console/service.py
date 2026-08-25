@@ -8,6 +8,9 @@ built and tested:
 * Remediation Agent (T074)
 * Artifact Mutation Tool (T073)
 * Crossing 2 validation (T076)
+* frontline delta composition and delivery (T077, T078)
+* Crossing 3 delivery validation (T078)
+* field observation, Crossing 4, and the live model provider (T079)
 
 No business logic is reimplemented here. The service composes, records presentation
 events, and projects results into shapes a UI can render — it decides nothing.
@@ -32,6 +35,14 @@ from driftzero.agents.enablement import (
     FrontlineAcknowledgment,
     FrontlineEnablementAgent,
 )
+from driftzero.agents.field_verify import (
+    FieldVerificationAgent,
+    ObservationContext,
+    ObservationStatus,
+    evidence_is_replayable,
+    get_field_observation_provider,
+    has_field_observation_provider,
+)
 from driftzero.agents.remediation import (
     RemediationAgent,
     RemediationIntent,
@@ -43,15 +54,35 @@ from driftzero.capabilities import (
     PLATFORM_ENFORCED_PER_AGENT_IDENTITY,
     SHARED_RUNTIME_SERVICE_ACCOUNT,
     AgentIdentity,
-    MutationCapabilityBroker,
+    CapabilityBroker,
     ToolCapability,
     is_authorized,
 )
+from driftzero.config import DriftZeroConfig, FieldProviderConfig
+from driftzero.delivery.local_channel import (
+    LocalPilotDeliveryChannel,
+    UncertainDeliveryError,
+)
+from driftzero.field.evidence import (
+    ACCEPTED_CONTAINERS,
+    MAX_IMAGE_BYTES,
+    FieldEvidenceStore,
+    ImageRejected,
+    accept_field_image,
+    derive_observation_operation_id,
+    derive_submission_id,
+)
+from driftzero.media.container import MIME_BY_CONTAINER
+from driftzero.models.action import ActionType
 from driftzero.models.artifact import DownstreamArtifact
 from driftzero.models.change import ApprovedChange
 from driftzero.models.classification import ClassificationLabel, DataClassification
 from driftzero.orchestration import (
+    DeliveryCrossingContext,
+    ObservationCrossingContext,
     RemediationCrossingContext,
+    accept_delivery_result,
+    accept_field_observation,
     accept_remediation_evidence,
 )
 from driftzero.tools.artifact_mutation import (
@@ -59,8 +90,16 @@ from driftzero.tools.artifact_mutation import (
     MutationToolContext,
     artifact_content_hash,
 )
-from driftzero.truth_engine.actions import ActionLedger
-from driftzero.truth_engine.idempotency import derive_remediation_action_id
+from driftzero.truth_engine.actions import (
+    ActionLedger,
+    RetryDecision,
+    decide_retry,
+    reconcile_delivery,
+)
+from driftzero.truth_engine.idempotency import (
+    derive_delivery_action_id,
+    derive_remediation_action_id,
+)
 
 
 class Environment(StrEnum):
@@ -126,6 +165,18 @@ PACKING_LABEL_PILOT = ChangeCase(
 """First pilot operational case. Real physical box, real printed label."""
 
 
+RUNTIME_READINESS = "LOCAL_PILOT"
+"""What the runtime actually is.
+
+Deliberately independent of ``DRIFTZERO_ENV``. That variable selects a *presentation*
+mode; it is not evidence that persistence, cloud deployment, or operational identity
+exist. Conflating the two is how a local process starts describing itself as
+production-ready.
+"""
+
+DESTINATION_REF = "frontline:pilot-surface"
+"""Where the pilot delivers. A surface, not a named employee."""
+
 WORKFLOW_ID = "wf-dz-001"
 ARTIFACT_ID = PACKING_LABEL_PILOT.artifact_id
 REQUIREMENT_ID = PACKING_LABEL_PILOT.requirement_id
@@ -144,6 +195,7 @@ PRODUCT_MODULES: tuple[dict[str, str], ...] = (
     {"id": "security", "label": "Security", "status": "ACTIVE"},
     {"id": "evidence", "label": "Evidence", "status": "PARTIAL"},
     {"id": "frontline", "label": "Frontline", "status": "ACTIVE"},
+    {"id": "field", "label": "Field Verification", "status": "ACTIVE"},
     {"id": "proof", "label": "Change Proof", "status": "NOT WIRED"},
     {"id": "coverage", "label": "Coverage", "status": "NOT WIRED"},
 )
@@ -152,23 +204,24 @@ FUTURE_CAPABILITIES: tuple[dict[str, Any], ...] = (
     {
         "group": "Frontline",
         "status": "PARTIAL",
-        "milestone": "Delta composition and acknowledgment are live; delivery receipt is not",
+        "milestone": "Composition, proven delivery, and acknowledgment are live",
         "items": [
             "Teach the Delta — LIVE",
+            "Proven delivery receipt — LIVE",
             "Worker acknowledgment — LIVE",
-            "Proven delivery receipt — NOT WIRED",
             "Micro-training — NOT WIRED",
         ],
     },
     {
         "group": "Field Verification",
-        "status": "AWAITING MILESTONE",
-        "milestone": "M3 — physical verification (G1 returned GO)",
+        "status": "PARTIAL",
+        "milestone": "Observation is live; the deterministic verdict is not",
         "items": [
-            "Photo upload",
-            "Gemma observation",
-            "LEFT / TOP_RIGHT / INCONCLUSIVE",
-            "Resubmission after FAIL",
+            "Photo upload — LIVE",
+            "Actual-bytes MIME detection — LIVE",
+            "Gemma 4 observation — LIVE",
+            "LEFT / TOP_RIGHT / INCONCLUSIVE — LIVE",
+            "Deterministic PASS / FAIL — NOT WIRED",
         ],
     },
     {
@@ -177,7 +230,7 @@ FUTURE_CAPABILITIES: tuple[dict[str, Any], ...] = (
         "milestone": "Proof generation exists in M0; not wired to this slice",
         "items": [
             "Seven proof invariants",
-            "Deterministic PASS / FAIL",
+            "Expected-vs-observed comparison",
             "Proof JSON + SHA-256",
             "Replay audit",
         ],
@@ -259,8 +312,11 @@ class _Session:
     change: ApprovedChange
     ledger: ActionLedger
     repository: InMemoryArtifactRepository
-    broker: MutationCapabilityBroker
+    broker: CapabilityBroker
+    channel: LocalPilotDeliveryChannel
+    field_store: FieldEvidenceStore
     action_id: str
+    delivery_action_id: str
     events: list[dict[str, Any]] = field(default_factory=list)
     remediation: dict[str, Any] | None = None
     crossing: dict[str, Any] | None = None
@@ -270,6 +326,13 @@ class _Session:
     acknowledgment: FrontlineAcknowledgment | None = None
     validated_execution: dict[str, Any] | None = None
     """The original validated execution. Never overwritten by an idempotent replay."""
+    delivery: dict[str, Any] | None = None
+    delta_composed_at: datetime | None = None
+    field_verification: dict[str, Any] | None = None
+    field_attempts: list[dict[str, Any]] = field(default_factory=list)
+    known_submission_ids: set[str] = field(default_factory=set)
+    provider_calls: int = 0
+    """Billable model calls made in this session. Counted, never estimated."""
 
 
 class HeroConsoleService:
@@ -297,11 +360,18 @@ class HeroConsoleService:
             change=change,
             ledger=ActionLedger(),
             repository=InMemoryArtifactRepository({case.artifact_id: artifact}),
-            broker=MutationCapabilityBroker(clock=lambda: datetime.now(UTC)),
+            broker=CapabilityBroker(clock=lambda: datetime.now(UTC)),
+            channel=LocalPilotDeliveryChannel(),
+            field_store=FieldEvidenceStore(),
             action_id=derive_remediation_action_id(
                 workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
                 change=change,
                 artifact_id=case.artifact_id,
+            ),
+            delivery_action_id=derive_delivery_action_id(
+                workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
+                change=change,
+                worker_id=DESTINATION_REF,
             ),
         )
         self._record(
@@ -347,8 +417,14 @@ class HeroConsoleService:
         environment = current_environment()
         production = environment is Environment.PRODUCTION
         return {
+            "presentation_environment": str(environment),
             "environment": str(environment),
             "is_production": production,
+            # Presentation mode is not readiness. This stays LOCAL_PILOT until
+            # persistence, cloud deployment, and operational identity actually exist.
+            "runtime_readiness": RUNTIME_READINESS,
+            "production_ready": False,
+            "identity_basis": "UNAUTHENTICATED_LOCAL_SESSION",
             # Customer-facing production hides unfinished modules rather than
             # advertising them; development keeps the diagnostics visible.
             "show_roadmap": not production,
@@ -426,7 +502,9 @@ class HeroConsoleService:
             "remediation": session.remediation,
             "validated_execution": session.validated_execution,
             "crossing_2": session.crossing,
+            "delivery": session.delivery,
             "frontline": self._frontline_view(session),
+            "field_verification": self._field_verification_view(),
             "security": session.security,
             "timeline": list(session.events),
             "modules": self._modules_view(),
@@ -675,6 +753,7 @@ class HeroConsoleService:
             self._record(session, "DELTA_NOT_COMPOSED", result.reason or str(result.status))
             return
         session.delta = result.instruction
+        session.delta_composed_at = datetime.now(UTC)
         session.evidence[result.instruction.instruction_id] = result.instruction.model_dump(
             mode="json"
         )
@@ -688,36 +767,48 @@ class HeroConsoleService:
     def _frontline_view(self, session: _Session) -> dict[str, Any]:
         delta = session.delta
         ack = session.acknowledgment
+        established = bool(session.delivery and session.delivery["delivery_established"])
+        # The worker surface opens on validated delivery, not on composition. That is
+        # what makes delivery a visible, real step rather than a label.
         return {
-            "available": delta is not None,
+            "available": delta is not None and established,
+            "composed": delta is not None,
+            "delivery": session.delivery,
             "instruction": delta.model_dump(mode="json") if delta else None,
             "acknowledgment": ack.model_dump(mode="json") if ack else None,
             "acknowledged": bool(ack and ack.acknowledged),
-            "delivery_established": False,
+            "delivery_established": established,
+            "field_verification": self._field_verification_view()
+            if session is self._session
+            else None,
             "delivery_note": (
-                "Acknowledgment records that the instruction was read. It does not "
-                "establish delivery and is not a verification — physical verification "
-                "is a separate step against real field evidence."
+                "Delivery is established by a resolvable mechanism receipt validated at "
+                "Crossing 3. Acknowledgment is a separate event recording that the "
+                "instruction was read — it is not delivery and not a verification. "
+                "Physical verification remains a further step against field evidence."
             ),
         }
 
     def get_frontline(self, change_id: str) -> dict[str, Any] | None:
         """Worker-facing payload for one change, or ``None`` if it is not this session."""
         session = self._session
-        if change_id != session.change.change_id or session.delta is None:
+        view = self._frontline_view(session)
+        if change_id != session.change.change_id or not view["available"]:
             return None
         return {
             "change_id": session.change.change_id,
             "source_name": session.case.source_name,
             "previous_version": session.change.previous_version,
             "source_version": session.change.source_version,
-            **self._frontline_view(session),
+            **view,
         }
 
     def acknowledge(self, change_id: str) -> dict[str, Any] | None:
         """Record a worker acknowledgment. Never a PASS, never a delivery receipt."""
         session = self._session
-        if change_id != session.change.change_id or session.delta is None:
+        if change_id != session.change.change_id or not self._frontline_view(
+            session
+        )["available"]:
             return None
         session.acknowledgment = FrontlineEnablementAgent().acknowledge(
             session.delta,
@@ -738,6 +829,454 @@ class HeroConsoleService:
             "Operator confirmed reading the delta — not delivery, not verification",
         )
         return self.get_frontline(change_id)
+
+    def deliver_to_frontline(self) -> dict[str, Any]:
+        """Deliver the composed delta through the pilot channel, then validate it.
+
+        Idempotent on the stable ``DELIVER_DELTA`` action identity: a repeat request
+        resolves the existing delivery rather than dispatching a second one, and an
+        uncertain dispatch is reconciled against the mechanism's receipt instead of
+        being blindly re-sent.
+        """
+        session = self._session
+        if session.delta is None:
+            self._record(session, "DELIVERY_REJECTED", "no composed delta to deliver")
+            return self.get_state()
+
+        decision = decide_retry(session.ledger, session.delivery_action_id)
+        if decision is RetryDecision.ALREADY_COMPLETED:
+            self._record(
+                session, "DELIVERY_ALREADY_ESTABLISHED", "no duplicate dispatch"
+            )
+            if session.delivery:
+                session.delivery = {**session.delivery, "last_request": "ALREADY_DELIVERED"}
+            return self.get_state()
+
+        if decision is RetryDecision.RECONCILIATION_REQUIRED:
+            outcome = reconcile_delivery(
+                session.ledger,
+                session.delivery_action_id,
+                recoverable_receipt_ref=session.channel.recoverable_receipt_ref(
+                    session.delta.instruction_id
+                ),
+                occurred_at=datetime.now(UTC),
+            )
+            self._record(
+                session,
+                "DELIVERY_RECONCILED"
+                if outcome.delivered
+                else "DELIVERY_UNCERTAIN_NO_RECEIPT",
+                f"reconciliation returned {outcome.outcome}",
+            )
+            if not outcome.delivered:
+                return self.get_state()
+
+        self._record(session, "DELIVERY_REQUESTED", f"→ {DESTINATION_REF}")
+        if session.ledger.get(session.delivery_action_id) is None:
+            session.ledger.plan(
+                action_id=session.delivery_action_id,
+                workflow_id=WORKFLOW_ID,
+                action_type=ActionType.DELIVER_DELTA,
+                target_ref=DESTINATION_REF,
+                intent={
+                    "instruction_id": session.delta.instruction_id,
+                    "change_id": session.change.change_id,
+                    "channel": session.channel.channel,
+                },
+                occurred_at=datetime.now(UTC),
+            )
+        session.ledger.mark_attempted(
+            session.delivery_action_id, occurred_at=datetime.now(UTC)
+        )
+
+        try:
+            # The service asks the broker for the grant; the agent presents it and the
+            # mechanism verifies it. Nothing here decides whether Enablement may deliver.
+            grant = session.broker.issue_grant(
+                holder=AgentIdentity.ENABLEMENT,
+                tool=ToolCapability.FRONTLINE_DELIVERY,
+                scope_ref=DESTINATION_REF,
+                change_id=session.change.change_id,
+                source_version=session.change.source_version,
+            )
+            dispatch = FrontlineEnablementAgent().deliver_delta(
+                session.delta,
+                channel=session.channel,
+                destination_ref=DESTINATION_REF,
+                occurred_at=datetime.now(UTC),
+                grant=grant,
+                grant_verifier=session.broker.grant_verifier(
+                    ToolCapability.FRONTLINE_DELIVERY
+                ),
+            )
+        except UncertainDeliveryError as exc:  # pragma: no cover - reconciliation path
+            session.ledger.mark_failed_or_uncertain(
+                session.delivery_action_id, occurred_at=datetime.now(UTC)
+            )
+            self._record(session, "DELIVERY_UNCERTAIN", str(exc))
+            return self.get_state()
+
+        verdict = accept_delivery_result(
+            dispatch.result,
+            context=DeliveryCrossingContext(
+                channel=session.channel,
+                instruction=session.delta,
+                expected_destination_ref=DESTINATION_REF,
+                rejection_ref=f"rej-delivery-{session.session_id}",
+                composed_at=session.delta_composed_at,
+            ),
+        )
+
+        receipt_id = f"delivery-receipt-{session.session_id}"
+        if verdict.receipt is not None:
+            session.evidence[receipt_id] = {
+                "receipt_id": verdict.receipt.receipt_id,
+                "instruction_id": verdict.receipt.instruction_id,
+                "change_id": verdict.receipt.change_id,
+                "channel": verdict.receipt.channel,
+                "destination_ref": verdict.receipt.destination_ref,
+                "payload_hash": verdict.receipt.payload_hash,
+                "status": str(verdict.receipt.status),
+                "issued_at": verdict.receipt.issued_at.isoformat(),
+                "identity_basis": verdict.receipt.identity_basis,
+                "evidence_ref": verdict.receipt.evidence_ref,
+            }
+
+        session.delivery = {
+            "status": "ESTABLISHED" if verdict.accepted else "REJECTED",
+            "delivery_established": verdict.delivery_established,
+            "last_request": "DELIVERED" if verdict.accepted else "REJECTED",
+            "crossing_3": "ACCEPTED" if verdict.accepted else "REJECTED",
+            "receipt_id": verdict.receipt.receipt_id if verdict.receipt else None,
+            "receipt_ref": verdict.receipt.evidence_ref if verdict.receipt else None,
+            "receipt_integrity": "VALIDATED" if verdict.accepted else "NOT VALIDATED",
+            "authoritative_payload_hash": verdict.authoritative_payload_hash,
+            "channel": session.channel.channel,
+            "destination_ref": DESTINATION_REF,
+            "identity_basis": verdict.receipt.identity_basis if verdict.receipt else None,
+            "dispatch_count": session.channel.dispatch_count,
+            "failed_layers": list(verdict.failed_layers),
+            "rejections": [str(r) for r in verdict.rejections],
+            "evidence_id": receipt_id if verdict.receipt else None,
+            "change_deployed": False,
+            "field_verified": False,
+        }
+
+        if verdict.accepted:
+            session.ledger.mark_completed(
+                session.delivery_action_id,
+                occurred_at=datetime.now(UTC),
+                receipt_ref=verdict.receipt.evidence_ref,
+                reconciled=False,
+            )
+            self._record(
+                session,
+                "DELIVERY_ESTABLISHED",
+                f"Crossing 3 accepted receipt {verdict.receipt.receipt_id}",
+            )
+        else:
+            session.ledger.mark_failed_or_uncertain(
+                session.delivery_action_id, occurred_at=datetime.now(UTC)
+            )
+            self._record(
+                session, "DELIVERY_REJECTED", verdict.rejection_reason or "rejected"
+            )
+        return self.get_state()
+
+    # ------------------------------------------------------------------ field evidence
+
+    def submit_field_evidence(
+        self,
+        raw: bytes,
+        *,
+        declared_filename: str | None = None,
+        declared_content_type: str | None = None,
+    ) -> dict[str, Any]:
+        """The single field-evidence use case. Mission Control and the worker share it.
+
+        Both surfaces upload bytes to this one method; neither has a code path of its
+        own. Duplicating verification logic per surface is how two surfaces end up
+        disagreeing about what was observed.
+
+        The caller supplies bytes and nothing else that matters. The filename and the
+        browser Content-Type are recorded as *claims* and never consulted: the MIME type,
+        the hash, the submission identity, the prompt, the model, and the agent identity
+        are all derived server-side.
+        """
+        session = self._session
+        self._record(session, "FIELD_EVIDENCE_SUBMITTED", f"{len(raw)} bytes received")
+
+        try:
+            image = accept_field_image(
+                raw,
+                declared_filename=declared_filename,
+                declared_content_type=declared_content_type,
+            )
+        except ImageRejected as exc:
+            session.field_verification = {
+                "status": "REJECTED",
+                "rejected": True,
+                "rejection_reason": str(exc.reason),
+                "detail": exc.detail,
+                "history": list(session.field_attempts),
+                **self._field_static_view(),
+            }
+            self._record(
+                session, "FIELD_EVIDENCE_REJECTED", f"{exc.reason}: {exc.detail}"
+            )
+            return self.get_state()
+
+        change = session.change
+        submission_id = derive_submission_id(
+            change_id=change.change_id,
+            source_version=change.source_version,
+            image_sha256=image.sha256,
+        )
+        operation_id = derive_observation_operation_id(
+            change_id=change.change_id,
+            source_version=change.source_version,
+            image_sha256=image.sha256,
+        )
+
+        # Replay guard, before anything billable. The same image under the same change
+        # and version is the same operation; repeating it must cost nothing.
+        existing = session.field_store.find_operation(operation_id)
+        if existing is not None and evidence_is_replayable(existing):
+            self._record(
+                session,
+                "FIELD_OBSERVATION_REPLAYED",
+                "identical submission — no additional provider call",
+            )
+            previous = session.field_verification or {}
+            session.field_verification = self._field_view(
+                session,
+                image=image,
+                record=existing,
+                status=ObservationStatus.REPLAYED,
+                crossing=previous.get("crossing_4"),
+            )
+            return self.get_state()
+
+        config = self._field_config()
+        if not config.enabled or not has_field_observation_provider():
+            session.field_verification = {
+                "status": "PROVIDER_DISABLED",
+                "rejected": False,
+                "detail": (
+                    "Live field observation is not configured for this instance, so no "
+                    "observation was made. Nothing was assumed in its place."
+                ),
+                "history": list(session.field_attempts),
+                **image.as_evidence(),
+                **self._field_static_view(),
+            }
+            self._record(session, "FIELD_PROVIDER_DISABLED", "no observation was made")
+            return self.get_state()
+
+        try:
+            provider = get_field_observation_provider(config)
+        except Exception as exc:  # noqa: BLE001 - surfaced, never silently faked
+            session.field_verification = {
+                "status": "PROVIDER_UNAVAILABLE",
+                "rejected": False,
+                "detail": f"{type(exc).__name__}: {exc}",
+                "history": list(session.field_attempts),
+                **image.as_evidence(),
+                **self._field_static_view(),
+            }
+            self._record(session, "FIELD_PROVIDER_UNAVAILABLE", str(exc))
+            return self.get_state()
+
+        grant = session.broker.issue_grant(
+            holder=AgentIdentity.FIELD_VERIFICATION,
+            tool=ToolCapability.FIELD_OBSERVATION,
+            scope_ref=change.change_id,
+            change_id=change.change_id,
+            source_version=change.source_version,
+        )
+        context = ObservationContext(
+            change_id=change.change_id,
+            source_version=change.source_version,
+            submission_id=submission_id,
+        )
+        evidence_ref = session.field_store.evidence_ref(operation_id)
+
+        session.provider_calls += 1
+        result = FieldVerificationAgent().observe(
+            image,
+            raw,
+            provider=provider,
+            context=context,
+            config=config,
+            grant=grant,
+            grant_verifier=session.broker.grant_verifier(
+                ToolCapability.FIELD_OBSERVATION
+            ),
+            raw_evidence_ref=evidence_ref,
+        )
+
+        document = dict(result.evidence)
+        document["operation_id"] = operation_id
+        document["status"] = str(result.status)
+        document["failure_reason"] = result.failure_reason
+        stored_ref = session.field_store.record(
+            operation_id=operation_id,
+            document=document,
+            recorded_at=datetime.now(UTC),
+        )
+        record = session.field_store.resolve(stored_ref) or document
+        session.evidence[f"field-observation-{operation_id}"] = dict(record)
+        session.field_attempts.append(
+            {
+                "operation_id": operation_id,
+                "evidence_ref": stored_ref,
+                "image_sha256": image.sha256,
+                "mime_type": image.mime_type,
+                "status": str(result.status),
+                "observation": record.get("normalized_observation"),
+                "attempt_count": result.attempt_count,
+            }
+        )
+
+        crossing = None
+        if result.succeeded and result.observation is not None:
+            crossing = self._validate_observation(session, result.observation)
+        else:
+            self._record(
+                session,
+                "FIELD_OBSERVATION_FAILED",
+                result.failure_reason or str(result.status),
+            )
+
+        session.known_submission_ids.add(submission_id)
+        session.field_verification = self._field_view(
+            session, image=image, record=record, status=result.status, crossing=crossing
+        )
+        return self.get_state()
+
+    def _validate_observation(
+        self, session: _Session, observation: Any
+    ) -> dict[str, Any]:
+        """Run Crossing 4 against the independently stored provider evidence."""
+        stored = session.field_store.resolve(observation.raw_evidence_ref) or {}
+        verdict = accept_field_observation(
+            observation,
+            context=ObservationCrossingContext(
+                store=session.field_store,
+                expected_change_id=session.change.change_id,
+                expected_source_version=session.change.source_version,
+                expected_submission_id=observation.submission_id,
+                expected_image_sha256=stored.get("image_sha256", ""),
+                authorized_identity=str(AgentIdentity.FIELD_VERIFICATION),
+                rejection_ref=f"rej-observation-{session.session_id}",
+                known_submission_ids=frozenset(session.known_submission_ids),
+            ),
+        )
+        crossing_id = f"crossing4-{session.session_id}-{len(session.field_attempts)}"
+        session.evidence[crossing_id] = {
+            "accepted": verdict.accepted,
+            "failed_layers": list(verdict.failed_layers),
+            "rejections": [str(r) for r in verdict.rejections],
+            "rejection_reason": verdict.rejection_reason,
+            "evidence_ref": verdict.evidence_ref(),
+        }
+        self._record(
+            session,
+            "CROSSING_4_ACCEPTED" if verdict.accepted else "CROSSING_4_REJECTED",
+            "FieldObservation validated against stored provider evidence",
+        )
+        return {
+            "verdict": "ACCEPTED" if verdict.accepted else "REJECTED",
+            "accepted": verdict.accepted,
+            "failed_layers": list(verdict.failed_layers),
+            "rejections": [str(r) for r in verdict.rejections],
+            "requires_review": verdict.requires_review,
+            "evidence_id": crossing_id,
+        }
+
+    def _field_config(self) -> FieldProviderConfig:
+        """Read configuration fresh, so live mode can be enabled without a rebuild."""
+        return DriftZeroConfig.from_env().field_provider
+
+    def _field_static_view(self) -> dict[str, Any]:
+        """Field-verification facts that do not depend on a particular submission."""
+        config = self._field_config()
+        return {
+            "provider_configured": config.enabled and has_field_observation_provider(),
+            "provider": config.as_disclosure(),
+            "accepted_mime_types": sorted(
+                MIME_BY_CONTAINER[c] for c in ACCEPTED_CONTAINERS
+            ),
+            "max_bytes": MAX_IMAGE_BYTES,
+            # Restated on every payload so no surface can imply otherwise.
+            "field_verified": False,
+            "change_deployed": False,
+            "deterministic_verdict": None,
+            "verdict_note": (
+                "A model observation is not a verdict. The deterministic "
+                "expected-vs-observed comparison is not part of this slice."
+            ),
+        }
+
+    def _field_view(
+        self,
+        session: _Session,
+        *,
+        image: Any,
+        record: dict[str, Any],
+        status: Any,
+        crossing: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Project one observation attempt for a UI. Adds no judgement of its own.
+
+        ``observation`` is populated only once Crossing 4 accepted it. What the agent
+        returned before validation is carried separately as ``observation_claimed``, so
+        a surface cannot render an unvalidated claim as an observation by accident.
+        """
+        observation = record.get("normalized_observation")
+        accepted = bool(crossing and crossing["accepted"])
+        return {
+            "status": str(status),
+            "rejected": False,
+            "observation": observation if accepted else None,
+            "observation_claimed": observation,
+            "inconclusive": accepted and observation == "INCONCLUSIVE",
+            "crossing_4": crossing,
+            "evidence_ref": record.get("evidence_ref"),
+            "evidence_id": f"field-observation-{record.get('operation_id')}",
+            "operation_id": record.get("operation_id"),
+            "submission_id": record.get("submission_id"),
+            "attempt_count": record.get("attempt_count"),
+            "replayed": str(status) == str(ObservationStatus.REPLAYED),
+            "provider_calls": session.provider_calls,
+            "model": record.get("model"),
+            "provider_name": record.get("provider"),
+            "response_id": record.get("response_id"),
+            "finish_reason": record.get("finish_reason"),
+            "traffic_type": record.get("traffic_type"),
+            "total_tokens": record.get("total_tokens"),
+            "request_hash": record.get("request_hash"),
+            "raw_response_hash": record.get("raw_response_hash"),
+            "latency_seconds": record.get("latency_seconds"),
+            "latency_label": record.get("latency_label"),
+            "history": list(session.field_attempts),
+            **image.as_evidence(),
+            **self._field_static_view(),
+        }
+
+    def _field_verification_view(self) -> dict[str, Any]:
+        """The field panel before any submission, or the latest attempt after one."""
+        session = self._session
+        if session.field_verification is not None:
+            return session.field_verification
+        return {
+            "status": "AWAITING_EVIDENCE",
+            "rejected": False,
+            "observation": None,
+            "crossing_4": None,
+            "history": [],
+            **self._field_static_view(),
+        }
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any] | None:
         return self._session.evidence.get(evidence_id)

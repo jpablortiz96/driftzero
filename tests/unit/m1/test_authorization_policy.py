@@ -31,6 +31,7 @@ from driftzero.capabilities import (  # noqa: E402
     PLATFORM_ENFORCED_PER_AGENT_IDENTITY,
     SHARED_RUNTIME_SERVICE_ACCOUNT,
     AgentIdentity,
+    CapabilityBroker,
     CapabilityDenied,
     DenialEvidence,
     DenialReason,
@@ -78,9 +79,22 @@ def issue(broker: MutationCapabilityBroker, **overrides: str) -> MutationCapabil
 # ============================ single policy authority =================================
 
 
-def test_the_policy_allows_only_remediation_to_mutate() -> None:
+def test_the_policy_is_exactly_one_capability_per_agent() -> None:
+    """Separation, not accumulation: no identity holds two capabilities."""
     assert AUTHORIZATION_POLICY == frozenset(
-        {(AgentIdentity.REMEDIATION, ToolCapability.ARTIFACT_MUTATION)}
+        {
+            (AgentIdentity.REMEDIATION, ToolCapability.ARTIFACT_MUTATION),
+            (AgentIdentity.ENABLEMENT, ToolCapability.FRONTLINE_DELIVERY),
+            (AgentIdentity.FIELD_VERIFICATION, ToolCapability.FIELD_OBSERVATION),
+        }
+    )
+    holders = [identity for identity, _ in AUTHORIZATION_POLICY]
+    assert len(holders) == len(set(holders)), "an identity gained a second capability"
+
+
+def test_the_policy_allows_only_remediation_to_mutate() -> None:
+    assert authorized_identities_for(ToolCapability.ARTIFACT_MUTATION) == frozenset(
+        {AgentIdentity.REMEDIATION}
     )
 
 
@@ -95,9 +109,13 @@ def test_policy_denies_every_other_identity(identity: AgentIdentity) -> None:
 
 def test_policy_fails_closed_on_unknown_identity_and_unknown_tool() -> None:
     """No wildcard, no default-allow, no implicit inheritance."""
-    assert is_authorized("driftzero-console", ToolCapability.ARTIFACT_MUTATION) is False
-    assert is_authorized("driftzero-admin", ToolCapability.ARTIFACT_MUTATION) is False
+    for tool in ToolCapability:
+        assert is_authorized("driftzero-console", tool) is False
+        assert is_authorized("driftzero-admin", tool) is False
+        assert is_authorized(AgentIdentity.ORCHESTRATOR, tool) is False
+    # A real capability held by the wrong identity is still denied.
     assert is_authorized(AgentIdentity.REMEDIATION, "FRONTLINE_DELIVERY") is False
+    assert is_authorized(AgentIdentity.ENABLEMENT, "FIELD_OBSERVATION") is False
     assert is_authorized(AgentIdentity.REMEDIATION, "ANYTHING_ELSE") is False
     assert is_authorized("", "") is False
 
@@ -142,20 +160,48 @@ def test_only_one_policy_table_exists_in_the_codebase() -> None:
 
 def test_the_broker_delegates_policy_rather_than_owning_it() -> None:
     source = CAPABILITIES_SRC.read_text(encoding="utf-8")
-    broker_body = source[source.index("class MutationCapabilityBroker"):]
-    assert "is_authorized(" in broker_body, "the adapter must consult the shared policy"
+    broker_body = source[source.index("class CapabilityBroker"):]
+    assert "is_authorized(" in broker_body, "the broker must consult the shared policy"
+
+
+def test_there_is_exactly_one_broker_class() -> None:
+    """One mechanism for every tool. A second broker is a second place policy can drift."""
+    src = REPO_ROOT / "src" / "driftzero"
+    brokers = [
+        node.name
+        for path in sorted(src.rglob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ClassDef) and node.name.endswith("Broker")
+    ]
+    assert brokers == ["CapabilityBroker"]
+    assert MutationCapabilityBroker is CapabilityBroker
 
 
 # ============================ tool capability model ===================================
 
 
 def test_the_tool_capability_vocabulary_is_minimal() -> None:
-    """Only the tool T075 actually needs. Future tools are added here, not elsewhere."""
-    assert [t.value for t in ToolCapability] == ["ARTIFACT_MUTATION"]
+    """Exactly the tools that exist. One member per real mechanism, and no more."""
+    assert [t.value for t in ToolCapability] == [
+        "ARTIFACT_MUTATION",
+        "FRONTLINE_DELIVERY",
+        "FIELD_OBSERVATION",
+    ]
 
 
 def test_future_tools_are_not_prematurely_authorized() -> None:
-    for speculative in ("FRONTLINE_DELIVERY", "FIELD_OBSERVATION"):
+    """A capability exists only once a real mechanism requires it.
+
+    ``FRONTLINE_DELIVERY`` and ``FIELD_OBSERVATION`` graduated off this list when T078's
+    channel and T079's provider actually started demanding them. Everything still
+    speculative stays absent and unauthorized.
+    """
+    for speculative in (
+        "PROOF_GENERATION",
+        "MEDIA_GENERATION",
+        "WORKFLOW_TRANSITION",
+        "COVERAGE_PUBLISH",
+    ):
         assert speculative not in {t.value for t in ToolCapability}
         for identity in AgentIdentity:
             assert is_authorized(identity, speculative) is False
