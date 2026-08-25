@@ -1,0 +1,44 @@
+"""Response envelopes for the Hero Console API.
+
+Deliberately thin. The service already returns plain, UI-shaped projections built from
+real domain results; these models exist to document the contract and to keep the API
+surface explicit rather than to re-model the domain.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class HeroState(BaseModel):
+    """Everything the console renders, derived from real application data.
+
+    Contains no capability, no ``grant_token``, and no secret: the service projects
+    only what a UI may see.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    scenario: dict[str, Any]
+    artifact: dict[str, Any]
+    authorization: dict[str, Any]
+    fleet: list[dict[str, Any]]
+    remediation: dict[str, Any] | None = None
+    crossing_2: dict[str, Any] | None = None
+    security: dict[str, Any] | None = None
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
+    modules: list[dict[str, Any]] = Field(default_factory=list)
+    future_capabilities: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class EvidenceDocument(BaseModel):
+    """One inspectable evidence record, pretty-printed by the UI."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_id: str
+    document: dict[str, Any]

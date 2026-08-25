@@ -161,23 +161,53 @@ class ArtifactRepository(Protocol):
         """
         ...
 
+    def resolve(self, content_ref: str) -> DownstreamArtifact | None:
+        """Return the immutable snapshot stored at ``content_ref``.
+
+        Crossing 2 requires the before- and after-states to be **independently
+        retrievable**, not merely distinguishable by string. A store that overwrites in
+        place cannot satisfy the evidence contract: ``before_ref`` must still resolve to
+        the pre-mutation artifact after the mutation has committed.
+        """
+        ...
+
 
 class InMemoryArtifactRepository:
     """Deterministic in-process store for M1. No cloud, no filesystem, no framework.
 
     ``dispatch_count`` exists so idempotency can be proven by counting real writes
     rather than by trusting a returned status.
+
+    Snapshots are append-only. Every committed state is retained under its own
+    ``content_ref`` so a mutation never destroys the state it replaced — without that,
+    ``before_ref`` in ``MutationEvidence`` would point at nothing and the evidence would
+    not be independently verifiable.
     """
 
     def __init__(self, artifacts: dict[str, DownstreamArtifact] | None = None) -> None:
         self._artifacts: dict[str, DownstreamArtifact] = dict(artifacts or {})
         self._revision: dict[str, int] = {}
+        self._snapshots: dict[str, DownstreamArtifact] = {
+            artifact.content_ref: artifact for artifact in self._artifacts.values()
+        }
         self.dispatch_count = 0
         self.read_count = 0
 
     def read(self, artifact_id: str) -> DownstreamArtifact | None:
         self.read_count += 1
         return self._artifacts.get(artifact_id)
+
+    def resolve(self, content_ref: str) -> DownstreamArtifact | None:
+        """Retrieve the immutable snapshot at ``content_ref``.
+
+        Append-only: resolving never mutates, and a later mutation never rewrites an
+        earlier snapshot.
+        """
+        return self._snapshots.get(content_ref)
+
+    def snapshot_refs(self) -> tuple[str, ...]:
+        """Every retained content ref, oldest first. Diagnostics only."""
+        return tuple(self._snapshots)
 
     def apply_requirement(
         self, artifact_id: str, requirement_id: str, expected_before: str, new_value: str
@@ -212,7 +242,12 @@ class InMemoryArtifactRepository:
             update["current_value"] = new_value
 
         mutated = artifact.model_copy(update=update)
+        if mutated.content_ref in self._snapshots:  # pragma: no cover - defensive
+            raise RepositoryWriteError(
+                f"refusing to overwrite the snapshot at {mutated.content_ref}"
+            )
         self._artifacts[artifact_id] = mutated
+        self._snapshots[mutated.content_ref] = mutated
         self.dispatch_count += 1
         return mutated
 

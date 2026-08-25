@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import ast
 import importlib
+import json
+import os
 import pkgutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -124,9 +127,32 @@ def test_no_model_or_agent_sdk_named_anywhere_in_the_core() -> None:
 
 
 def test_importing_both_packages_loads_no_forbidden_module() -> None:
-    """Catches transitive reachability, which the static scan alone cannot see."""
-    _import_every_module()
-    loaded = {name.split(".")[0] for name in sys.modules}
+    """Catches transitive reachability, which the static scan alone cannot see.
+
+    Measured in a **clean subprocess**. Reading this process's ``sys.modules`` would
+    conflate "loaded anywhere in the test session" with "reachable from the core": any
+    other suite that imports an HTTP client would make this fire even though nothing in
+    the deterministic core touches it. The subprocess imports only the guarded packages,
+    so what it loads is exactly what they pull in.
+    """
+    probe = (
+        "import json, sys;"
+        f"import importlib, pkgutil;"
+        f"[importlib.import_module(n) for n in {list(DETERMINISTIC_PACKAGES)!r}];"
+        f"[importlib.import_module(f'{{p}}.{{m.name}}')"
+        f" for p in {list(GUARDED_SUBPACKAGES)!r}"
+        f" for m in pkgutil.iter_modules(importlib.import_module(p).__path__)];"
+        "print(json.dumps(sorted({n.split('.')[0] for n in sys.modules})))"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[3],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[3] / "src")},
+    )
+    loaded = set(json.loads(completed.stdout))
     leaked = sorted(loaded & FORBIDDEN_ROOTS)
     assert not leaked, f"forbidden modules reachable from the deterministic core: {leaked}"
 

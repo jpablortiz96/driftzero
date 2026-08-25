@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DRIFTZERO — Change Ops</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="shell">
+
+    <header class="masthead">
+      <div class="brand">
+        <h1>DRIFT<span>ZERO</span></h1>
+        <p>Autonomous Operational Change Deployment</p>
+      </div>
+      <div class="status-cluster">
+        <span class="live"><span class="pulse"></span> Change Ops • Local Live</span>
+        <span class="chip" id="session-chip">SESSION —</span>
+      </div>
+    </header>
+
+    <nav class="modules" id="modules" aria-label="Product modules"></nav>
+
+    <div class="grid">
+
+      <!-- ------------------------------------------------ left column -->
+      <div class="col">
+
+        <section class="panel">
+          <header><h2>Source Change</h2><span class="chip info" id="scenario-status">APPROVED</span></header>
+          <div class="body">
+            <div class="change-id" id="change-id">—</div>
+            <div class="source-line" id="source-name">—</div>
+            <div class="version-flow">
+              <b id="prev-version">—</b> <span>→</span> <b id="curr-version">—</b>
+            </div>
+
+            <div class="transition">
+              <div class="req" id="requirement-id">—</div>
+              <div class="from" id="value-from">—</div>
+              <div class="arrow">↓</div>
+              <div class="to" id="value-to">—</div>
+            </div>
+
+            <div class="actions">
+              <button class="primary" id="btn-deploy">Deploy Change</button>
+              <button id="btn-reset">Reset Demo</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Agent Fleet</h2><span class="chip" id="fleet-count">—</span></header>
+          <div class="body"><div id="fleet"></div>
+            <div class="callout">
+              <b>Application-level enforcement.</b>
+              <span id="enforcement-note">—</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Security</h2><span class="chip" id="security-chip">IDLE</span></header>
+          <div class="body">
+            <div class="actions" style="margin-top:0">
+              <button class="danger" id="btn-security">Run Security Test</button>
+            </div>
+            <div id="security-panel" style="margin-top:14px"></div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ------------------------------------------------ right column -->
+      <div class="col">
+
+        <section class="panel">
+          <header><h2>Change Deployment</h2><span class="chip" id="pipeline-chip">PENDING</span></header>
+          <div class="body"><div class="stages" id="stages"></div></div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Downstream Artifact</h2><span class="chip" id="artifact-chip">—</span></header>
+          <div class="body"><div id="artifact"></div></div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Remediation Evidence</h2><span class="chip" id="crossing-chip">—</span></header>
+          <div class="body"><div id="evidence-summary"></div></div>
+        </section>
+
+        <section class="panel">
+          <header>
+            <h2>Evidence Inspector</h2>
+            <button class="ghost" id="btn-copy">Copy JSON</button>
+          </header>
+          <div class="body">
+            <div class="evidence-bar" id="evidence-bar"></div>
+            <pre class="json" id="evidence-json">Select an evidence record.</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <header>
+            <h2>Audit Timeline</h2>
+            <span class="chip">UI ACTIVITY — NOT WORKFLOW STATE</span>
+          </header>
+          <div class="body"><div class="timeline" id="timeline"></div></div>
+        </section>
+
+        <section class="panel">
+          <header><h2>Product Roadmap</h2><span class="chip warn">NOT WIRED</span></header>
+          <div class="body"><div class="future" id="future"></div></div>
+        </section>
+
+      </div>
+    </div>
+
+    <p class="footnote">
+      This console executes the real remediation, authorization, and validation path.
+      Frontline delivery, physical verification, and Change Proof are not wired into this
+      slice and are labelled accordingly. No model, cloud, or network call is made.
+      Authorization is application-level inside one process under a shared runtime
+      identity — not Google Cloud IAM and not Agent Identity.
+    </p>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

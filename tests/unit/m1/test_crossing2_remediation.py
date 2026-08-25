@@ -530,3 +530,79 @@ def test_an_incomplete_action_cannot_produce_accepted_mutation_evidence() -> Non
     verdict = accept_remediation_evidence(result.evidence, context=make_crossing_context(context))
     assert verdict.accepted is False
     assert RemediationRejection.ACTION_NOT_COMPLETED in verdict.rejections
+
+
+# ============ snapshot integrity: refs must RESOLVE, not merely differ ================
+
+
+def test_before_ref_and_after_ref_resolve_to_independent_snapshots() -> None:
+    """String inequality is not enough — both refs must retrieve real, distinct states.
+
+    Without this the before-state would be destroyed by its own replacement and
+    MutationEvidence would reference something unretrievable.
+    """
+    context, result = run_hero_mutation()
+    repository = context.repository
+    evidence = result.evidence
+
+    before = repository.resolve(evidence.before_ref)
+    after = repository.resolve(evidence.after_ref)
+
+    assert evidence.before_ref != evidence.after_ref
+    assert before is not None, "before_ref must still resolve after the mutation committed"
+    assert after is not None
+    assert before is not after
+
+    assert before.requirements["label_position"] == "LEFT"
+    assert after.requirements["label_position"] == "TOP_RIGHT"
+    assert before.current_value == "LEFT"
+    assert after.current_value == "TOP_RIGHT"
+
+
+def test_resolved_snapshots_agree_with_the_evidence_hashes() -> None:
+    context, result = run_hero_mutation()
+    repository = context.repository
+    evidence = result.evidence
+
+    assert artifact_content_hash(repository.resolve(evidence.before_ref)) == evidence.before_hash
+    assert artifact_content_hash(repository.resolve(evidence.after_ref)) == evidence.after_hash
+
+
+def test_unrelated_fields_are_identical_across_both_snapshots() -> None:
+    context, result = run_hero_mutation()
+    repository = context.repository
+    before = repository.resolve(result.evidence.before_ref)
+    after = repository.resolve(result.evidence.after_ref)
+
+    assert before.requirements["instructions"] == after.requirements["instructions"]
+    assert before.requirements["instructions"] == UNRELATED_PROSE
+    assert before.requirements["packing_mode"] == after.requirements["packing_mode"]
+    ignored = {"requirements", "current_value", "content_ref"}
+    assert before.model_dump(exclude=ignored) == after.model_dump(exclude=ignored)
+
+
+def test_resolving_the_after_ref_cannot_overwrite_the_before_snapshot() -> None:
+    """Append-only: reading is never a write, and a later read cannot corrupt history."""
+    context, result = run_hero_mutation()
+    repository = context.repository
+    evidence = result.evidence
+
+    for _ in range(3):
+        repository.resolve(evidence.after_ref)
+        repository.resolve(evidence.before_ref)
+
+    assert repository.resolve(evidence.before_ref).requirements["label_position"] == "LEFT"
+    assert repository.resolve(evidence.after_ref).requirements["label_position"] == "TOP_RIGHT"
+    assert repository.dispatch_count == 1
+
+
+def test_an_unknown_content_ref_resolves_to_none() -> None:
+    context, _ = run_hero_mutation()
+    assert context.repository.resolve("local://artifacts/does-not-exist") is None
+
+
+def test_the_initial_snapshot_is_registered_before_any_mutation() -> None:
+    repository = InMemoryArtifactRepository({ARTIFACT_ID: make_hero_artifact()})
+    original = repository.read(ARTIFACT_ID)
+    assert repository.resolve(original.content_ref) is original
+    assert repository.snapshot_refs() == (original.content_ref,)
