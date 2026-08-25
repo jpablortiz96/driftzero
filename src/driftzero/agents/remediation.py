@@ -40,6 +40,7 @@ from enum import StrEnum
 from driftzero.capabilities import (
     AgentIdentity,
     CapabilityDenied,
+    DenialEvidence,
     MutationCapabilityBroker,
 )
 from driftzero.models.remediation import MutationEvidence, NoOpEvidence
@@ -115,6 +116,8 @@ class RemediationResult:
     evidence: MutationEvidence | NoOpEvidence | None = None
     tool_result: MutationResult | None = None
     denial_reason: str | None = None
+    denial_evidence: DenialEvidence | None = None
+    """Authorization denial record, when the request was refused. Evidence, not authority."""
     identity: str = str(AGENT_IDENTITY)
     enforcement_model: str = "APPLICATION_LEVEL_ENFORCEMENT"
     platform_enforced_per_agent_identity: bool = False
@@ -171,9 +174,12 @@ class RemediationAgent:
                 source_version=intent.source_version,
             )
         except CapabilityDenied as denied:
+            # The broker already recorded the denial; the agent carries the evidence
+            # rather than re-deriving it, so there is one record per refused request.
             return RemediationResult(
                 status=RemediationStatus.CAPABILITY_DENIED,
                 denial_reason=str(denied),
+                denial_evidence=denied.record,
                 identity=str(self.identity),
             )
 

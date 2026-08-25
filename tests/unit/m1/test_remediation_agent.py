@@ -167,7 +167,7 @@ def test_an_unauthorized_agent_cannot_mutate(identity: AgentIdentity) -> None:
 
 
 def test_an_unknown_identity_is_denied() -> None:
-    with pytest.raises(CapabilityDenied, match="unknown logical identity"):
+    with pytest.raises(CapabilityDenied, match="not a known logical agent identity"):
         MutationCapabilityBroker().issue(
             holder="driftzero-not-a-real-agent",
             artifact_id=ARTIFACT_ID,
@@ -190,6 +190,7 @@ def test_a_hand_constructed_capability_is_rejected_by_the_tool() -> None:
     forged = MutationCapability(
         capability_id="cap-forged",
         holder=str(AgentIdentity.REMEDIATION),
+        tool="ARTIFACT_MUTATION",
         authorized_artifact_ids=frozenset({ARTIFACT_ID}),
         change_id=CHANGE_ID,
         source_version="v3",

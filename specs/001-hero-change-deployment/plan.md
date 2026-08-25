@@ -242,7 +242,9 @@ Two distinct concepts, never conflated (see research.md R-013):
 
 1. **one least-privilege Cloud Run runtime service account** per deployed service (two total, table above);
 2. **logical agent identity / capability context inside ADK** — each agent carries a logical identifier used to scope its capabilities;
-3. a **deterministic in-process authorization broker** in the Truth Engine that decides which logical agent may invoke which tool (the Remediation Agent is the only logical identity permitted to invoke the Artifact Mutation Tool).
+3. a **deterministic application-layer authorization authority** that sits **outside the M0 deterministic core** (`src/driftzero/capabilities.py`), authorizes logical-agent/tool capability requests, and preserves the one-way **M1 → M0** dependency direction (the Remediation Agent is the only logical identity permitted to invoke the Artifact Mutation Tool).
+
+   **Superseded placement decision (T075).** This item previously placed the broker *in the Truth Engine*. That placement was superseded during T075: the authority must handle `MutationCapability`, an M1 tooling concept, so hosting it under `truth_engine/` would have required the M0 package to import M1 modules and invert the dependency direction. The architectural constraint is dependency direction, not directory ownership. The security properties are unchanged — the authority remains deterministic, in-process, and application-level.
 
 This provides **application-level per-agent authorization**. It is explicitly **NOT** GEAP Agent Identity, and explicitly **NOT** an independent per-agent Google Cloud IAM runtime identity. The security properties are weaker (bearer-token service-account principals, impersonation possible, no cryptographic per-agent attestation, a shared process boundary), and this MUST be recorded as such in `LIMITATIONS.md`. No evidence artifact may describe the fallback as platform-enforced Agent Identity or as per-agent IAM identity.
 

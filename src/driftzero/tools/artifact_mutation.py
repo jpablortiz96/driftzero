@@ -56,6 +56,15 @@ from driftzero.truth_engine.evidence import canonical_hash
 TOOL_IDENTITY = "driftzero.tools.artifact_mutation"
 """Stable tool identity recorded on receipts and checked at Crossing 2."""
 
+TOOL_CAPABILITY = "ARTIFACT_MUTATION"
+"""The capability a caller must hold to invoke this tool.
+
+Mirrors ``driftzero.capabilities.ToolCapability.ARTIFACT_MUTATION`` as a plain string so
+this module keeps no import of the authorization layer — the dependency runs
+capabilities -> tools, and inverting it here would create a cycle. A structural test
+asserts the two stay identical.
+"""
+
 
 class MutationOutcome(StrEnum):
     """What the tool did. Exactly one applies per invocation."""
@@ -72,6 +81,7 @@ class MutationRejection(StrEnum):
 
     CAPABILITY_MISSING = "CAPABILITY_MISSING"
     CAPABILITY_NOT_ISSUED = "CAPABILITY_NOT_ISSUED"
+    CAPABILITY_WRONG_TOOL = "CAPABILITY_WRONG_TOOL"
     CAPABILITY_SCOPE_VIOLATION = "CAPABILITY_SCOPE_VIOLATION"
     CAPABILITY_CONTEXT_MISMATCH = "CAPABILITY_CONTEXT_MISMATCH"
     MALFORMED_REQUEST = "MALFORMED_REQUEST"
@@ -120,6 +130,8 @@ class MutationCapability:
 
     capability_id: str
     holder: str
+    tool: str
+    """The capability this grant is for. Bound into the broker's HMAC payload."""
     authorized_artifact_ids: frozenset[str]
     change_id: str
     source_version: str
@@ -294,6 +306,16 @@ def apply_authorized_artifact_patch(
     capability = context.capability
     if capability is None:
         return _reject(MutationRejection.CAPABILITY_MISSING, detail="no capability presented")
+    if capability.tool != TOOL_CAPABILITY:
+        # Checked before verification so a capability minted for another tool is refused
+        # on its own terms, not merely because its signature happens not to match here.
+        return _reject(
+            MutationRejection.CAPABILITY_WRONG_TOOL,
+            detail=(
+                f"capability was minted for {capability.tool!r}, not {TOOL_CAPABILITY!r}; "
+                "a capability never crosses a tool boundary"
+            ),
+        )
     if not context.capability_verifier(capability):
         return _reject(
             MutationRejection.CAPABILITY_NOT_ISSUED,
