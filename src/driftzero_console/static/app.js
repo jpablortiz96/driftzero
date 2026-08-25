@@ -124,7 +124,7 @@ function renderStages() {
     },
     {
       label: "Authorization",
-      sub: r ? `${r.identity} → ARTIFACT_MUTATION` : "Awaiting deployment",
+      sub: r ? `${r.identity} → ${r.capability}` : "Awaiting deployment",
       chip: r
         ? r.status === "CAPABILITY_DENIED"
           ? chip("DENIED", "bad")
@@ -176,17 +176,17 @@ function renderStages() {
       done: Boolean(state.field_verification && state.field_verification.observation),
     },
     {
-      label: "Awaiting Deterministic Verdict",
-      sub: "Expected-vs-observed comparison is not wired — the change is not deployed",
-      chip: chip("AWAITING", "warn"),
-      done: false,
+      label: "Deterministic Verdict",
+      sub: verdictStageSub(state.verdict),
+      chip: verdictStageChip(state.verdict),
+      done: Boolean(state.verdict && state.verdict.result === "PASS"),
+      denied: Boolean(state.verdict && state.verdict.result === "FAIL"),
     },
   ];
 
   const notImplemented = [
     { label: "Impact Analysis", sub: "Change Intelligence Agent", chip: chip("NOT IMPLEMENTED", "warn") },
-    { label: "Deterministic Verdict", sub: "Expected vs observed — T080", chip: chip("NOT IMPLEMENTED", "warn") },
-    { label: "Change Proof", sub: "Seven proof invariants", chip: chip("NOT IMPLEMENTED", "warn") },
+    { label: "Change Proof", sub: "Seven proof invariants — T080 step 11", chip: chip("NOT IMPLEMENTED", "warn") },
   ];
 
   const shown = dev ? implemented.concat(notImplemented) : implemented;
@@ -201,11 +201,43 @@ function renderStages() {
     )
     .join("");
 
-  /* Counts only real change progress, never software completeness. */
-  const done = implemented.filter((s) => s.done).length;
-  $("pipeline-chip").textContent = `${done} / ${implemented.length} COMPLETE`;
-  $("pipeline-chip").className = `chip ${done === implemented.length ? "ok" : "warn"}`;
+  /* An operational status, not a fraction. "7 / 8 COMPLETE" reads as near-deployment
+     even while the change is unverified — a count of finished steps is not a statement
+     about the change, and this header should only ever say what is true of the change. */
+  const status = changeStatus();
+  $("pipeline-chip").textContent = status.label;
+  $("pipeline-chip").className = `chip ${status.tone}`;
   void c;
+}
+
+/* The single honest headline for the whole change. Derived from deterministic state
+ * only — never from how many UI steps happen to be filled in. */
+function changeStatus() {
+  const v = state.verdict;
+  if (v && v.change_deployed) return { label: "CHANGE DEPLOYED", tone: "ok" };
+  if (v && v.result === "PASS") return { label: "VERIFICATION PASSED", tone: "ok" };
+  if (v && v.result === "FAIL") return { label: "VERIFICATION FAILED", tone: "bad" };
+  if (v && v.result === "INCONCLUSIVE") return { label: "MORE EVIDENCE REQUIRED", tone: "warn" };
+  if (v && v.status === "EVALUATING") return { label: "EVALUATING", tone: "warn" };
+  if (state.delivery && state.delivery.delivery_established)
+    return { label: "AWAITING FIELD EVIDENCE", tone: "warn" };
+  if (state.validated_execution) return { label: "AWAITING DELIVERY", tone: "warn" };
+  return { label: "AWAITING REMEDIATION", tone: "" };
+}
+
+function verdictStageSub(v) {
+  if (!v || !v.result) return "Awaiting a validated field observation";
+  if (v.result === "PASS") return `Expected ${v.expected_value} · observed ${v.observed_value}`;
+  if (v.result === "FAIL")
+    return `Expected ${v.expected_value} but observed ${v.observed_value} — correct the work`;
+  return "Evidence was not clear enough to decide";
+}
+
+function verdictStageChip(v) {
+  if (!v || !v.result) return chip(v && v.status === "EVALUATING" ? "EVALUATING" : "PENDING");
+  if (v.result === "PASS") return chip("PASSED", "ok");
+  if (v.result === "FAIL") return chip("FAILED", "bad");
+  return chip("INCONCLUSIVE", "warn");
 }
 
 /* Stage text for field evidence. Reports the observation; never grades it. */
@@ -335,7 +367,8 @@ function renderSecurity() {
   const s = state.security;
   if (!s) {
     $("security-panel").innerHTML =
-      '<div class="empty">Frontline Enablement will attempt <b>ARTIFACT_MUTATION</b> through the real policy seam.</div>';
+      `<div class="empty">${esc(state.security_probe.identity)} will attempt
+       <b>${esc(state.security_probe.capability)}</b> through the real policy seam.</div>`;
     $("security-chip").textContent = "IDLE";
     $("security-chip").className = "chip";
     return;
@@ -548,7 +581,7 @@ function renderFieldVerification() {
 
   const observationBlock = accepted
     ? `<div class="observation ${f.inconclusive ? "inconclusive" : ""}">
-         <div class="obs-label">Model observation</div>
+         <div class="obs-label">Model observation · ${esc(f.observation_source || "model")}</div>
          <div class="obs-value">${esc(f.inconclusive ? "MORE EVIDENCE REQUIRED" : observation)}</div>
          <div class="obs-note">${
            f.inconclusive
@@ -580,12 +613,57 @@ function renderFieldVerification() {
       ${row("Change deployed", chip(String(f.change_deployed), "warn"))}
     </div>
     ${observationBlock}
-    <div class="observation verdict-gap">
-      <div class="obs-label">Deterministic verdict</div>
-      <div class="obs-value">NOT IMPLEMENTED</div>
-      <div class="obs-note">${esc(f.verdict_note || "")}</div>
-    </div>
+    ${renderVerdictBlock(f)}
     ${renderAttempts(f)}`;
+}
+
+/* The deterministic verdict. Visually separate from the model observation, and labelled
+ * with a different authority, because they are different kinds of claim: one is what a
+ * model reported, the other is what the Truth Engine decided. */
+function renderVerdictBlock(f) {
+  const v = state.verdict;
+  if (!v) return "";
+
+  if (v.status === "AWAITING_EVIDENCE" || v.status === "EVALUATING") {
+    return `<div class="observation verdict ${v.status === "EVALUATING" ? "evaluating" : ""}">
+      <div class="obs-label">Deterministic verdict · ${esc(v.authority)}</div>
+      <div class="obs-value">${v.status === "EVALUATING" ? "EVALUATING" : "AWAITING EVIDENCE"}</div>
+      <div class="obs-note">${esc(v.remaining_condition || "")}</div>
+    </div>`;
+  }
+
+  if (!v.result) {
+    return `<div class="observation verdict bad">
+      <div class="obs-label">Deterministic verdict · ${esc(v.authority)}</div>
+      <div class="obs-value">NOT ADJUDICATED</div>
+      <div class="obs-note">${esc(v.rejection_reason || v.status)}</div>
+    </div>`;
+  }
+
+  const tone = { PASS: "passed", FAIL: "failed", INCONCLUSIVE: "inconclusive" }[v.result];
+  const headline = { PASS: "PASSED", FAIL: "FAILED", INCONCLUSIVE: "MORE EVIDENCE REQUIRED" }[
+    v.result
+  ];
+  const action = {
+    PASS: "The physical work matches the approved change.",
+    FAIL: "CORRECT THE WORK AND PROVIDE NEW EVIDENCE",
+    INCONCLUSIVE: "The evidence was not clear enough to decide. Provide a clearer photo.",
+  }[v.result];
+
+  return `<div class="observation verdict ${tone}">
+      <div class="obs-label">Deterministic verdict · ${esc(v.authority)}</div>
+      <div class="obs-value">${esc(headline)}</div>
+      <div class="rows verdict-rows">
+        ${row("Expected", chip(v.expected_value, "info"))}
+        ${row("Observed", chip(v.observed_value, v.result === "PASS" ? "ok" : "warn"))}
+        ${row("Decision authority", esc(v.authority))}
+        ${row("Workflow state", esc(v.workflow_state || "—"), "mono")}
+        ${row("Change verified", chip(String(v.change_verified), v.change_verified ? "ok" : ""))}
+        ${row("Change deployed", chip(String(v.change_deployed), "warn"))}
+      </div>
+      <div class="obs-note action">${esc(action)}</div>
+      ${v.remaining_condition ? `<div class="obs-note">${esc(v.remaining_condition)}</div>` : ""}
+    </div>`;
 }
 
 function providerLabel(f, provider) {

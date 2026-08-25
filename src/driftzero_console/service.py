@@ -43,6 +43,15 @@ from driftzero.agents.field_verify import (
     get_field_observation_provider,
     has_field_observation_provider,
 )
+from driftzero.agents.orchestrator import (
+    VerdictContext,
+    adjudicate_field_verification,
+    authoritative_expected_value,
+    change_is_deployed,
+    remaining_condition_for,
+    reopen_for_new_evidence,
+    verification_history,
+)
 from driftzero.agents.remediation import (
     RemediationAgent,
     RemediationIntent,
@@ -77,6 +86,7 @@ from driftzero.models.action import ActionType
 from driftzero.models.artifact import DownstreamArtifact
 from driftzero.models.change import ApprovedChange
 from driftzero.models.classification import ClassificationLabel, DataClassification
+from driftzero.models.workflow import Workflow, WorkflowState
 from driftzero.orchestration import (
     DeliveryCrossingContext,
     ObservationCrossingContext,
@@ -100,6 +110,7 @@ from driftzero.truth_engine.idempotency import (
     derive_delivery_action_id,
     derive_remediation_action_id,
 )
+from driftzero.truth_engine.state_machine import can_transition, transition
 
 
 class Environment(StrEnum):
@@ -173,6 +184,12 @@ mode; it is not evidence that persistence, cloud deployment, or operational iden
 exist. Conflating the two is how a local process starts describing itself as
 production-ready.
 """
+
+VERDICT_AUTHORITY = "DRIFTZERO TRUTH ENGINE"
+"""Who decides PASS/FAIL. Never the model, never an agent, never the browser."""
+
+MODEL_OBSERVATION_SOURCE = "Gemma 4 MaaS"
+"""Who reports what was seen. Named separately so a UI cannot conflate the two."""
 
 DESTINATION_REF = "frontline:pilot-surface"
 """Where the pilot delivers. A surface, not a named employee."""
@@ -328,6 +345,10 @@ class _Session:
     """The original validated execution. Never overwritten by an idempotent replay."""
     delivery: dict[str, Any] | None = None
     delta_composed_at: datetime | None = None
+    workflow: Workflow | None = None
+    verdict: dict[str, Any] | None = None
+    verification_events: list[Any] = field(default_factory=list)
+    """Append-only. Every attempt is retained, FAIL and INCONCLUSIVE included."""
     field_verification: dict[str, Any] | None = None
     field_attempts: list[dict[str, Any]] = field(default_factory=list)
     known_submission_ids: set[str] = field(default_factory=set)
@@ -374,10 +395,34 @@ class HeroConsoleService:
                 worker_id=DESTINATION_REF,
             ),
         )
+        session.workflow = Workflow(
+            workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
+            change_id=change.change_id,
+            source_version=change.source_version,
+            state=WorkflowState.CHANGE_RECEIVED,
+            affected_artifact_id=case.artifact_id,
+            candidate_artifact_refs=[case.artifact_id],
+            worker_id=DESTINATION_REF,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            data_classification=_classification(),
+        )
         self._record(
             session, "CHANGE_CASE_LOADED", f"{case.change_id} — {case.source_name}"
         )
         return session
+
+    def _advance(self, session: _Session, target: WorkflowState) -> None:
+        """Advance the workflow through the frozen state machine, or leave it alone.
+
+        Structural legality is the state machine's call, never this service's. An
+        illegal request is skipped rather than forced, so a presentation layer can
+        never push the workflow somewhere the domain forbids.
+        """
+        workflow = session.workflow
+        if workflow is None or not can_transition(workflow.state, target):
+            return
+        session.workflow = transition(workflow, target, occurred_at=datetime.now(UTC))
 
     def _record(self, session: _Session, event: str, detail: str) -> None:
         session.events.append(
@@ -452,6 +497,12 @@ class HeroConsoleService:
         }
 
     def _fleet_view(self) -> list[dict[str, Any]]:
+        """The capability matrix, derived cell by cell from AUTHORIZATION_POLICY.
+
+        Every column is enumerated from ``ToolCapability`` and every cell answered by
+        ``is_authorized``. Nothing is written down twice: adding a capability to the
+        policy adds a column here, and no frontend asset carries a copy of the matrix.
+        """
         return [
             {
                 "identity": str(identity),
@@ -461,13 +512,12 @@ class HeroConsoleService:
                 # Capability-specific, so "DENIED" can never read as "agent unavailable".
                 "capabilities": [
                     {
-                        "capability": str(ToolCapability.ARTIFACT_MUTATION),
+                        "capability": str(tool),
                         "permission": (
-                            "ALLOWED"
-                            if is_authorized(identity, ToolCapability.ARTIFACT_MUTATION)
-                            else "DENIED"
+                            "ALLOWED" if is_authorized(identity, tool) else "DENIED"
                         ),
                     }
+                    for tool in ToolCapability
                 ],
                 "artifact_mutation": (
                     "ALLOWED"
@@ -477,6 +527,10 @@ class HeroConsoleService:
             }
             for identity, name, role in AGENT_ROLES
         ]
+
+    def _capability_columns(self) -> list[str]:
+        """Column order for the fleet matrix. Derived from the enum, never a UI literal."""
+        return [str(tool) for tool in ToolCapability]
 
     def get_state(self) -> dict[str, Any]:
         session = self._session
@@ -505,6 +559,12 @@ class HeroConsoleService:
             "delivery": session.delivery,
             "frontline": self._frontline_view(session),
             "field_verification": self._field_verification_view(),
+            "verdict": self._verdict_state_view(),
+            "security_probe": {
+                "identity": str(AgentIdentity.ENABLEMENT),
+                "capability": str(ToolCapability.ARTIFACT_MUTATION),
+            },
+            "capability_columns": self._capability_columns(),
             "security": session.security,
             "timeline": list(session.events),
             "modules": self._modules_view(),
@@ -560,6 +620,8 @@ class HeroConsoleService:
         session.remediation = {
             "status": str(result.status),
             "identity": result.identity,
+            # Named by the server so no UI asset has to know the capability vocabulary.
+            "capability": str(ToolCapability.ARTIFACT_MUTATION),
             "dispatched": result.dispatched,
             "dispatch_count": session.repository.dispatch_count,
             "enforcement_model": result.enforcement_model,
@@ -607,6 +669,10 @@ class HeroConsoleService:
                     ],
                     "action_id": session.action_id,
                 }
+                # Real progress, driven by validated results rather than by a UI click.
+                self._advance(session, WorkflowState.IMPACT_DETERMINED)
+                self._advance(session, WorkflowState.REMEDIATION_PENDING)
+                self._advance(session, WorkflowState.REMEDIATION_COMPLETED)
                 self._compose_delta(session)
 
         return self.get_state()
@@ -716,6 +782,8 @@ class HeroConsoleService:
 
         session.security = {
             "status": str(result.status),
+            "probe_identity": str(AgentIdentity.ENABLEMENT),
+            "probe_capability": str(ToolCapability.ARTIFACT_MUTATION),
             "denied": result.status is RemediationStatus.CAPABILITY_DENIED,
             "denial": denial,
             "evidence_id": evidence_id if denial else None,
@@ -969,6 +1037,8 @@ class HeroConsoleService:
                 receipt_ref=verdict.receipt.evidence_ref,
                 reconciled=False,
             )
+            self._advance(session, WorkflowState.FRONTLINE_DELIVERY_COMPLETED)
+            self._advance(session, WorkflowState.AWAITING_FIELD_VERIFICATION)
             self._record(
                 session,
                 "DELIVERY_ESTABLISHED",
@@ -1140,7 +1210,9 @@ class HeroConsoleService:
 
         crossing = None
         if result.succeeded and result.observation is not None:
-            crossing = self._validate_observation(session, result.observation)
+            crossing, boundary = self._validate_observation(session, result.observation)
+            if boundary is not None and boundary.accepted:
+                self._adjudicate(session, boundary)
         else:
             self._record(
                 session,
@@ -1156,8 +1228,13 @@ class HeroConsoleService:
 
     def _validate_observation(
         self, session: _Session, observation: Any
-    ) -> dict[str, Any]:
-        """Run Crossing 4 against the independently stored provider evidence."""
+    ) -> tuple[dict[str, Any], Any]:
+        """Run Crossing 4 against the independently stored provider evidence.
+
+        Returns the projection *and* the boundary result. Only the boundary result may
+        be handed to adjudication — the projection is for display, and a dict of strings
+        must never be what a verdict is derived from.
+        """
         stored = session.field_store.resolve(observation.raw_evidence_ref) or {}
         verdict = accept_field_observation(
             observation,
@@ -1192,6 +1269,112 @@ class HeroConsoleService:
             "rejections": [str(r) for r in verdict.rejections],
             "requires_review": verdict.requires_review,
             "evidence_id": crossing_id,
+        }, verdict
+
+    def _adjudicate(self, session: _Session, boundary: Any) -> None:
+        """Step 10 — hand the validated observation to the deterministic Truth Engine.
+
+        This service supplies inputs and stores the outcome. It computes no verdict, and
+        there is no expected/observed comparison anywhere in this file: the expected
+        value is read from the approved change by the domain, and the comparison is the
+        frozen T038 comparator reached through the frozen ingestion path.
+        """
+        workflow = session.workflow
+        if workflow is None:  # pragma: no cover - a session always has one
+            return
+
+        # A second attempt after FAIL/INCONCLUSIVE must reopen the workflow first. The
+        # state machine decides whether that is legal; this only asks.
+        session.workflow = reopen_for_new_evidence(workflow, occurred_at=datetime.now(UTC))
+
+        outcome = adjudicate_field_verification(
+            VerdictContext(
+                workflow=session.workflow,
+                change=session.change,
+                boundary=boundary,
+                store=session.field_store,
+                event_id=f"vev-{session.session_id}-{len(session.verification_events) + 1:03d}",
+                occurred_at=datetime.now(UTC),
+                data_classification=_classification(),
+                existing_events=tuple(session.verification_events),
+            )
+        )
+
+        if outcome.event is not None and not outcome.duplicate:
+            session.verification_events.append(outcome.event)
+            evidence_id = f"verification-event-{outcome.event.event_id}"
+            session.evidence[evidence_id] = outcome.event.model_dump(mode="json")
+        if outcome.workflow is not None:
+            session.workflow = outcome.workflow
+
+        session.verdict = self._verdict_view(session, outcome)
+        self._record(
+            session,
+            f"VERIFICATION_{outcome.result}" if outcome.result else "VERDICT_NOT_REACHED",
+            outcome.rejection_reason
+            or (
+                f"expected {outcome.expected_value} vs observed {outcome.observed_value}"
+                f" -> {outcome.result}"
+                + (" (already adjudicated)" if outcome.duplicate else "")
+            ),
+        )
+
+    def _verdict_view(self, session: _Session, outcome: Any) -> dict[str, Any]:
+        """Project the deterministic verdict for a UI. Adds no judgement of its own."""
+        workflow = session.workflow
+        return {
+            "status": str(outcome.status),
+            "adjudicated": outcome.adjudicated,
+            "duplicate": outcome.duplicate,
+            "result": str(outcome.result) if outcome.result else None,
+            "expected_value": outcome.expected_value,
+            "observed_value": outcome.observed_value,
+            "authority": VERDICT_AUTHORITY,
+            "observation_source": MODEL_OBSERVATION_SOURCE,
+            "workflow_state": str(workflow.state) if workflow else None,
+            "event_id": outcome.event.event_id if outcome.event else None,
+            "event_sequence": outcome.event.event_sequence if outcome.event else None,
+            "evidence_id": (
+                f"verification-event-{outcome.event.event_id}" if outcome.event else None
+            ),
+            "rejection_reason": outcome.rejection_reason,
+            # Derived from the frozen state table, never asserted by this layer.
+            "change_verified": outcome.passed,
+            "change_deployed": change_is_deployed(workflow),
+            "proof_generated": bool(workflow and workflow.proof_id),
+            "remaining_condition": remaining_condition_for(workflow),
+            "history": list(verification_history(session.verification_events)),
+        }
+
+    def _verdict_state_view(self) -> dict[str, Any]:
+        """The verdict panel before any adjudication, or the latest one after."""
+        session = self._session
+        if session.verdict is not None:
+            return session.verdict
+        workflow = session.workflow
+        field = session.field_verification
+        # EVALUATING is a real transient: the image was accepted and observed, but the
+        # deterministic step has not produced an authoritative event.
+        evaluating = bool(field and field.get("observation") and not session.verdict)
+        return {
+            "status": "EVALUATING" if evaluating else "AWAITING_EVIDENCE",
+            "adjudicated": False,
+            "duplicate": False,
+            "result": None,
+            "expected_value": None,
+            "observed_value": None,
+            "authority": VERDICT_AUTHORITY,
+            "observation_source": MODEL_OBSERVATION_SOURCE,
+            "workflow_state": str(workflow.state) if workflow else None,
+            "event_id": None,
+            "event_sequence": None,
+            "evidence_id": None,
+            "rejection_reason": None,
+            "change_verified": False,
+            "change_deployed": change_is_deployed(workflow),
+            "proof_generated": False,
+            "remaining_condition": remaining_condition_for(workflow),
+            "history": list(verification_history(session.verification_events)),
         }
 
     def _field_config(self) -> FieldProviderConfig:
@@ -1200,6 +1383,7 @@ class HeroConsoleService:
 
     def _field_static_view(self) -> dict[str, Any]:
         """Field-verification facts that do not depend on a particular submission."""
+        session = self._session
         config = self._field_config()
         return {
             "provider_configured": config.enabled and has_field_observation_provider(),
@@ -1209,12 +1393,21 @@ class HeroConsoleService:
             ),
             "max_bytes": MAX_IMAGE_BYTES,
             # Restated on every payload so no surface can imply otherwise.
-            "field_verified": False,
-            "change_deployed": False,
-            "deterministic_verdict": None,
+            # The approved expected value, read through the one accessor the domain
+            # exposes. A surface may display it; nothing may supply it.
+            "expected_value": authoritative_expected_value(session.change),
+            # Read from the deterministic layer, never asserted here.
+            "field_verified": bool(session.verdict and session.verdict["change_verified"]),
+            "change_deployed": change_is_deployed(session.workflow),
+            "deterministic_verdict": (
+                session.verdict["result"] if session.verdict else None
+            ),
+            "verdict_authority": VERDICT_AUTHORITY,
+            "observation_source": MODEL_OBSERVATION_SOURCE,
             "verdict_note": (
-                "A model observation is not a verdict. The deterministic "
-                "expected-vs-observed comparison is not part of this slice."
+                "A model observation is not a verdict. The observation says what was "
+                "seen; the deterministic comparator decides whether it matches the "
+                "approved change."
             ),
         }
 

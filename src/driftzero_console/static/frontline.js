@@ -51,8 +51,14 @@ function render(view) {
   $("fl-footnote").textContent = view.delivery_note;
 }
 
-/* The worker sees the observation in plain language. No PASS, no FAIL, no percentage —
- * this surface reports what the model saw and whether another photo is needed. */
+/* Reads the expected value out of the delta the worker was already shown, so the FAIL
+ * message names it without the page inventing or receiving anything new. */
+function state_expected(f) {
+  return f.expected_value || "";
+}
+
+/* The worker sees the deterministic outcome in plain language. This surface renders
+ * what the Truth Engine decided; it never decides anything itself. */
 function renderFieldEvidence(f) {
   const card = $("fl-evidence-card");
   if (!f || !f.provider_configured) {
@@ -75,6 +81,31 @@ function renderFieldEvidence(f) {
       `<div class="fl-obs bad"><span class="fl-obs-label">Not recorded</span>
        <span class="fl-obs-value">The photo could not be checked</span>
        <p class="fl-acked-note">Please take another photo.</p></div>`;
+    return;
+  }
+
+  /* The worker is told the deterministic outcome, in plain language and with the
+   * action it implies. The model observation alone is never the answer. */
+  const v = f.deterministic_verdict;
+  if (v === "FAIL") {
+    out.innerHTML = `<div class="fl-obs bad">
+      <span class="fl-obs-label">Verification failed</span>
+      <span class="fl-obs-value">Correct the work</span>
+      <p class="fl-acked-note">The approved setting is
+      <b>${esc(state_expected(f))}</b>, but the photo shows
+      <b>${esc(f.observation)}</b>. Fix it, then take a new photo.</p></div>`;
+    $("fl-capture").textContent = "Take New Photo";
+    $("fl-capture").disabled = false;
+    return;
+  }
+  if (v === "PASS") {
+    out.innerHTML = `<div class="fl-obs ok">
+      <span class="fl-obs-label">Verification passed</span>
+      <span class="fl-obs-value">${esc(f.observation)}</span>
+      <p class="fl-acked-note">Checked by the DRIFTZERO Truth Engine against the
+      approved change. Nothing further is needed from you.</p></div>`;
+    $("fl-capture").textContent = "Send Another Photo";
+    $("fl-capture").disabled = false;
     return;
   }
 

@@ -550,3 +550,29 @@ pre.json .b { color: var(--cyan); }
 }
 .attempt-row .idx { opacity: .45; font-variant-numeric: tabular-nums; min-width: 22px; }
 .attempt-row .hash { font-family: var(--mono, ui-monospace, monospace); opacity: .6; }
+
+/* ---------------------------------------------------------------- deterministic verdict */
+
+/* Deliberately styled apart from .observation: a model report and a Truth Engine
+   decision must never look like the same kind of statement. */
+.observation.verdict {
+  border-width: 1.5px;
+  background: rgba(255, 255, 255, .025);
+}
+.observation.verdict .obs-label { opacity: .7; letter-spacing: .16em; }
+.observation.verdict .obs-value { font-size: 30px; }
+.observation.verdict.passed { border-color: rgba(90, 200, 140, .55); }
+.observation.verdict.passed .obs-value { color: #5ac88c; }
+.observation.verdict.failed { border-color: rgba(229, 116, 116, .6); }
+.observation.verdict.failed .obs-value { color: #e57474; }
+.observation.verdict.inconclusive { border-color: rgba(229, 181, 103, .55); }
+.observation.verdict.inconclusive .obs-value { color: #e5b567; font-size: 21px; }
+.observation.verdict.evaluating .obs-value { opacity: .6; font-size: 21px; }
+.observation.verdict.bad { border-color: rgba(229, 116, 116, .45); }
+.observation.verdict.bad .obs-value { font-size: 19px; }
+.verdict-rows { margin-top: 12px; }
+.observation.verdict .obs-note.action {
+  font-weight: 600;
+  opacity: .85;
+  letter-spacing: .02em;
+}

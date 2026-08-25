@@ -505,13 +505,22 @@ def test_the_markup_carries_no_demo_language() -> None:
 
 
 def test_agent_permissions_are_capability_specific(client: TestClient) -> None:
-    """DENIED must read as 'not this capability', never as 'agent unavailable'."""
-    fleet = client.get("/api/hero/state").json()["fleet"]
+    """DENIED must read as 'not this capability', never as 'agent unavailable'.
+
+    The matrix now carries one column per real capability, so a denial is legible as
+    exactly which power the agent lacks.
+    """
+    from driftzero.capabilities import ToolCapability
+
+    state = client.get("/api/hero/state").json()
+    fleet = state["fleet"]
+    columns = [str(t) for t in ToolCapability]
+    assert state["capability_columns"] == columns
+
     for agent in fleet:
         assert agent["status"] == "OPERATIONAL"
-        assert agent["capabilities"]
+        assert [c["capability"] for c in agent["capabilities"]] == columns
         for capability in agent["capabilities"]:
-            assert capability["capability"] == "ARTIFACT_MUTATION"
             assert capability["permission"] in {"ALLOWED", "DENIED"}
 
     allowed = {a["identity"] for a in fleet if a["artifact_mutation"] == "ALLOWED"}

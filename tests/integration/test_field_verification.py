@@ -662,7 +662,10 @@ def test_hostile_headers_change_nothing(
     assert field["mime_type"] == "image/heic"
     assert field["model"] == "fake/gemma-test"
     assert provider.seen_prompts[-1] == FIELD_OBSERVATION_PROMPT
-    assert field["field_verified"] is False
+    # The verdict is whatever the deterministic comparator decided from authoritative
+    # state; a header cannot move it, and deployment still requires a Change Proof.
+    assert field["deterministic_verdict"] == body["verdict"]["result"]
+    assert body["verdict"]["expected_value"] == "TOP_RIGHT"
     assert field["change_deployed"] is False
 
 
@@ -1167,8 +1170,12 @@ def test_the_ui_separates_model_observation_from_deterministic_verdict(
     field = client.post(
         "/api/hero/field-evidence", content=HEIC_UNDER_JPG.read_bytes()
     ).json()["field_verification"]
-    assert field["deterministic_verdict"] is None
     assert "not a verdict" in field["verdict_note"]
+    # Two separately-sourced values, never one value shown twice.
+    assert field["observation_source"] == "Gemma 4 MaaS"
+    assert field["verdict_authority"] == "DRIFTZERO TRUTH ENGINE"
+    assert field["deterministic_verdict"] == "PASS"
+    assert field["observation"] == "TOP_RIGHT"
 
     app_js = (REPO_ROOT / "src" / "driftzero_console" / "static" / "app.js").read_text(
         encoding="utf-8"
@@ -1223,17 +1230,43 @@ def test_an_inconclusive_attempt_survives_a_later_submission(
     )
 
 
-def test_no_surface_claims_pass_deployed_or_proof(client: TestClient) -> None:
+def test_no_surface_claims_deployed_or_proof(client: TestClient) -> None:
+    """A PASS is a passed verification. It is not a deployment and not a proof."""
     deliver(client)
     state = client.post(
         "/api/hero/field-evidence", content=HEIC_UNDER_JPG.read_bytes()
     ).json()
-    assert state["field_verification"]["field_verified"] is False
+    assert state["verdict"]["result"] == "PASS"
     assert state["field_verification"]["change_deployed"] is False
+    assert state["verdict"]["change_deployed"] is False
+    assert state["verdict"]["proof_generated"] is False
+    assert state["verdict"]["workflow_state"] == "VERIFICATION_PASSED"
 
-    stages = json.dumps(state)
-    for claim in ('"PASS"', '"PROOF_COMPLETE"', '"DEPLOYED"', '"proof_complete"'):
-        assert claim not in stages
+    # Structural, not a substring grep: naming PROOF_COMPLETE as the step that has NOT
+    # happened is an honest explanation, while carrying it as a *state or result value*
+    # would be a false claim. Only the latter is forbidden.
+    forbidden_values = {"PROOF_COMPLETE", "DEPLOYED", "COMPLETE"}
+    claim_keys = {
+        "status",
+        "result",
+        "verdict",
+        "workflow_state",
+        "state",
+        "deterministic_verdict",
+    }
+
+    def walk(node: Any, path: str = "") -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in claim_keys and isinstance(value, str):
+                    assert value not in forbidden_values, f"{path}.{key} claims {value}"
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for i, item in enumerate(node):
+                walk(item, f"{path}[{i}]")
+
+    walk(state)
+    assert "the seven PROOF_COMPLETE invariants" in state["verdict"]["remaining_condition"]
 
     for page in ("index.html", "app.js", "frontline.html", "frontline.js"):
         source = (

@@ -33,6 +33,9 @@ class HeroState(BaseModel):
     delivery: dict[str, Any] | None = None
     frontline: dict[str, Any] | None = None
     field_verification: dict[str, Any] | None = None
+    verdict: dict[str, Any] | None = None
+    capability_columns: list[str] = Field(default_factory=list)
+    security_probe: dict[str, Any] | None = None
     security: dict[str, Any] | None = None
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     modules: list[dict[str, Any]] = Field(default_factory=list)
