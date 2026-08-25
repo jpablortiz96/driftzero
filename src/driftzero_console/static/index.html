@@ -15,8 +15,8 @@
         <p>Autonomous Operational Change Deployment</p>
       </div>
       <div class="status-cluster">
-        <span class="live"><span class="pulse"></span> Change Ops • Local Live</span>
-        <span class="chip" id="session-chip">SESSION —</span>
+        <span class="live"><span class="pulse"></span> <span id="env-badge">Change Ops</span></span>
+        <span class="chip" id="session-chip">CHANGE —</span>
       </div>
     </header>
 
@@ -45,7 +45,7 @@
 
             <div class="actions">
               <button class="primary" id="btn-deploy">Deploy Change</button>
-              <button id="btn-reset">Reset Demo</button>
+              <button id="btn-reset">New Change</button>
             </div>
           </div>
         </section>
@@ -61,10 +61,10 @@
         </section>
 
         <section class="panel">
-          <header><h2>Security</h2><span class="chip" id="security-chip">IDLE</span></header>
+          <header><h2>Control Verification</h2><span class="chip" id="security-chip">NOT RUN</span></header>
           <div class="body">
             <div class="actions" style="margin-top:0">
-              <button class="danger" id="btn-security">Run Security Test</button>
+              <button class="danger" id="btn-security">Run Control Verification</button>
             </div>
             <div id="security-panel" style="margin-top:14px"></div>
           </div>
@@ -86,8 +86,16 @@
         </section>
 
         <section class="panel">
-          <header><h2>Remediation Evidence</h2><span class="chip" id="crossing-chip">—</span></header>
+          <header><h2>Execution Evidence</h2><span class="chip" id="crossing-chip">—</span></header>
           <div class="body"><div id="evidence-summary"></div></div>
+        </section>
+
+        <section class="panel" id="frontline-panel">
+          <header>
+            <h2>Frontline · Teach the Delta</h2>
+            <span class="chip" id="frontline-chip">AWAITING VALIDATION</span>
+          </header>
+          <div class="body"><div id="frontline"></div></div>
         </section>
 
         <section class="panel">
@@ -109,8 +117,8 @@
           <div class="body"><div class="timeline" id="timeline"></div></div>
         </section>
 
-        <section class="panel">
-          <header><h2>Product Roadmap</h2><span class="chip warn">NOT WIRED</span></header>
+        <section class="panel" id="roadmap-panel" hidden>
+          <header><h2>Implementation Status</h2><span class="chip warn">DEVELOPMENT</span></header>
           <div class="body"><div class="future" id="future"></div></div>
         </section>
 
@@ -118,11 +126,11 @@
     </div>
 
     <p class="footnote">
-      This console executes the real remediation, authorization, and validation path.
-      Frontline delivery, physical verification, and Change Proof are not wired into this
-      slice and are labelled accordingly. No model, cloud, or network call is made.
-      Authorization is application-level inside one process under a shared runtime
-      identity — not Google Cloud IAM and not Agent Identity.
+      Authorization is enforced at application level inside one process under a shared
+      runtime identity — not Google Cloud IAM and not Agent Identity. A change is not
+      deployed because a document changed: acknowledgment records that an operator read
+      the update, and physical verification remains a separate step against real field
+      evidence.
     </p>
   </div>
 

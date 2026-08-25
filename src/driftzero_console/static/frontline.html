@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070a10" />
+  <title>Process Update — DRIFTZERO</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/frontline.css" />
+</head>
+<body class="frontline">
+  <main class="fl-shell">
+
+    <header class="fl-head">
+      <span class="fl-brand">DRIFT<span>ZERO</span></span>
+      <span class="chip" id="fl-version">—</span>
+    </header>
+
+    <h1 class="fl-title">Process Update</h1>
+    <p class="fl-source" id="fl-source">Loading…</p>
+
+    <section class="fl-card" aria-labelledby="fl-what">
+      <h2 id="fl-what">What changed</h2>
+      <p class="fl-requirement" id="fl-requirement">—</p>
+
+      <div class="fl-values">
+        <div class="fl-value before">
+          <span class="fl-label">Before</span>
+          <span class="fl-big" id="fl-before">—</span>
+        </div>
+        <div class="fl-arrow" aria-hidden="true">↓</div>
+        <div class="fl-value now">
+          <span class="fl-label">Now</span>
+          <span class="fl-big" id="fl-after">—</span>
+        </div>
+      </div>
+
+      <p class="fl-instruction" id="fl-instruction">—</p>
+    </section>
+
+    <section class="fl-card unchanged" aria-labelledby="fl-unchanged-h">
+      <h2 id="fl-unchanged-h">Only this requirement changed</h2>
+      <p class="fl-note">Everything below is unchanged. Do not alter it.</p>
+      <div id="fl-unchanged"></div>
+    </section>
+
+    <div id="fl-ack-zone">
+      <button class="fl-ack" id="fl-ack">Acknowledge Change</button>
+    </div>
+
+    <p class="fl-footnote" id="fl-footnote"></p>
+  </main>
+
+  <script src="/static/frontline.js"></script>
+</body>
+</html>

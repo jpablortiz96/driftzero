@@ -58,6 +58,14 @@ function highlightJson(value) {
 
 /* ---------------------------------------------------------------- renderers */
 
+function renderEnvironment() {
+  const env = state.environment;
+  $("env-badge").textContent = env.is_production ? "Change Ops" : "Change Ops · Development";
+  $("btn-reset").textContent = env.session_action_label;
+  $("btn-security").textContent = env.control_verification_label;
+  $("roadmap-panel").hidden = !env.show_roadmap;
+}
+
 function renderModules() {
   $("modules").innerHTML = state.modules
     .map((m) => {
@@ -71,7 +79,7 @@ function renderModules() {
 
 function renderScenario() {
   const s = state.scenario;
-  $("session-chip").textContent = `SESSION ${s.action_id.slice(0, 8).toUpperCase()}`;
+  $("session-chip").textContent = `CHANGE ${s.change_id}`;
   $("change-id").textContent = s.change_id;
   $("source-name").textContent = `${s.source} · ${s.source_procedure_id}`;
   $("prev-version").textContent = s.previous_version;
@@ -83,21 +91,20 @@ function renderScenario() {
 
 function renderStages() {
   const r = state.remediation;
+  const v = state.validated_execution;
   const c = state.crossing_2;
-  const mutated = r && (r.status === "MUTATED" || r.status === "ALREADY_COMPLETED");
+  const f = state.frontline;
+  const dev = state.environment.show_diagnostics;
 
-  const stages = [
+  /* Implemented stages describe real change progress. Unimplemented capabilities are
+     development diagnostics — they are never rendered as operational stages, and never
+     counted, because a stage nobody built cannot be "pending" for this change. */
+  const implemented = [
     {
       label: "Source Change Approved",
       sub: `${state.scenario.change_id} · ${state.scenario.previous_version} → ${state.scenario.source_version}`,
       chip: chip("APPROVED", "ok"),
       done: true,
-    },
-    {
-      label: "Impact Analysis",
-      sub: "Change Intelligence Agent — not wired into this slice",
-      chip: chip("NOT WIRED", "warn"),
-      done: false,
     },
     {
       label: "Authorization",
@@ -111,25 +118,40 @@ function renderStages() {
       denied: Boolean(r) && r.status === "CAPABILITY_DENIED",
     },
     {
-      label: "Artifact Mutation",
-      sub: r
-        ? `${r.status.replace(/_/g, " ").toLowerCase()} · dispatch count ${r.dispatch_count}`
+      label: "Artifact Remediation",
+      sub: v
+        ? `${v.remediation_type} · dispatch count ${v.dispatch_count}`
         : "Awaiting deployment",
-      chip: r ? chip(r.remediation_type || r.status, mutated ? "ok" : "warn") : chip("PENDING"),
-      done: Boolean(mutated),
+      chip: v ? chip(v.remediation_type, "ok") : chip("PENDING"),
+      done: Boolean(v),
     },
     {
-      label: "Crossing 2 Validation",
-      sub: c ? "RemediationEvidence checked against authoritative state" : "Awaiting evidence",
-      chip: c ? chip(c.verdict, c.accepted ? "ok" : "bad") : chip("PENDING"),
-      done: Boolean(c && c.accepted),
+      label: "Evidence Validation",
+      sub: v ? "Checked against authoritative state" : "Awaiting evidence",
+      chip: v ? chip(v.crossing_2, v.accepted ? "ok" : "bad") : chip("PENDING"),
+      done: Boolean(v && v.accepted),
     },
-    { label: "Teach the Delta", sub: "Frontline Enablement — T077", chip: chip("COMING NEXT", "warn"), done: false },
-    { label: "Physical Verification", sub: "Gemma field observation — M3", chip: chip("NOT WIRED", "warn"), done: false },
-    { label: "Change Proof", sub: "Seven proof invariants — not wired", chip: chip("NOT WIRED", "warn"), done: false },
+    {
+      label: "Teach the Delta",
+      sub: f && f.available
+        ? f.acknowledged
+          ? "Operator acknowledged the update"
+          : "Operational delta composed — awaiting acknowledgment"
+        : "Awaiting validated change",
+      chip: f && f.available ? chip(f.acknowledged ? "ACKNOWLEDGED" : "READY", f.acknowledged ? "ok" : "info") : chip("PENDING"),
+      done: Boolean(f && f.acknowledged),
+    },
   ];
 
-  $("stages").innerHTML = stages
+  const notImplemented = [
+    { label: "Impact Analysis", sub: "Change Intelligence Agent", chip: chip("NOT IMPLEMENTED", "warn") },
+    { label: "Proven Delivery", sub: "Delivery receipt — T078", chip: chip("NOT IMPLEMENTED", "warn") },
+    { label: "Physical Verification", sub: "Field observation — M3", chip: chip("NOT IMPLEMENTED", "warn") },
+    { label: "Change Proof", sub: "Seven proof invariants", chip: chip("NOT IMPLEMENTED", "warn") },
+  ];
+
+  const shown = dev ? implemented.concat(notImplemented) : implemented;
+  $("stages").innerHTML = shown
     .map(
       (s, i) => `
       <div class="stage ${s.done ? "done" : ""} ${s.denied ? "denied" : ""}">
@@ -140,9 +162,11 @@ function renderStages() {
     )
     .join("");
 
-  const done = stages.filter((s) => s.done).length;
-  $("pipeline-chip").textContent = `${done} / ${stages.length} STAGES`;
-  $("pipeline-chip").className = `chip ${done > 3 ? "ok" : "warn"}`;
+  /* Counts only real change progress, never software completeness. */
+  const done = implemented.filter((s) => s.done).length;
+  $("pipeline-chip").textContent = `${done} / ${implemented.length} COMPLETE`;
+  $("pipeline-chip").className = `chip ${done === implemented.length ? "ok" : "warn"}`;
+  void c;
 }
 
 function renderArtifact() {
@@ -177,55 +201,78 @@ function renderArtifact() {
 
 function renderEvidenceSummary() {
   const r = state.remediation;
+  const v = state.validated_execution;
   const c = state.crossing_2;
+
   if (!r) {
     $("evidence-summary").innerHTML =
-      '<div class="empty">No remediation executed yet. Press <b>Deploy Change</b>.</div>';
+      '<div class="empty">No change executed yet. Press <b>Deploy Change</b>.</div>';
     $("crossing-chip").textContent = "—";
     $("crossing-chip").className = "chip";
     return;
   }
 
-  const before = c ? c.authoritative_before_hash : null;
-  const after = c ? c.authoritative_after_hash : null;
-
-  $("evidence-summary").innerHTML = `<div class="rows">
-    ${row("Remediation status", chip(r.status, r.status === "MUTATED" ? "ok" : "info"))}
-    ${row("Evidence type", r.remediation_type ? chip(r.remediation_type, "info") : "—")}
-    ${row("Reconciled", r.reconciled === null ? "—" : chip(String(r.reconciled), r.reconciled ? "warn" : ""))}
-    ${row("Dispatch count", `<b>${r.dispatch_count}</b>`, "hl")}
-    ${row("Action ID", esc(state.scenario.action_id), "mono")}
-    ${row("Authoritative before hash", esc(shortHash(before)), "mono")}
-    ${row("Authoritative after hash", esc(shortHash(after)), "mono")}
-    ${row("Crossing 2", c ? chip(c.verdict, c.accepted ? "ok" : "bad") : "—")}
-    ${row("Requires review", c ? String(c.requires_review) : "—")}
-    ${row("Enforcement", esc(r.enforcement_model), "mono")}
+  /* The latest request and the validated execution are different facts. An idempotent
+     replay changes the former and must never blank the latter. */
+  const lastRequest = `<div class="rows">
+    ${row("Last request", chip(r.status, r.status === "MUTATED" ? "ok" : "info"))}
+    ${row("Dispatched by this request", String(r.dispatched))}
   </div>`;
 
-  if (c) {
-    $("crossing-chip").textContent = c.verdict;
-    $("crossing-chip").className = `chip ${c.accepted ? "ok" : "bad"}`;
+  const execution = v
+    ? `<div class="rows">
+        ${row("Evidence type", chip(v.remediation_type, "info"))}
+        ${row("Reconciled", chip(String(v.reconciled), v.reconciled ? "warn" : ""))}
+        ${row("Dispatch count", `<b>${v.dispatch_count}</b>`, "hl")}
+        ${row("Action ID", esc(v.action_id), "mono")}
+        ${row("Authoritative before hash", esc(shortHash(v.authoritative_before_hash)), "mono")}
+        ${row("Authoritative after hash", esc(shortHash(v.authoritative_after_hash)), "mono")}
+        ${row("Crossing 2", chip(v.crossing_2, v.accepted ? "ok" : "bad"))}
+        ${row("Enforcement", esc(r.enforcement_model), "mono")}
+      </div>`
+    : '<div class="empty">No validated execution recorded.</div>';
+
+  $("evidence-summary").innerHTML =
+    `<div class="sub-head">Last request</div>${lastRequest}
+     <div class="sub-head">Validated execution evidence</div>${execution}`;
+
+  const chipSource = v || c;
+  if (chipSource) {
+    const accepted = v ? v.accepted : c.accepted;
+    $("crossing-chip").textContent = v ? v.crossing_2 : c.verdict;
+    $("crossing-chip").className = `chip ${accepted ? "ok" : "bad"}`;
   }
 }
 
 function renderFleet() {
   $("fleet").innerHTML = state.fleet
-    .map(
-      (a) => `
+    .map((a) => {
+      const caps = a.capabilities
+        .map(
+          (c) =>
+            `<div class="cap"><span class="cap-name">${esc(c.capability)}</span>
+             ${chip(c.permission, c.permission === "ALLOWED" ? "ok" : "bad")}</div>`,
+        )
+        .join("");
+      return `
       <div class="agent ${a.artifact_mutation === "ALLOWED" ? "allowed" : ""}">
         <span>
           <span class="name">${esc(a.name)}</span>
           <div class="id">${esc(a.identity)}</div>
           <div class="role">${esc(a.role)}</div>
         </span>
-        ${chip(a.artifact_mutation, a.artifact_mutation === "ALLOWED" ? "ok" : "bad")}
-      </div>`,
-    )
+        <span class="agent-right">
+          ${chip(a.status, "info")}
+          <div class="caps">${caps}</div>
+        </span>
+      </div>`;
+    })
     .join("");
 
   const allowed = state.fleet.filter((a) => a.artifact_mutation === "ALLOWED").length;
-  $("fleet-count").textContent = `${allowed} / ${state.fleet.length} MUTATION`;
+  $("fleet-count").textContent = `${state.fleet.length} OPERATIONAL`;
   $("enforcement-note").textContent = state.authorization.note;
+  void allowed;
 }
 
 function renderSecurity() {
@@ -293,6 +340,7 @@ function renderEvidenceBar() {
 }
 
 function renderFuture() {
+  if (!state.environment.show_roadmap) return;
   $("future").innerHTML = state.future_capabilities
     .map((g) => {
       const kind = g.status === "PARTIAL" ? "warn" : "";
@@ -303,6 +351,42 @@ function renderFuture() {
       </div>`;
     })
     .join("");
+}
+
+function renderFrontline() {
+  const f = state.frontline;
+  const panel = $("frontline");
+  if (!f || !f.available) {
+    $("frontline-chip").textContent = "AWAITING VALIDATION";
+    $("frontline-chip").className = "chip";
+    panel.innerHTML =
+      '<div class="empty">The operational delta is composed once a change is validated at Crossing 2.</div>';
+    return;
+  }
+
+  const i = f.instruction;
+  const unchanged = Object.entries(i.unchanged_context || {})
+    .map(([k, v]) => `<div class="req-row"><span class="key">${esc(k)}</span>
+                      <span class="val">${markLexicalLeft(v)}</span></div>`)
+    .join("");
+
+  $("frontline-chip").textContent = f.acknowledged ? "ACKNOWLEDGED" : "READY TO TEACH";
+  $("frontline-chip").className = `chip ${f.acknowledged ? "ok" : "info"}`;
+
+  panel.innerHTML = `<div class="rows">
+      ${row("Requirement", esc(i.requirement_id), "mono")}
+      ${row("Change", `${chip(i.before_value, "warn")} → ${chip(i.after_value, "ok")}`)}
+      ${row("Instruction", esc(i.concise_instruction))}
+      ${row("Rationale", i.rationale ? esc(i.rationale) : "<i>None provided by the source</i>")}
+      ${row("Acknowledged", chip(String(f.acknowledged), f.acknowledged ? "ok" : ""))}
+      ${row("Delivery established", chip(String(f.delivery_established), "warn"))}
+    </div>
+    <div class="sub-head">Unchanged context</div>${unchanged}
+    <div class="actions" style="margin-top:14px">
+      <a class="link-btn" href="/frontline/${encodeURIComponent(i.change_id)}" target="_blank"
+         rel="noopener">Open Worker View</a>
+    </div>
+    <div class="callout">${esc(f.delivery_note)}</div>`;
 }
 
 /* ---------------------------------------------------------------- evidence */
@@ -316,6 +400,7 @@ async function showEvidence(id) {
 /* ---------------------------------------------------------------- render */
 
 function render() {
+  renderEnvironment();
   renderModules();
   renderScenario();
   renderStages();
@@ -325,6 +410,7 @@ function render() {
   renderSecurity();
   renderTimeline();
   renderEvidenceBar();
+  renderFrontline();
   renderFuture();
 }
 

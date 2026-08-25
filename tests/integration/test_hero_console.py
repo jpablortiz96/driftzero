@@ -142,7 +142,7 @@ def test_crossing_2_reports_authoritative_hashes(client: TestClient) -> None:
 
 def test_the_timeline_records_real_events(client: TestClient) -> None:
     events = [e["event"] for e in deploy(client)["timeline"]]
-    assert events[0] == "DEMO_INITIALIZED"
+    assert events[0] == "CHANGE_CASE_LOADED"
     for expected in ("REMEDIATION_REQUESTED", "AUTHORIZATION_GRANTED", "ARTIFACT_MUTATED",
                      "CROSSING_2_ACCEPTED"):
         assert expected in events
@@ -175,17 +175,17 @@ def test_reset_creates_a_fresh_context_rather_than_undoing(client: TestClient) -
     deployed = deploy(client)
     assert deployed["artifact"]["requirements"][REQUIREMENT] == "TOP_RIGHT"
 
-    reset = client.post("/api/hero/reset").json()
+    reset = client.post("/api/hero/session").json()
     assert reset["artifact"]["requirements"][REQUIREMENT] == "LEFT"
     assert reset["session_id"] != deployed["session_id"]
     assert reset["remediation"] is None
     assert reset["evidence_ids"] == []
-    assert [e["event"] for e in reset["timeline"]] == ["DEMO_INITIALIZED"]
+    assert [e["event"] for e in reset["timeline"]] == ["CHANGE_CASE_LOADED"]
 
 
 def test_reset_issues_a_new_action_identity(client: TestClient) -> None:
     before = state(client)["scenario"]["action_id"]
-    after = client.post("/api/hero/reset").json()["scenario"]["action_id"]
+    after = client.post("/api/hero/session").json()["scenario"]["action_id"]
     assert before and after
 
 
@@ -319,7 +319,7 @@ def test_no_endpoint_accepts_a_filesystem_path_or_patch(client: TestClient) -> N
         for operation in operations.values()
         for parameter in operation.get("parameters", [])
     ]
-    assert parameters == ["evidence_id"]
+    assert sorted(set(parameters)) == ["change_id", "evidence_id"]
     for forbidden in ("path", "file", "dir", "uri", "url", "patch", "value", "identity"):
         assert not any(forbidden in name.lower() for name in parameters)
 
@@ -378,7 +378,7 @@ def test_future_modules_are_marked_not_ready_rather_than_fake_success(
     assert statuses["Agent Fleet"] == "ACTIVE"
     assert statuses["Security"] == "ACTIVE"
     assert statuses["Evidence"] == "PARTIAL"
-    assert statuses["Frontline"] == "NOT WIRED"
+    assert statuses["Frontline"] == "ACTIVE"
     assert statuses["Change Proof"] == "NOT WIRED"
     assert statuses["Coverage"] == "NOT WIRED"
 
