@@ -108,7 +108,9 @@ from driftzero.orchestration import (
     accept_remediation_evidence,
 )
 from driftzero.proof.store import (
+    DOWNLOAD_HASH_NOTE,
     HASH_MEANING,
+    HASH_PREIMAGE_LABEL,
     ProofOutcome,
     ProofStore,
     attempt_proof,
@@ -2338,6 +2340,8 @@ class HeroConsoleService:
             "proof_id": None,
             "content_hash": None,
             "hash_meaning": HASH_MEANING,
+            "download_hash_note": DOWNLOAD_HASH_NOTE,
+            "hash_preimage": HASH_PREIMAGE_LABEL,
             "change_deployed": False,
         }
 
@@ -2362,6 +2366,8 @@ class HeroConsoleService:
             "proof_id": stored.proof.proof_id if stored else None,
             "content_hash": stored.content_hash if stored else None,
             "hash_meaning": HASH_MEANING,
+            "download_hash_note": DOWNLOAD_HASH_NOTE,
+            "hash_preimage": HASH_PREIMAGE_LABEL,
             "summary": stored.as_summary() if stored else None,
             "evidence_id": (
                 f"change-proof-{stored.proof.proof_id}" if stored else None
@@ -2394,6 +2400,8 @@ class HeroConsoleService:
             "proof_id": None,
             "content_hash": None,
             "hash_meaning": HASH_MEANING,
+            "download_hash_note": DOWNLOAD_HASH_NOTE,
+            "hash_preimage": HASH_PREIMAGE_LABEL,
             "change_deployed": change_is_deployed(session.workflow),
         }
 
@@ -2409,7 +2417,10 @@ class HeroConsoleService:
             "proof_ref": stored.proof_ref,
             "content_hash": stored.content_hash,
             "hash_meaning": HASH_MEANING,
-            # The exact bytes the hash was computed over — not a re-serialisation.
+            "hash_preimage": HASH_PREIMAGE_LABEL,
+            "download_hash_note": DOWNLOAD_HASH_NOTE,
+            # The stored bytes verbatim — the complete proof, content_hash included.
+            # Deliberately NOT the hash preimage, which excludes that field.
             "canonical_json": stored.canonical_bytes,
             "document": stored.proof.model_dump(mode="json"),
         }

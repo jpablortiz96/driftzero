@@ -496,13 +496,16 @@ function renderProof() {
       ${row("Verification event", esc(s.verification_event_id), "mono")}
       ${row("Delivery receipt", esc(s.delivery_ref), "mono")}
       ${row("Proof ID", esc(s.proof_id), "mono")}
-      ${row("Canonical SHA-256", esc(shortHash(s.content_hash)), "mono")}
+      ${row("Proof content hash", esc(shortHash(s.content_hash)), "mono")}
       ${row("Completed", esc((s.completion_timestamp || "").replace("T", " ").split(".")[0]))}
       ${row("Proof size", `${s.byte_count} bytes`, "mono")}
     </div>
     ${gate}
-    <div class="callout">${esc(p.hash_meaning)}. This is content integrity, not a
-    signature, attestation, or trusted timestamp.</div>`;
+    <div class="callout">
+      <b>Verification.</b> ${esc(p.hash_meaning)}
+      This is content integrity, not a signature, attestation, or trusted timestamp.
+      <div class="dz-sub" style="margin-top:6px">${esc(p.download_hash_note || "")}</div>
+    </div>`;
 }
 
 /* Implementation, runtime, and operation are three different questions. Rendering them

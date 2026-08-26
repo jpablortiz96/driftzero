@@ -9,11 +9,22 @@ state into the :class:`ProofContext` those functions expect, plus an append-only
 
 Canonical bytes
 ---------------
-The proof's identity is its canonical JSON and the SHA-256 over it, both produced by M0.
-The store keeps **those exact bytes**, so what a caller downloads is byte-for-byte what
-was hashed. Re-serialising a proof through a presentation schema and hashing the result
-would produce a different document with the same name — which is how an audit trail
-quietly stops being one.
+The store keeps the canonical JSON of the **complete** proof — ``content_hash`` included
+— and that is what a caller downloads. Re-serialising a proof through a presentation
+schema before serving it would produce a different document under the same name, which
+is how an audit trail quietly stops being one.
+
+What the hash covers
+--------------------
+``content_hash`` is SHA-256 over the canonical JSON of the proof **excluding its own
+``content_hash`` field** (:func:`~driftzero.truth_engine.proof_generator.canonical_proof_material`).
+The exclusion is arithmetic, not preference: a field cannot contain the digest of a
+document that contains that field.
+
+So the downloaded file is deliberately **not** the hash preimage — it carries 82 extra
+bytes, its own digest. ``sha256(downloaded_bytes) != content_hash`` is the expected and
+required result, and a third party still verifies the proof from those bytes alone by
+removing ``content_hash`` before canonicalising. See ``docs/verifying_a_change_proof.md``.
 
 What the hash is, and is not
 ----------------------------
@@ -43,8 +54,25 @@ from driftzero.truth_engine.proof_generator import (
 PROOF_REF_SCHEME = "proof"
 """``proof:pf-wf-dz-001-001`` — stable, and it resolves to the canonical bytes."""
 
-HASH_MEANING = "SHA-256 content identity and alteration detection over canonical JSON"
-"""The only claim this hash supports. Not a signature, attestation, or timestamp."""
+HASH_MEANING = (
+    "SHA-256 over canonical JSON of the Change Proof excluding its own content_hash "
+    "field. Content identity and alteration detection only."
+)
+"""The only claim this hash supports. Not a signature, attestation, or timestamp.
+
+Names the preimage explicitly. The earlier wording said only "over canonical JSON",
+which reads as "over the file" and sent a real auditor to ``Get-FileHash``.
+"""
+
+HASH_PREIMAGE_LABEL = "canonical-json-excluding-content_hash"
+"""Machine-readable preimage identifier, surfaced on the download response."""
+
+DOWNLOAD_HASH_NOTE = (
+    "The downloaded JSON contains content_hash, so the SHA-256 of the complete file is "
+    "expected to differ from content_hash. Remove the content_hash field, canonicalise, "
+    "then hash."
+)
+"""Shown wherever the hash is displayed, so the difference is never a surprise."""
 
 CONDITION_LABELS: Mapping[ProofCondition, str] = {
     ProofCondition.C1_SOURCE_CHANGE_APPLICABLE: (

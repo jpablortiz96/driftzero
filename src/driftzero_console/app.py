@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 
 from driftzero.config import DriftZeroConfig
 from driftzero.field.evidence import MAX_IMAGE_BYTES
+from driftzero.proof.store import HASH_PREIMAGE_LABEL
 from driftzero_console.schemas import EvidenceDocument, FrontlineView, HeroState
 from driftzero_console.service import HeroConsoleService
 
@@ -287,10 +288,15 @@ def read_proof() -> dict:
 
 @app.get("/api/hero/proof/download")
 def download_proof() -> Response:
-    """Download the canonical proof bytes verbatim.
+    """Download the stored canonical proof bytes verbatim.
 
-    Serves ``canonical_json`` rather than re-serialising the model, so the downloaded
-    file is byte-for-byte what the SHA-256 was computed over.
+    Serves the stored ``canonical_json`` rather than re-serialising the model, so the
+    file is exactly what this deployment recorded — the **complete** proof, its own
+    ``content_hash`` included.
+
+    That means ``sha256`` of this file deliberately does **not** equal ``content_hash``:
+    the digest is taken over the proof *without* that field. ``X-Proof-Hash-Preimage``
+    names the preimage so the difference is discoverable from the response alone.
     """
     document = _service.get_proof_document()
     if document is None:
@@ -302,6 +308,7 @@ def download_proof() -> Response:
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Proof-Content-Hash": document["content_hash"],
+            "X-Proof-Hash-Preimage": HASH_PREIMAGE_LABEL,
         },
     )
 
