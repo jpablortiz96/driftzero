@@ -258,24 +258,34 @@ FUTURE_CAPABILITIES: tuple[dict[str, Any], ...] = (
         ],
     },
     {
-        "group": "Field Verification",
-        "status": "PARTIAL",
-        "milestone": "Observation is live; the deterministic verdict is not",
+        "group": "Change Intelligence",
+        "status": "IMPLEMENTED",
+        "milestone": "Google ADK + Gemini, Crossing 1, and the deterministic impact gate",
         "items": [
-            "Photo upload — LIVE",
-            "Actual-bytes MIME detection — LIVE",
-            "Gemma 4 observation — LIVE",
-            "LEFT / TOP_RIGHT / INCONCLUSIVE — LIVE",
-            "Deterministic PASS / FAIL — NOT WIRED",
+            "Source version diff — IMPLEMENTED",
+            "Google ADK + Gemini proposal — IMPLEMENTED",
+            "Crossing 1 validation — IMPLEMENTED",
+            "Deterministic impact gate — IMPLEMENTED",
+        ],
+    },
+    {
+        "group": "Field Verification",
+        "status": "IMPLEMENTED",
+        "milestone": "Observation and the deterministic verdict are both implemented",
+        "items": [
+            "Photo upload — IMPLEMENTED",
+            "Actual-bytes MIME detection — IMPLEMENTED",
+            "Gemma 4 observation — IMPLEMENTED",
+            "LEFT / TOP_RIGHT / INCONCLUSIVE — IMPLEMENTED",
+            "Deterministic PASS / FAIL — IMPLEMENTED",
         ],
     },
     {
         "group": "Change Proof",
         "status": "NOT WIRED",
-        "milestone": "Proof generation exists in M0; not wired to this slice",
+        "milestone": "Proof generation exists in M0; T080 step 11 is not wired",
         "items": [
             "Seven proof invariants",
-            "Expected-vs-observed comparison",
             "Proof JSON + SHA-256",
             "Replay audit",
         ],
@@ -448,6 +458,9 @@ class _Session:
     qualified_artifact_id: str | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
     remediation: dict[str, Any] | None = None
+    """Set **only** when remediation actually executed. A refusal never lands here."""
+    remediation_requests: list[dict[str, Any]] = field(default_factory=list)
+    """Append-only history of every remediation request, refusals included."""
     crossing: dict[str, Any] | None = None
     security: dict[str, Any] | None = None
     evidence: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -734,6 +747,9 @@ class HeroConsoleService:
             "authorization": self._policy_view(),
             "fleet": self._fleet_view(),
             "remediation": session.remediation,
+            "remediation_state": self._remediation_view(),
+            "authorization_stage": self._authorization_view(),
+            "capability_status": self._capability_status(),
             "validated_execution": session.validated_execution,
             "crossing_2": session.crossing,
             "delivery": session.delivery,
@@ -985,20 +1001,25 @@ class HeroConsoleService:
                 "REMEDIATION_BLOCKED",
                 "no qualified impact target; run impact analysis first",
             )
-            session.remediation = {
-                "status": "BLOCKED_NO_QUALIFIED_TARGET",
-                "blocked": True,
-                "detail": (
-                    "Remediation requires exactly one deterministically qualified "
-                    "artifact. Impact analysis has not produced one."
-                ),
-                "identity": None,
-                "dispatched": False,
-                "dispatch_count": session.repository.dispatch_count,
-                "evidence_id": None,
-                "remediation_type": None,
-                "reconciled": None,
-            }
+            # A refusal is a *request*, not a remediation. It must never occupy the slot
+            # that means "remediation executed" — that is what made a blocked attempt
+            # render as an authorization grant with no identity behind it.
+            session.remediation_requests.append(
+                {
+                    "sequence": len(session.remediation_requests) + 1,
+                    "outcome": "BLOCKED_NO_QUALIFIED_TARGET",
+                    "executed": False,
+                    "reason": (
+                        "impact had not yet been qualified when this request was made"
+                    ),
+                    "detail": (
+                        "Remediation requires exactly one deterministically qualified "
+                        "artifact. Impact analysis had not produced one."
+                    ),
+                    "dispatch_count": session.repository.dispatch_count,
+                    "at": datetime.now(UTC).isoformat(timespec="seconds"),
+                }
+            )
             return self.get_state()
 
         target_id = session.qualified_artifact_id
@@ -1034,6 +1055,17 @@ class HeroConsoleService:
         )
 
         result = RemediationAgent(broker=session.broker).remediate(intent, tool_context)
+        session.remediation_requests.append(
+            {
+                "sequence": len(session.remediation_requests) + 1,
+                "outcome": str(result.status),
+                "executed": True,
+                "reason": None,
+                "detail": f"{result.identity} requested the mutation capability",
+                "dispatch_count": session.repository.dispatch_count,
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+        )
 
         if result.status is not RemediationStatus.CAPABILITY_DENIED:
             self._record(
@@ -1808,6 +1840,145 @@ class HeroConsoleService:
             "remaining_condition": remaining_condition_for(workflow),
             "history": list(verification_history(session.verification_events)),
         }
+
+    def _remediation_view(self) -> dict[str, Any]:
+        """Current remediation state, kept distinct from the request history.
+
+        Three different questions, three different answers: has remediation executed
+        (``remediation``), what was last *asked for* (``last_request``), and is the
+        system ready to be asked (``state``). Collapsing them is what made a refused
+        request read as a completed authorization.
+        """
+        session = self._session
+        history = list(session.remediation_requests)
+        last = history[-1] if history else None
+        if session.remediation is not None:
+            state = str(session.remediation["status"])
+        elif session.qualified_artifact_id is not None:
+            state = "AWAITING_REMEDIATION"
+        else:
+            state = "AWAITING_IMPACT_QUALIFICATION"
+        return {
+            "state": state,
+            "executed": session.remediation is not None,
+            "last_request": last,
+            "blocked_request_count": sum(1 for r in history if not r["executed"]),
+            "request_history": history,
+            "note": (
+                "A refused request is preserved as history. It is not the current "
+                "remediation state and it never authorized anything."
+            ),
+        }
+
+    def _authorization_view(self) -> dict[str, Any]:
+        """The *operational* authorization stage. Eligibility is not a grant.
+
+        Policy eligibility already appears in the Agent Fleet matrix, where it belongs.
+        This says only whether a capability was actually obtained and used, which cannot
+        be true until the Remediation Agent has run.
+        """
+        session = self._session
+        executed = session.remediation
+        if executed is None:
+            return {
+                "status": "PENDING",
+                "granted": False,
+                "identity": None,
+                "capability": None,
+                "detail": "Awaiting a remediation request. Policy eligibility is not a grant.",
+            }
+        denied = executed["status"] == str(RemediationStatus.CAPABILITY_DENIED)
+        return {
+            "status": "DENIED" if denied else "GRANTED",
+            "granted": not denied,
+            "identity": executed["identity"],
+            "capability": executed["capability"],
+            "detail": (
+                "The capability was refused by the authorization policy."
+                if denied
+                else "A broker-issued capability was obtained and used."
+            ),
+        }
+
+    def _capability_status(self) -> list[dict[str, Any]]:
+        """Implementation, runtime, and operation as three separate dimensions.
+
+        A capability can be built but unconfigured, or configured but not yet exercised.
+        One status string cannot say which, and collapsing them is how a wired
+        comparator ends up advertised as "NOT WIRED".
+        """
+        session = self._session
+        field_config = self._field_config()
+        semantic_config = DriftZeroConfig.from_env().semantic_provider
+        verdict = session.verdict
+        observation = session.field_verification
+
+        def runtime(config: Any, registered: bool) -> str:
+            if not config.enabled:
+                return "DISABLED_THIS_SESSION"
+            return "CONFIGURED" if registered else "NOT_AVAILABLE"
+
+        return [
+            {
+                "id": "change_intelligence",
+                "label": "Change intelligence",
+                "implementation": "IMPLEMENTED",
+                "runtime": runtime(semantic_config, has_model_client_provider()),
+                "runtime_detail": semantic_config.as_disclosure()["runtime"]
+                or "no semantic provider configured",
+                "operation": (
+                    str(session.intel["status"]) if session.intel else "AWAITING_ANALYSIS"
+                ),
+            },
+            {
+                "id": "impact_gate",
+                "label": "Deterministic impact gate",
+                "implementation": "IMPLEMENTED",
+                "runtime": "DETERMINISTIC",
+                "runtime_detail": "no model or network dependency",
+                "operation": (
+                    str(session.impact["outcome"])
+                    if session.impact
+                    else "AWAITING_PROPOSAL"
+                ),
+            },
+            {
+                "id": "field_observation",
+                "label": "Field observation",
+                "implementation": "IMPLEMENTED",
+                "runtime": runtime(field_config, has_field_observation_provider()),
+                "runtime_detail": (
+                    f"{field_config.model} via Vertex AI MaaS"
+                    if field_config.is_live
+                    else "no field model provider configured"
+                ),
+                "operation": (
+                    str(observation["status"]) if observation else "AWAITING_EVIDENCE"
+                ),
+            },
+            {
+                "id": "deterministic_verdict",
+                "label": "Deterministic verdict",
+                "implementation": "IMPLEMENTED",
+                # Deterministic in itself; it needs a validated observation as *input*,
+                # which is a dependency, not a missing implementation.
+                "runtime": "DETERMINISTIC",
+                "runtime_detail": "depends on a Crossing-4-validated FieldObservation",
+                "operation": (
+                    str(verdict["result"])
+                    if verdict and verdict.get("result")
+                    else "AWAITING_FIELD_OBSERVATION"
+                ),
+            },
+            {
+                "id": "change_proof",
+                "label": "Change Proof",
+                "implementation": "NOT_YET_WIRED",
+                "runtime": "UNAVAILABLE",
+                "runtime_detail": "generation exists in M0; T080 step 11 is not wired",
+                "operation": "UNAVAILABLE",
+            },
+        ]
 
     def _intel_static_view(self, config: Any) -> dict[str, Any]:
         """Change-intelligence facts independent of any particular analysis."""

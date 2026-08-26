@@ -32,6 +32,9 @@ class HeroState(BaseModel):
     authorization: dict[str, Any]
     fleet: list[dict[str, Any]]
     remediation: dict[str, Any] | None = None
+    remediation_state: dict[str, Any] | None = None
+    authorization_stage: dict[str, Any] | None = None
+    capability_status: list[dict[str, Any]] = Field(default_factory=list)
     validated_execution: dict[str, Any] | None = None
     crossing_2: dict[str, Any] | None = None
     delivery: dict[str, Any] | None = None

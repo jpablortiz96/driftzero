@@ -582,3 +582,21 @@ pre.json .b { color: var(--cyan); }
 .source-refs { margin-top: 14px; }
 .source-refs .row .v { font-size: 11.5px; }
 button:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------- capability status */
+
+/* Three dimensions per capability, never collapsed into one badge. */
+.cap-status {
+  padding: 12px 0;
+  border-top: 1px solid var(--line, #26303f);
+}
+.cap-status:first-child { border-top: none; padding-top: 0; }
+.cap-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cap-status-head .name { font-weight: 600; }
+.cap-status .rows .row .v { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -561,9 +561,12 @@ def test_remediation_is_refused_before_impact_determination(
 ) -> None:
     """Server-side, not a disabled button: the API call itself is refused."""
     body = client.post("/api/hero/deploy").json()
-    assert body["remediation"]["status"] == "BLOCKED_NO_QUALIFIED_TARGET"
-    assert body["remediation"]["blocked"] is True
-    assert body["remediation"]["dispatch_count"] == 0
+    # A refusal is recorded as a request, never as an executed remediation.
+    assert body["remediation"] is None
+    last = body["remediation_state"]["last_request"]
+    assert last["outcome"] == "BLOCKED_NO_QUALIFIED_TARGET"
+    assert last["executed"] is False
+    assert last["dispatch_count"] == 0
     assert body["crossing_2"] is None
     assert body["artifact"] is None
 
@@ -576,8 +579,12 @@ def test_remediation_is_refused_after_a_review_required_outcome(
     )
     client.post("/api/hero/analyze")
     body = client.post("/api/hero/deploy").json()
-    assert body["remediation"]["status"] == "BLOCKED_NO_QUALIFIED_TARGET"
-    assert body["remediation"]["dispatch_count"] == 0
+    assert body["remediation"] is None
+    assert (
+        body["remediation_state"]["last_request"]["outcome"]
+        == "BLOCKED_NO_QUALIFIED_TARGET"
+    )
+    assert body["remediation_state"]["last_request"]["dispatch_count"] == 0
 
 
 def test_remediation_proceeds_after_qualification(

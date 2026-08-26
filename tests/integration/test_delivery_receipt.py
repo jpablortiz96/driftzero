@@ -52,6 +52,11 @@ from driftzero.orchestration import (  # noqa: E402
 from driftzero_console import app as app_module  # noqa: E402
 from driftzero_console.service import HeroConsoleService  # noqa: E402
 
+from ._pilot import (  # noqa: E402
+    analyze_and_deploy,
+    arm_for_service,
+    clear_change_intelligence,
+)
 from .test_frontline_enablement import TORQUE_CASE  # noqa: E402
 
 DESTINATION = "frontline:pilot-surface"
@@ -114,13 +119,16 @@ def crossing(channel: DeliveryChannel, instruction: DeltaInstruction, **override
 
 @pytest.fixture
 def client() -> TestClient:
-    app_module.get_service().reset_demo()
+    service = app_module.get_service()
+    service.reset_demo()
+    arm_for_service(service)
     with TestClient(app_module.app) as test_client:
         yield test_client
+    clear_change_intelligence()
 
 
 def deploy_and_deliver(client: TestClient) -> dict:
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     return client.post("/api/hero/deliver").json()
 
 
@@ -385,14 +393,14 @@ def test_a_rejection_produces_a_deterministic_evidence_reference() -> None:
 
 
 def test_delta_exists_before_delivery(client: TestClient) -> None:
-    body = client.post("/api/hero/deploy").json()
+    body = analyze_and_deploy(client).json()
     assert body["frontline"]["composed"] is True
     assert body["frontline"]["available"] is False
     assert body["delivery"] is None
 
 
 def test_delivery_establishes_only_after_an_accepted_crossing(client: TestClient) -> None:
-    before = client.post("/api/hero/deploy").json()
+    before = analyze_and_deploy(client).json()
     assert before["frontline"]["delivery_established"] is False
 
     after = client.post("/api/hero/deliver").json()
@@ -468,7 +476,7 @@ def test_delivery_does_not_alter_the_mutation_evidence(client: TestClient) -> No
 
 
 def test_the_worker_route_is_unavailable_before_delivery(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     assert client.get("/api/hero/frontline/DZ-001").status_code == 404
     assert client.post("/api/hero/frontline/DZ-001/acknowledge").status_code == 404
 
@@ -492,7 +500,7 @@ def test_the_deliver_endpoint_accepts_no_request_body(client: TestClient) -> Non
 
 
 def test_the_frontend_cannot_forge_a_receipt_or_choose_identity(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     for payload in (
         {"delivery_evidence_ref": "local_pilot_frontline:receipt:forged"},
         {"identity": "driftzero-remediation"},
@@ -552,10 +560,11 @@ def test_delivery_works_for_an_arbitrary_second_case(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = HeroConsoleService(case=TORQUE_CASE)
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
-        test_client.post("/api/hero/deploy")
+        analyze_and_deploy(test_client)
         delivery = test_client.post("/api/hero/deliver").json()["delivery"]
         assert delivery["delivery_established"] is True
         assert delivery["crossing_3"] == "ACCEPTED"
@@ -590,6 +599,7 @@ def test_presentation_mode_is_distinct_from_runtime_readiness(
     """DRIFTZERO_ENV selects presentation. It is not evidence of readiness."""
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
@@ -606,10 +616,11 @@ def test_production_delivery_payload_has_no_demo_terminology(
 ) -> None:
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
-        test_client.post("/api/hero/deploy")
+        analyze_and_deploy(test_client)
         payload = test_client.post("/api/hero/deliver").text
 
     for banned in ("Demo", "DEMO", "mock", "fake", "NOT WIRED", "COMING NEXT"):

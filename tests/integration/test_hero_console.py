@@ -24,13 +24,30 @@ from driftzero_console.service import UNRELATED_INSTRUCTIONS  # noqa: E402
 
 REQUIREMENT = "label_position"
 
+from ._pilot import (  # noqa: E402
+    analyze_and_deploy,
+    arm_pilot_analysis,
+    clear_change_intelligence,
+)
+
 
 @pytest.fixture
 def client() -> TestClient:
     """A fresh demo session per test, so ordering never leaks between cases."""
-    get_service().reset_demo()
+    service = get_service()
+    service.reset_demo()
+    # Remediation is gated on a qualified impact target, so every session needs a real
+    # analysis first. The ADK runtime is real; only the model is a stub.
+    arm_pilot_analysis(service.current_change)
     with TestClient(app) as test_client:
         yield test_client
+    clear_change_intelligence()
+
+
+def analyze(client: TestClient) -> dict:
+    response = client.post("/api/hero/analyze")
+    assert response.status_code == 200
+    return response.json()
 
 
 def state(client: TestClient) -> dict:
@@ -40,7 +57,8 @@ def state(client: TestClient) -> dict:
 
 
 def deploy(client: TestClient) -> dict:
-    response = client.post("/api/hero/deploy")
+    """Analyse, then deploy. Remediation without a qualified target is refused."""
+    response = analyze_and_deploy(client)
     assert response.status_code == 200
     return response.json()
 
@@ -78,17 +96,28 @@ def test_no_external_origin_is_referenced(client: TestClient) -> None:
 
 
 def test_initial_state_is_the_canonical_left_scenario(client: TestClient) -> None:
+    """The change is derived from real source versions; the target is not yet known."""
     body = state(client)
     scenario = body["scenario"]
 
     assert scenario["change_id"] == "DZ-001"
-    assert scenario["source"] == "Packing SOP"
     assert scenario["previous_version"] == "v13"
     assert scenario["source_version"] == "v14"
     assert scenario["requirement_id"] == REQUIREMENT
     assert scenario["previous_value"] == "LEFT"
     assert scenario["current_value"] == "TOP_RIGHT"
-    assert body["artifact"]["requirements"][REQUIREMENT] == "LEFT"
+
+    # Impact is undetermined at boot. Nothing here knows WI-114 exists as a target.
+    assert scenario["affected_artifact_id"] is None
+    assert scenario["impact_determined"] is False
+    assert scenario["remediation_available"] is False
+    assert body["artifact"] is None
+    assert body["impact"] is None
+
+    # It becomes known only after analysis and the deterministic gate.
+    analyzed = analyze(client)
+    assert analyzed["impact"]["affected_artifact_id"] == "WI-114"
+    assert analyzed["artifact"]["requirements"][REQUIREMENT] == "LEFT"
 
 
 def test_nothing_is_claimed_before_deployment(client: TestClient) -> None:
@@ -96,7 +125,7 @@ def test_nothing_is_claimed_before_deployment(client: TestClient) -> None:
     assert body["remediation"] is None
     assert body["crossing_2"] is None
     assert body["security"] is None
-    assert body["evidence_ids"] == []
+    assert body["evidence_ids"] == [f"source-change-{body['session_id']}"]
 
 
 # ============================ deploy ==================================================
@@ -142,7 +171,7 @@ def test_crossing_2_reports_authoritative_hashes(client: TestClient) -> None:
 
 def test_the_timeline_records_real_events(client: TestClient) -> None:
     events = [e["event"] for e in deploy(client)["timeline"]]
-    assert events[0] == "CHANGE_CASE_LOADED"
+    assert events[0] == "SOURCE_CHANGE_RECEIVED"
     for expected in ("REMEDIATION_REQUESTED", "AUTHORIZATION_GRANTED", "ARTIFACT_MUTATED",
                      "CROSSING_2_ACCEPTED"):
         assert expected in events
@@ -176,17 +205,27 @@ def test_reset_creates_a_fresh_context_rather_than_undoing(client: TestClient) -
     assert deployed["artifact"]["requirements"][REQUIREMENT] == "TOP_RIGHT"
 
     reset = client.post("/api/hero/session").json()
-    assert reset["artifact"]["requirements"][REQUIREMENT] == "LEFT"
+    # A new session re-ingests the source and forgets the target entirely.
+    assert reset["artifact"] is None
+    assert reset["scenario"]["impact_determined"] is False
+    assert analyze(client)["artifact"]["requirements"][REQUIREMENT] == "LEFT"
     assert reset["session_id"] != deployed["session_id"]
     assert reset["remediation"] is None
-    assert reset["evidence_ids"] == []
-    assert [e["event"] for e in reset["timeline"]] == ["CHANGE_CASE_LOADED"]
+    assert reset["evidence_ids"] == [f"source-change-{reset['session_id']}"]
+    assert [e["event"] for e in reset["timeline"]] == ["SOURCE_CHANGE_RECEIVED"]
 
 
 def test_reset_issues_a_new_action_identity(client: TestClient) -> None:
-    before = state(client)["scenario"]["action_id"]
-    after = client.post("/api/hero/session").json()["scenario"]["action_id"]
+    """An action identity exists only once a target does, and differs per session."""
+    assert state(client)["scenario"]["action_id"] is None, "no target, no action"
+    before = analyze(client)["scenario"]["action_id"]
+
+    client.post("/api/hero/session")
+    assert state(client)["scenario"]["action_id"] is None
+    after = analyze(client)["scenario"]["action_id"]
+
     assert before and after
+    assert before != after
 
 
 # ============================ security ================================================
@@ -206,7 +245,8 @@ def test_the_security_test_is_denied(client: TestClient) -> None:
 
 def test_the_security_test_causes_zero_mutation(client: TestClient) -> None:
     body = security_test(client)
-    assert body["artifact"]["requirements"][REQUIREMENT] == "LEFT"
+    # Measured on the probe's own target, which needs no impact qualification.
+    assert body["security"]["artifact_hash_unchanged"] is True
     assert body["security"]["dispatch_count_before"] == 0
     assert body["security"]["dispatch_count_after"] == 0
     assert body["security"]["dispatch_count_unchanged"] is True
@@ -275,7 +315,7 @@ def test_no_platform_enforcement_is_claimed(client: TestClient) -> None:
 def test_no_capability_or_grant_token_is_ever_serialized(client: TestClient) -> None:
     bodies = [
         client.get("/api/hero/state").text,
-        client.post("/api/hero/deploy").text,
+        analyze_and_deploy(client).text,
         client.post("/api/hero/security-test").text,
     ]
     for evidence_id in client.get("/api/hero/state").json()["evidence_ids"]:
@@ -389,7 +429,7 @@ def test_future_capabilities_carry_no_fabricated_numbers(client: TestClient) -> 
     Coverage is the tempting one: "82% deployed" would look great and mean nothing,
     because no worker has been reached and no verification has run.
     """
-    allowed = {"COMING NEXT", "NOT WIRED", "AWAITING MILESTONE", "PARTIAL"}
+    allowed = {"COMING NEXT", "NOT WIRED", "AWAITING MILESTONE", "PARTIAL", "IMPLEMENTED"}
     body = state(client)
     coverage = next(g for g in body["future_capabilities"] if g["group"] == "Deployment Coverage")
 

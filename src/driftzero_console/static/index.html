@@ -99,7 +99,10 @@
 
         <section class="panel">
           <header><h2>Execution Evidence</h2><span class="chip" id="crossing-chip">—</span></header>
-          <div class="body"><div id="evidence-summary"></div></div>
+          <div class="body">
+            <div id="evidence-summary"></div>
+            <div id="request-history"></div>
+          </div>
         </section>
 
         <section class="panel" id="delivery-panel">
@@ -152,6 +155,14 @@
             <span class="chip">UI ACTIVITY — NOT WORKFLOW STATE</span>
           </header>
           <div class="body"><div class="timeline" id="timeline"></div></div>
+        </section>
+
+        <section class="panel" id="capability-panel">
+          <header>
+            <h2>Capability Status</h2>
+            <span class="chip">IMPLEMENTATION · RUNTIME · OPERATION</span>
+          </header>
+          <div class="body"><div id="capability-status"></div></div>
         </section>
 
         <section class="panel" id="roadmap-panel" hidden>

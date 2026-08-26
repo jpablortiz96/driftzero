@@ -67,6 +67,12 @@ from driftzero.retry import NonTransientModelError, TransientModelError  # noqa:
 from driftzero_console import app as app_module  # noqa: E402
 from driftzero_console.service import ChangeCase, HeroConsoleService  # noqa: E402
 
+from ._pilot import (  # noqa: E402
+    analyze_and_deploy,
+    arm_for_service,
+    clear_change_intelligence,
+)
+
 FIXTURES = REPO_ROOT / "fixtures" / "multimodal"
 HEIC_UNDER_JPG = FIXTURES / "label_left_01.jpg"
 HEIC_TOP_RIGHT = FIXTURES / "label_top_right_01.jpg"
@@ -282,14 +288,16 @@ def client(provider: FakeProvider, monkeypatch: pytest.MonkeyPatch):  # type: ig
     monkeypatch.setenv("DRIFTZERO_GEMMA_MODEL", "google/gemma-4-26b-a4b-it-maas")
     fv.register_field_observation_provider(lambda _config: provider)
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as test_client:
         yield test_client
+    clear_change_intelligence()
 
 
 def deliver(client: TestClient) -> dict[str, Any]:
     """Advance the pilot to the point where field evidence is meaningful."""
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     return client.post("/api/hero/deliver").json()
 
 
@@ -1288,9 +1296,10 @@ def test_field_verification_works_for_an_arbitrary_second_case(
     monkeypatch.setenv("DRIFTZERO_GCP_PROJECT", "driftzero-runtime-2026")
     fv.register_field_observation_provider(lambda _c: provider)
     service = HeroConsoleService(case=TORQUE_CASE)
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as client:
-        client.post("/api/hero/deploy")
+        analyze_and_deploy(client)
         client.post("/api/hero/deliver")
         field = client.post(
             "/api/hero/field-evidence", content=HEIC_UNDER_JPG.read_bytes()
@@ -1334,6 +1343,7 @@ def test_production_hides_the_upload_control_when_no_provider_is_configured(
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     monkeypatch.delenv("DRIFTZERO_FIELD_PROVIDER", raising=False)
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as client:
         state = client.get("/api/hero/state").json()
@@ -1350,9 +1360,10 @@ def test_a_disabled_provider_never_fabricates_an_observation(
 ) -> None:
     monkeypatch.delenv("DRIFTZERO_FIELD_PROVIDER", raising=False)
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as client:
-        client.post("/api/hero/deploy")
+        analyze_and_deploy(client)
         client.post("/api/hero/deliver")
         field = client.post(
             "/api/hero/field-evidence", content=HEIC_UNDER_JPG.read_bytes()

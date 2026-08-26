@@ -50,6 +50,12 @@ from driftzero_console.service import (  # noqa: E402
     current_environment,
 )
 
+from ._pilot import (  # noqa: E402
+    analyze_and_deploy,
+    arm_for_service,
+    clear_change_intelligence,
+)
+
 STATIC = REPO_ROOT / "src" / "driftzero_console" / "static"
 
 TORQUE_CASE = ChangeCase(
@@ -129,15 +135,20 @@ def compose(**overrides: object):  # type: ignore[no-untyped-def]
 
 def deploy_and_deliver(client: TestClient) -> dict:
     """The full pilot chain up to an established delivery."""
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     return client.post("/api/hero/deliver").json()
 
 
 @pytest.fixture
 def client() -> TestClient:
-    app_module.get_service().reset_demo()
+    service = app_module.get_service()
+    service.reset_demo()
+    # Remediation is gated on a qualified target, so arm the real ADK runtime (stub
+    # model) that impact analysis needs.
+    arm_for_service(service)
     with TestClient(app_module.app) as test_client:
         yield test_client
+    clear_change_intelligence()
 
 
 # ============================ T077 semantics ==========================================
@@ -296,10 +307,11 @@ def test_the_frontend_renders_a_second_case_without_source_changes(
 ) -> None:
     """The console derives everything from application state, not hard-coded markup."""
     service = HeroConsoleService(case=TORQUE_CASE)
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
-        body = test_client.post("/api/hero/deploy").json()
+        body = analyze_and_deploy(test_client).json()
 
         assert body["scenario"]["change_id"] == "DZ-114"
         assert body["scenario"]["source"] == "Torque Procedure"
@@ -454,6 +466,7 @@ def test_development_mode_stays_honest(client: TestClient) -> None:
 def test_production_mode_hides_unfinished_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
@@ -471,10 +484,11 @@ def test_production_payload_contains_no_demo_language(
 ) -> None:
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
-        payload = test_client.post("/api/hero/deploy").text
+        payload = analyze_and_deploy(test_client).text
 
     for banned in ("Demo", "DEMO", "Reset Demo", "NOT WIRED", "COMING NEXT",
                    "Product Roadmap", "LOCAL LIVE"):
@@ -486,6 +500,7 @@ def test_production_terminology_is_used_for_actions(
 ) -> None:
     monkeypatch.setenv("DRIFTZERO_ENV", "production")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
 
     with TestClient(app_module.app) as test_client:
@@ -540,11 +555,11 @@ def test_every_agent_is_operational_even_when_denied_mutation(client: TestClient
 
 def test_replay_preserves_the_validated_execution_evidence(client: TestClient) -> None:
     """An idempotent replay must not blank the evidence panel."""
-    first = client.post("/api/hero/deploy").json()
+    first = analyze_and_deploy(client).json()
     original = first["validated_execution"]
     assert original["remediation_type"] == "MUTATION"
 
-    second = client.post("/api/hero/deploy").json()
+    second = analyze_and_deploy(client).json()
     assert second["remediation"]["status"] == "ALREADY_COMPLETED"
     assert second["remediation"]["remediation_type"] is None
 
@@ -557,8 +572,8 @@ def test_replay_preserves_the_validated_execution_evidence(client: TestClient) -
 
 
 def test_last_request_and_validated_execution_are_separate(client: TestClient) -> None:
-    client.post("/api/hero/deploy")
-    body = client.post("/api/hero/deploy").json()
+    analyze_and_deploy(client)
+    body = analyze_and_deploy(client).json()
     assert body["remediation"]["status"] != body["validated_execution"]["crossing_2"]
     assert body["remediation"]["dispatched"] is False
     assert body["validated_execution"]["dispatch_count"] == 1

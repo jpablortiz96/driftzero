@@ -60,6 +60,12 @@ from driftzero.truth_engine import verification as frozen_verification  # noqa: 
 from driftzero_console import app as app_module  # noqa: E402
 from driftzero_console.service import ChangeCase, HeroConsoleService  # noqa: E402
 
+from ._pilot import (  # noqa: E402
+    analyze_and_deploy,
+    arm_for_service,
+    clear_change_intelligence,
+)
+
 FIXTURES = REPO_ROOT / "fixtures" / "multimodal"
 TOP_RIGHT_IMG = FIXTURES / "label_top_right_01.jpg"
 LEFT_IMG = FIXTURES / "label_left_01.jpg"
@@ -258,9 +264,11 @@ def client(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("DRIFTZERO_FIELD_PROVIDER", "vertex_maas")
     monkeypatch.setenv("DRIFTZERO_GCP_PROJECT", "driftzero-runtime-2026")
     service = HeroConsoleService()
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as test_client:
         yield test_client
+    clear_change_intelligence()
 
 
 def wire(output: str) -> StubProvider:
@@ -270,7 +278,7 @@ def wire(output: str) -> StubProvider:
 
 
 def run_to_verdict(client: TestClient, image: Path) -> dict[str, Any]:
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     return client.post("/api/hero/field-evidence", content=image.read_bytes()).json()
 
@@ -553,7 +561,7 @@ def test_hostile_verdict_headers_are_ignored(
 ) -> None:
     """Observed LEFT against expected TOP_RIGHT must FAIL, whatever the caller claims."""
     wire("LEFT")
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     body = client.post(
         "/api/hero/field-evidence", content=LEFT_IMG.read_bytes(), headers=hostile
@@ -658,7 +666,7 @@ def test_the_same_image_produces_one_verification_event_end_to_end(
     client: TestClient,
 ) -> None:
     provider = wire("TOP_RIGHT")
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     raw = TOP_RIGHT_IMG.read_bytes()
     for _ in range(4):
@@ -676,7 +684,7 @@ def test_a_failed_attempt_is_preserved_when_a_later_one_passes(
 ) -> None:
     outputs = iter(["LEFT", "TOP_RIGHT"])
     fv.register_field_observation_provider(lambda _c: StubProvider(next(outputs)))
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
 
     failed = client.post(
@@ -703,7 +711,7 @@ def test_an_inconclusive_attempt_is_preserved_when_a_later_one_passes(
 ) -> None:
     outputs = iter(["INCONCLUSIVE", "TOP_RIGHT"])
     fv.register_field_observation_provider(lambda _c: StubProvider(next(outputs)))
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     client.post("/api/hero/field-evidence", content=AMBIGUOUS_IMG.read_bytes())
     verdict = client.post(
@@ -719,7 +727,7 @@ def test_a_later_pass_supersedes_without_deleting_the_failure(
     """T037 chronology: the newest event wins; the old one is retained, not erased."""
     outputs = iter(["LEFT", "TOP_RIGHT"])
     fv.register_field_observation_provider(lambda _c: StubProvider(next(outputs)))
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     client.post("/api/hero/field-evidence", content=LEFT_IMG.read_bytes())
     state = client.post(
@@ -809,7 +817,7 @@ def test_state_transitions_use_the_frozen_state_machine() -> None:
 def test_the_console_never_forces_an_illegal_transition(client: TestClient) -> None:
     """A verdict before delivery is impossible; the state machine, not the UI, says so."""
     wire("TOP_RIGHT")
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     state = client.get("/api/hero/state").json()
     assert state["verdict"]["workflow_state"] == "REMEDIATION_COMPLETED"
     assert state["verdict"]["result"] is None
@@ -935,7 +943,7 @@ def test_the_inconclusive_surface_never_says_failed(client: TestClient) -> None:
 
 def test_the_worker_surface_renders_the_deterministic_outcome(client: TestClient) -> None:
     wire("LEFT")
-    client.post("/api/hero/deploy")
+    analyze_and_deploy(client)
     client.post("/api/hero/deliver")
     view = client.post(
         f"/api/hero/frontline/{CHANGE_ID}/field-evidence", content=LEFT_IMG.read_bytes()
@@ -1002,9 +1010,10 @@ def test_an_arbitrary_second_case_adjudicates_without_special_casing(
     monkeypatch.setenv("DRIFTZERO_GCP_PROJECT", "driftzero-runtime-2026")
     fv.register_field_observation_provider(lambda _c: StubProvider("TOP_RIGHT"))
     service = HeroConsoleService(case=TORQUE_CASE)
+    arm_for_service(service)
     monkeypatch.setattr(app_module, "_service", service)
     with TestClient(app_module.app) as client:
-        client.post("/api/hero/deploy")
+        analyze_and_deploy(client)
         client.post("/api/hero/deliver")
         verdict = client.post(
             "/api/hero/field-evidence", content=TOP_RIGHT_IMG.read_bytes()

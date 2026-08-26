@@ -211,7 +211,8 @@ function renderIntel() {
 }
 
 function renderStages() {
-  const r = state.remediation;
+  const auth = state.authorization_stage;
+  const rem = state.remediation_state;
   const v = state.validated_execution;
   const c = state.crossing_2;
   const f = state.frontline;
@@ -238,21 +239,24 @@ function renderStages() {
       denied: Boolean(imp && imp.requires_review),
     },
     {
+      /* Policy eligibility is not a grant. This stage reflects a capability actually
+         obtained and used, which cannot be true before remediation runs. Eligibility
+         lives in the Agent Fleet matrix, where it belongs. */
       label: "Authorization",
-      sub: r ? `${r.identity} → ${r.capability}` : "Awaiting deployment",
-      chip: r
-        ? r.status === "CAPABILITY_DENIED"
-          ? chip("DENIED", "bad")
-          : chip("GRANTED", "ok")
-        : chip("PENDING"),
-      done: Boolean(r) && r.status !== "CAPABILITY_DENIED",
-      denied: Boolean(r) && r.status === "CAPABILITY_DENIED",
+      sub: auth.granted
+        ? `${auth.identity} → ${auth.capability}`
+        : auth.status === "DENIED"
+          ? `${auth.identity} → ${auth.capability}`
+          : "Awaiting remediation request",
+      chip: chip(auth.status, auth.granted ? "ok" : auth.status === "DENIED" ? "bad" : ""),
+      done: auth.granted,
+      denied: auth.status === "DENIED",
     },
     {
       label: "Artifact Remediation",
       sub: v
         ? `${v.remediation_type} · dispatch count ${v.dispatch_count}`
-        : "Awaiting deployment",
+        : remediationStageSub(rem),
       chip: v ? chip(v.remediation_type, "ok") : chip("PENDING"),
       done: Boolean(v),
     },
@@ -392,6 +396,46 @@ function fieldStageChip(f) {
   return f.inconclusive ? chip("INCONCLUSIVE", "warn") : chip(f.observation, "ok");
 }
 
+/* A refused request is history, never the current state. */
+function remediationStageSub(rem) {
+  if (!rem) return "Awaiting deployment";
+  if (rem.state === "AWAITING_IMPACT_QUALIFICATION")
+    return "Awaiting impact qualification";
+  if (rem.blocked_request_count)
+    return `Awaiting remediation · ${rem.blocked_request_count} earlier request refused`;
+  return "Awaiting remediation";
+}
+
+/* Implementation, runtime, and operation are three different questions. Rendering them
+ * as one string is what made a wired comparator advertise itself as NOT WIRED. */
+function renderCapabilityStatus() {
+  const rows = (state.capability_status || [])
+    .map((c) => {
+      const implTone =
+        c.implementation === "IMPLEMENTED" ? "ok" : c.implementation === "NOT_YET_WIRED" ? "warn" : "";
+      const runtimeTone =
+        c.runtime === "CONFIGURED" || c.runtime === "DETERMINISTIC"
+          ? "ok"
+          : c.runtime === "UNAVAILABLE"
+            ? "warn"
+            : "";
+      return `<div class="cap-status">
+        <div class="cap-status-head">
+          <span class="name">${esc(c.label)}</span>
+          ${chip(c.implementation.replace(/_/g, " "), implTone)}
+        </div>
+        <div class="rows">
+          ${row("Runtime", chip(c.runtime.replace(/_/g, " "), runtimeTone) +
+            ` <span class="dz-sub">${esc(c.runtime_detail)}</span>`)}
+          ${row("Operation", chip(c.operation.replace(/_/g, " "), "info"))}
+        </div>
+      </div>`;
+    })
+    .join("");
+  const el = $("capability-status");
+  if (el) el.innerHTML = rows;
+}
+
 function renderArtifact() {
   const a = state.artifact;
   const target = state.scenario.requirement_id;
@@ -420,6 +464,29 @@ function renderArtifact() {
   const current = a.requirements[target];
   $("artifact-chip").textContent = current;
   $("artifact-chip").className = `chip ${current === state.scenario.current_value ? "ok" : "warn"}`;
+}
+
+function renderRequestHistory() {
+  const rem = state.remediation_state;
+  const el = $("request-history");
+  if (!el) return;
+  const history = (rem && rem.request_history) || [];
+  if (!history.length) {
+    el.innerHTML = "";
+    return;
+  }
+  const rows = history
+    .map(
+      (h) => `<div class="attempt-row">
+        <span class="idx">${String(h.sequence).padStart(2, "0")}</span>
+        ${chip(h.outcome.replace(/_/g, " "), h.executed ? "ok" : "warn")}
+        <span class="dz-sub">${esc(h.reason || h.detail || "")}</span>
+      </div>`,
+    )
+    .join("");
+  el.innerHTML = `<div class="sub-head" style="margin-top:14px">Remediation requests</div>
+    <div class="attempts">${rows}</div>
+    <div class="callout">${esc(rem.note)}</div>`;
 }
 
 function renderEvidenceSummary() {
@@ -846,6 +913,8 @@ function render() {
   renderStages();
   renderArtifact();
   renderEvidenceSummary();
+  renderRequestHistory();
+  renderCapabilityStatus();
   renderFleet();
   renderSecurity();
   renderTimeline();
