@@ -107,6 +107,14 @@ from driftzero.orchestration import (
     accept_field_observation,
     accept_remediation_evidence,
 )
+from driftzero.proof.store import (
+    HASH_MEANING,
+    ProofOutcome,
+    ProofStore,
+    attempt_proof,
+    evaluate_eligibility,
+    replay_audit,
+)
 from driftzero.sources.registry import (
     ArtifactCatalog,
     SourceChangeIngestion,
@@ -128,7 +136,7 @@ from driftzero.truth_engine.actions import (
     decide_retry,
     reconcile_delivery,
 )
-from driftzero.truth_engine.evidence import canonical_hash
+from driftzero.truth_engine.evidence import assemble_evidence_manifest, canonical_hash
 from driftzero.truth_engine.idempotency import (
     derive_delivery_action_id,
     derive_remediation_action_id,
@@ -138,6 +146,7 @@ from driftzero.truth_engine.impact import (
     qualify_candidates,
     resolve_cardinality,
 )
+from driftzero.truth_engine.proof_generator import ProofContext
 from driftzero.truth_engine.state_machine import can_transition, transition
 
 
@@ -241,7 +250,7 @@ PRODUCT_MODULES: tuple[dict[str, str], ...] = (
     {"id": "evidence", "label": "Evidence", "status": "PARTIAL"},
     {"id": "frontline", "label": "Frontline", "status": "ACTIVE"},
     {"id": "field", "label": "Field Verification", "status": "ACTIVE"},
-    {"id": "proof", "label": "Change Proof", "status": "NOT WIRED"},
+    {"id": "proof", "label": "Change Proof", "status": "ACTIVE"},
     {"id": "coverage", "label": "Coverage", "status": "NOT WIRED"},
 )
 
@@ -282,10 +291,10 @@ FUTURE_CAPABILITIES: tuple[dict[str, Any], ...] = (
     },
     {
         "group": "Change Proof",
-        "status": "NOT WIRED",
-        "milestone": "Proof generation exists in M0; T080 step 11 is not wired",
+        "status": "IMPLEMENTED",
+        "milestone": "Generated only through the frozen seven completion conditions",
         "items": [
-            "Seven proof invariants",
+            "Seven proof invariants — IMPLEMENTED",
             "Proof JSON + SHA-256",
             "Replay audit",
         ],
@@ -471,6 +480,16 @@ class _Session:
     delivery: dict[str, Any] | None = None
     delta_composed_at: datetime | None = None
     workflow: Workflow | None = None
+    proof_store: ProofStore = field(default_factory=ProofStore)
+    proof: dict[str, Any] | None = None
+    # The frozen ProofContext takes domain objects, not projections. A dict of strings
+    # cannot satisfy an invariant, so the real records are retained alongside the views.
+    impact_resolution: Any = None
+    remediation_evidence: Any = None
+    delivery_receipt_ref: str | None = None
+    state_history: list[WorkflowState] = field(default_factory=list)
+    rejected_result_refs: list[str] = field(default_factory=list)
+    """Trust-boundary rejections, retained for audit. Retention is not endorsement."""
     verdict: dict[str, Any] | None = None
     verification_events: list[Any] = field(default_factory=list)
     """Append-only. Every attempt is retained, FAIL and INCONCLUSIVE included."""
@@ -580,6 +599,9 @@ class HeroConsoleService:
         workflow = session.workflow
         if workflow is None or not can_transition(workflow.state, target):
             return
+        # Condition 7 reads history, not just the current state, so every state the
+        # workflow actually occupied is retained.
+        session.state_history.append(workflow.state)
         session.workflow = transition(workflow, target, occurred_at=datetime.now(UTC))
 
     def _record(self, session: _Session, event: str, detail: str) -> None:
@@ -750,6 +772,7 @@ class HeroConsoleService:
             "remediation_state": self._remediation_view(),
             "authorization_stage": self._authorization_view(),
             "capability_status": self._capability_status(),
+            "proof": self._proof_state_view(),
             "validated_execution": session.validated_execution,
             "crossing_2": session.crossing,
             "delivery": session.delivery,
@@ -930,6 +953,7 @@ class HeroConsoleService:
             }
         )
 
+        session.impact_resolution = resolution
         session.impact = {
             "outcome": str(resolution.outcome),
             "qualified": resolution.outcome is ImpactOutcome.SINGLE_QUALIFIED_TARGET,
@@ -1101,6 +1125,7 @@ class HeroConsoleService:
             )
 
         if result.evidence is not None:
+            session.remediation_evidence = result.evidence
             evidence_id = f"remediation-evidence-{session.session_id}"
             session.evidence[evidence_id] = result.evidence.model_dump(mode="json")
             session.remediation["evidence_id"] = evidence_id
@@ -1501,6 +1526,15 @@ class HeroConsoleService:
                 receipt_ref=verdict.receipt.evidence_ref,
                 reconciled=False,
             )
+            session.delivery_receipt_ref = verdict.receipt.evidence_ref
+            # C4 reads these off the workflow, and only a Crossing-3-accepted receipt
+            # may set them.
+            session.workflow = session.workflow.model_copy(
+                update={
+                    "delivery_status": "DELIVERED",
+                    "delivery_ref": verdict.receipt.evidence_ref,
+                }
+            )
             self._advance(session, WorkflowState.FRONTLINE_DELIVERY_COMPLETED)
             self._advance(session, WorkflowState.AWAITING_FIELD_VERIFICATION)
             self._record(
@@ -1813,9 +1847,18 @@ class HeroConsoleService:
     def _verdict_state_view(self) -> dict[str, Any]:
         """The verdict panel before any adjudication, or the latest one after."""
         session = self._session
-        if session.verdict is not None:
-            return session.verdict
         workflow = session.workflow
+        if session.verdict is not None:
+            # The stored verdict is a record of one adjudication; the workflow keeps
+            # moving after it (step 11 advances to PROOF_COMPLETE). State and deployment
+            # are therefore re-read live rather than served from the cached projection.
+            return {
+                **session.verdict,
+                "workflow_state": str(workflow.state) if workflow else None,
+                "change_deployed": change_is_deployed(workflow),
+                "proof_generated": bool(workflow and workflow.proof_id),
+                "remaining_condition": remaining_condition_for(workflow),
+            }
         field = session.field_verification
         # EVALUATING is a real transient: the image was accepted and observed, but the
         # deterministic step has not produced an authoritative event.
@@ -1973,10 +2016,14 @@ class HeroConsoleService:
             {
                 "id": "change_proof",
                 "label": "Change Proof",
-                "implementation": "NOT_YET_WIRED",
-                "runtime": "UNAVAILABLE",
-                "runtime_detail": "generation exists in M0; T080 step 11 is not wired",
-                "operation": "UNAVAILABLE",
+                "implementation": "IMPLEMENTED",
+                "runtime": "DETERMINISTIC",
+                "runtime_detail": (
+                    "gated by the seven frozen completion conditions"
+                ),
+                "operation": (
+                    str(session.proof["status"]) if session.proof else "AWAITING_CONDITIONS"
+                ),
             },
         ]
 
@@ -2170,6 +2217,216 @@ class HeroConsoleService:
             "history": [],
             **self._field_static_view(),
         }
+
+    # ------------------------------------------------------------------ step 11
+
+    def _proof_context(self, session: _Session) -> ProofContext | None:
+        """Assemble the frozen :class:`ProofContext` from authoritative session state.
+
+        Returns ``None`` only when a *structural* input is genuinely absent — no
+        workflow, no impact resolution, no remediation evidence. That is not an
+        eligibility decision: the seven conditions are evaluated by M0, and this method
+        never substitutes a placeholder to get past one.
+        """
+        workflow = session.workflow
+        if workflow is None or session.impact_resolution is None:
+            return None
+        if session.remediation_evidence is None or not session.delivery_receipt_ref:
+            return None
+
+        manifest = assemble_evidence_manifest(
+            source_change_ref=session.ingestion.current.content_ref,
+            affected_artifact_ref=(
+                session.repository.read(session.qualified_artifact_id).content_ref
+                if session.qualified_artifact_id
+                else ""
+            ),
+            remediation_evidence=session.remediation_evidence,
+            delivery_ref=session.delivery_receipt_ref,
+            verification_events=session.verification_events,
+            state_transition_refs=[str(state) for state in session.state_history],
+            rejected_result_refs=session.rejected_result_refs,
+            extra_content_hashes={
+                session.ingestion.current.content_ref: (
+                    session.ingestion.current.content_hash
+                )
+            },
+        )
+        return ProofContext(
+            workflow=workflow,
+            change=session.change,
+            impact=session.impact_resolution,
+            remediation_evidence=session.remediation_evidence,
+            manifest=manifest,
+            verification_events=tuple(session.verification_events),
+            state_history=tuple(session.state_history),
+            source_version_applicable=True,
+            delivery_receipt_ref=session.delivery_receipt_ref,
+        )
+
+    def generate_proof(self) -> dict[str, Any]:
+        """Step 11 — generate the Change Proof, or explain exactly what blocks it.
+
+        The gate is the frozen seven invariants. This method evaluates none of them: it
+        assembles the authoritative context, hands it to :func:`attempt_proof`, and
+        records what came back.
+        """
+        session = self._session
+        self._record(session, "PROOF_REQUESTED", "evaluating completion conditions")
+
+        context = self._proof_context(session)
+        if context is None:
+            session.proof = self._proof_unavailable_view(session)
+            self._record(
+                session, "PROOF_BLOCKED", "the workflow has not produced the required evidence"
+            )
+            return self.get_state()
+
+        outcome = attempt_proof(context, store=session.proof_store)
+        session.proof = self._proof_view(session, outcome)
+
+        if not outcome.generated:
+            self._record(session, "PROOF_BLOCKED", outcome.blocker_detail or "not eligible")
+            return self.get_state()
+
+        stored = outcome.stored
+        session.evidence[f"change-proof-{stored.proof.proof_id}"] = stored.proof.model_dump(
+            mode="json"
+        )
+        if outcome.replayed:
+            self._record(
+                session,
+                "PROOF_ALREADY_COMPLETE",
+                f"{stored.proof.proof_id} returned unchanged; no second proof exists",
+            )
+            return self.get_state()
+
+        session.workflow = session.workflow.model_copy(
+            update={"proof_id": stored.proof.proof_id}
+        )
+        self._advance(session, WorkflowState.PROOF_COMPLETE)
+        session.proof = self._proof_view(session, outcome)
+        self._record(
+            session,
+            "PROOF_COMPLETE",
+            f"{stored.proof.proof_id} · {stored.content_hash[:16]}…",
+        )
+        return self.get_state()
+
+    def _proof_unavailable_view(self, session: _Session) -> dict[str, Any]:
+        """The panel before the workflow has produced the inputs a proof needs."""
+        missing = []
+        if session.impact_resolution is None:
+            missing.append("impact has not been qualified")
+        if session.remediation_evidence is None:
+            missing.append("no remediation evidence exists")
+        if not session.delivery_receipt_ref:
+            missing.append("delivery has not been established")
+        if not session.verification_events:
+            missing.append("no authoritative verification has been recorded")
+        return {
+            "status": "BLOCKED",
+            "generated": False,
+            "replayed": False,
+            "eligible": False,
+            "satisfied_count": 0,
+            "total": 7,
+            "conditions": [],
+            "blockers": missing,
+            "blocker_detail": "; ".join(missing),
+            "proof_ref": None,
+            "proof_id": None,
+            "content_hash": None,
+            "hash_meaning": HASH_MEANING,
+            "change_deployed": False,
+        }
+
+    def _proof_view(self, session: _Session, outcome: ProofOutcome) -> dict[str, Any]:
+        """Project a proof attempt. The invariant results come from M0, never a constant."""
+        eligibility = outcome.eligibility
+        stored = outcome.stored
+        workflow = session.workflow
+        return {
+            "status": "PROOF_COMPLETE" if outcome.generated else "BLOCKED",
+            "generated": outcome.generated,
+            "replayed": outcome.replayed,
+            "eligible": eligibility.eligible,
+            "satisfied_count": eligibility.satisfied_count,
+            "total": eligibility.total,
+            "conditions": list(eligibility.conditions),
+            "blockers": [
+                entry["label"] for entry in eligibility.conditions if not entry["satisfied"]
+            ],
+            "blocker_detail": outcome.blocker_detail,
+            "proof_ref": outcome.proof_ref,
+            "proof_id": stored.proof.proof_id if stored else None,
+            "content_hash": stored.content_hash if stored else None,
+            "hash_meaning": HASH_MEANING,
+            "summary": stored.as_summary() if stored else None,
+            "evidence_id": (
+                f"change-proof-{stored.proof.proof_id}" if stored else None
+            ),
+            "change_deployed": change_is_deployed(workflow),
+        }
+
+    def _proof_state_view(self) -> dict[str, Any]:
+        """The Change Proof panel: eligibility whenever it can honestly be computed."""
+        session = self._session
+        if session.proof is not None:
+            return session.proof
+        context = self._proof_context(session)
+        if context is None:
+            return self._proof_unavailable_view(session)
+        eligibility = evaluate_eligibility(context)
+        return {
+            "status": "ELIGIBLE" if eligibility.eligible else "BLOCKED",
+            "generated": False,
+            "replayed": False,
+            "eligible": eligibility.eligible,
+            "satisfied_count": eligibility.satisfied_count,
+            "total": eligibility.total,
+            "conditions": list(eligibility.conditions),
+            "blockers": [
+                entry["label"] for entry in eligibility.conditions if not entry["satisfied"]
+            ],
+            "blocker_detail": None,
+            "proof_ref": None,
+            "proof_id": None,
+            "content_hash": None,
+            "hash_meaning": HASH_MEANING,
+            "change_deployed": change_is_deployed(session.workflow),
+        }
+
+    def get_proof_document(self) -> dict[str, Any] | None:
+        """The stored canonical proof, resolved through its own reference."""
+        session = self._session
+        if session.workflow is None:
+            return None
+        stored = session.proof_store.find_workflow(session.workflow.workflow_id)
+        if stored is None:
+            return None
+        return {
+            "proof_ref": stored.proof_ref,
+            "content_hash": stored.content_hash,
+            "hash_meaning": HASH_MEANING,
+            # The exact bytes the hash was computed over — not a re-serialisation.
+            "canonical_json": stored.canonical_bytes,
+            "document": stored.proof.model_dump(mode="json"),
+        }
+
+    def get_replay_audit(self) -> dict[str, Any] | None:
+        """Render the recorded chronology. Executes nothing and dispatches nothing."""
+        session = self._session
+        if session.workflow is None:
+            return None
+        stored = session.proof_store.find_workflow(session.workflow.workflow_id)
+        if stored is None:
+            return None
+        return replay_audit(
+            stored=stored,
+            verification_events=session.verification_events,
+            timeline=session.events,
+        )
 
     @property
     def current_change(self) -> ApprovedChange:

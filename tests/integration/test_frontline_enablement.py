@@ -419,8 +419,9 @@ def test_acknowledgment_produces_no_change_proof(client: TestClient) -> None:
     deploy_and_deliver(client)
     client.post("/api/hero/frontline/DZ-001/acknowledge")
     body = client.get("/api/hero/state").json()
-    assert "proof" not in body
-    assert not any("PROOF" in e["event"] for e in body["timeline"])
+    assert body["proof"]["generated"] is False
+    assert body["proof"]["proof_id"] is None
+    assert not any(e["event"] == "PROOF_COMPLETE" for e in body["timeline"])
 
 
 def test_acknowledgment_dispatches_no_write(client: TestClient) -> None:

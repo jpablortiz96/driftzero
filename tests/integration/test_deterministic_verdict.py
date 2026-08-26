@@ -286,12 +286,12 @@ def run_to_verdict(client: TestClient, image: Path) -> dict[str, Any]:
 # ============================ 1. owning-task semantics ================================
 
 
-def test_t080_owns_this_wiring_and_remains_open() -> None:
-    """Step 10 of T080 is implemented; steps 1-3 and 11 are not, so T080 stays open."""
+def test_t080_owns_this_wiring() -> None:
+    """Step 10 belongs to T080, which closed once all eleven steps were wired."""
     tasks = (REPO_ROOT / "specs" / "001-hero-change-deployment" / "tasks.md").read_text(
         encoding="utf-8"
     )
-    line = next(raw for raw in tasks.splitlines() if raw.startswith("- [ ] T080"))
+    line = next(raw for raw in tasks.splitlines() if raw.startswith("- [x] T080"))
     assert "orchestrator.py" in line
     assert "11-step boundary sequence" in line
     assert "async pause after delivery" in line
@@ -303,17 +303,13 @@ def test_t080_owns_this_wiring_and_remains_open() -> None:
     assert "10. Truth Engine: deterministic PASS/FAIL" in contract
 
 
-def test_step_eleven_change_proof_is_not_built() -> None:
-    """No proof is generated here, and nothing in this slice reaches the generator."""
+def test_the_verdict_layer_never_generates_a_proof() -> None:
+    """Step 10 adjudicates. Step 11 is a separate gate it cannot reach."""
     source = (REPO_ROOT / "src" / "driftzero" / "agents" / "orchestrator.py").read_text(
         encoding="utf-8"
     )
     for banned in ("generate_change_proof", "ChangeProof", "PROOF_COMPLETE ="):
         assert banned not in source
-    console = (REPO_ROOT / "src" / "driftzero_console" / "service.py").read_text(
-        encoding="utf-8"
-    )
-    assert "generate_change_proof" not in console
 
 
 # ============================ 2. the comparator is reused =============================
@@ -1080,7 +1076,12 @@ def test_the_state_payload_never_carries_a_proof(client: TestClient) -> None:
     body = run_to_verdict(client, TOP_RIGHT_IMG)
     # ``content_hash`` on the artifact is T073's, and unrelated to proof — only
     # proof-specific material is forbidden here.
-    blob = json.dumps(body)
-    for banned in ("proof_id", "ChangeProof", "proof_content_hash", "completion_timestamp"):
-        assert banned not in blob
+    # A passing verification is not a proof: the panel reports the key with no value.
+    assert body["proof"]["generated"] is False
+    assert body["proof"]["proof_id"] is None
+    assert body["proof"]["content_hash"] is None
     assert body["verdict"]["proof_generated"] is False
+    assert body["verdict"]["change_deployed"] is False
+    blob = json.dumps(body)
+    for banned in ("ChangeProof", "proof_content_hash", "completion_timestamp"):
+        assert banned not in blob

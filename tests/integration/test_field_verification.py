@@ -1281,8 +1281,12 @@ def test_no_surface_claims_deployed_or_proof(client: TestClient) -> None:
             REPO_ROOT / "src" / "driftzero_console" / "static" / page
         ).read_text(encoding="utf-8")
         upper = source.upper()
-        for banned in ("PROOF COMPLETE", "CHANGE DEPLOYED<", ">PASS<", ">FAIL<"):
+        # A renderer may *label* a completed proof; what it must never do is state the
+        # claim in markup, where it would survive the backend disagreeing.
+        for banned in ("CHANGE DEPLOYED<", ">PASS<", ">FAIL<"):
             assert banned not in upper, f"{page} claims {banned}"
+        if page.endswith(".html"):
+            assert "PROOF COMPLETE" not in upper, f"{page} states PROOF COMPLETE in markup"
 
 
 # ============================ 38-39. genericity and production presentation ===========

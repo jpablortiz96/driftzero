@@ -303,9 +303,14 @@ function renderStages() {
     },
   ];
 
-  const notImplemented = [
-    { label: "Change Proof", sub: "Seven proof invariants — T080 step 11", chip: chip("NOT IMPLEMENTED", "warn") },
-  ];
+  implemented.push({
+    label: "Change Proof",
+    sub: proofStageSub(state.proof),
+    chip: proofStageChip(state.proof),
+    done: Boolean(state.proof && state.proof.status === "PROOF_COMPLETE"),
+  });
+
+  const notImplemented = [];
 
   const shown = dev ? implemented.concat(notImplemented) : implemented;
   $("stages").innerHTML = shown
@@ -332,6 +337,9 @@ function renderStages() {
  * only — never from how many UI steps happen to be filled in. */
 function changeStatus() {
   const v = state.verdict;
+  const p = state.proof;
+  if (p && p.status === "PROOF_COMPLETE") return { label: "DEPLOYED · VERIFIED", tone: "ok" };
+  if (p && p.eligible) return { label: "AWAITING CHANGE PROOF", tone: "warn" };
   if (v && v.change_deployed) return { label: "CHANGE DEPLOYED", tone: "ok" };
   if (v && v.result === "PASS") return { label: "VERIFICATION PASSED", tone: "ok" };
   if (v && v.result === "FAIL") return { label: "VERIFICATION FAILED", tone: "bad" };
@@ -346,6 +354,21 @@ function changeStatus() {
   if (state.intel && state.intel.status !== "PENDING" && !state.intel.succeeded)
     return { label: "IMPACT REVIEW REQUIRED", tone: "bad" };
   return { label: "SOURCE CHANGE RECEIVED", tone: "" };
+}
+
+function proofStageSub(p) {
+  if (!p) return "Awaiting completion conditions";
+  if (p.status === "PROOF_COMPLETE")
+    return `${p.satisfied_count} / ${p.total} conditions · ${p.proof_id}`;
+  if (p.eligible) return `${p.satisfied_count} / ${p.total} conditions — ready to generate`;
+  return `${p.satisfied_count} / ${p.total} conditions — ${(p.blockers || []).join("; ")}`;
+}
+
+function proofStageChip(p) {
+  if (!p) return chip("PENDING");
+  if (p.status === "PROOF_COMPLETE") return chip("PROOF COMPLETE", "ok");
+  if (p.eligible) return chip("ELIGIBLE", "warn");
+  return chip("BLOCKED", "");
 }
 
 function impactStageSub(intel, imp) {
@@ -404,6 +427,82 @@ function remediationStageSub(rem) {
   if (rem.blocked_request_count)
     return `Awaiting remediation · ${rem.blocked_request_count} earlier request refused`;
   return "Awaiting remediation";
+}
+
+/* The Change Proof module. Every invariant shown is a real deterministic result from
+ * the Truth Engine — never a hardcoded 7/7. */
+function renderProof() {
+  const p = state.proof;
+  if (!p) return;
+  const chipEl = $("proof-chip");
+  const out = $("proof");
+  const complete = p.status === "PROOF_COMPLETE";
+
+  chipEl.textContent = complete
+    ? "PROOF COMPLETE"
+    : p.eligible
+      ? "ELIGIBLE"
+      : "BLOCKED";
+  chipEl.className = `chip ${complete ? "ok" : p.eligible ? "warn" : ""}`;
+
+  $("proof-actions").hidden = false;
+  $("btn-proof").disabled = complete || !p.eligible;
+  ["btn-proof-json", "btn-proof-download", "btn-proof-replay"].forEach((id) => {
+    $(id).disabled = !complete;
+  });
+
+  const conditions = (p.conditions || [])
+    .map(
+      (c, i) => `<div class="attempt-row">
+        <span class="idx">${String(i + 1).padStart(2, "0")}</span>
+        ${chip(c.satisfied ? "MET" : "NOT MET", c.satisfied ? "ok" : "bad")}
+        <span class="dz-sub">${esc(c.label)}</span>
+      </div>`,
+    )
+    .join("");
+
+  const gate = p.conditions && p.conditions.length
+    ? `<div class="sub-head" style="margin-top:14px">Completion conditions
+       <b>${p.satisfied_count} / ${p.total}</b></div>
+       <div class="attempts">${conditions}</div>`
+    : "";
+
+  if (!complete) {
+    out.innerHTML = `<div class="rows">
+        ${row("Change Proof", chip(p.eligible ? "ELIGIBLE" : "BLOCKED", p.eligible ? "warn" : ""))}
+        ${row("Change deployed", chip(String(p.change_deployed), "warn"))}
+      </div>
+      ${gate}
+      ${p.blockers && p.blockers.length
+        ? `<div class="callout">Blocked by: ${esc(p.blockers.join("; "))}</div>`
+        : ""}`;
+    return;
+  }
+
+  const s = p.summary || {};
+  out.innerHTML = `<div class="observation verdict passed">
+      <div class="obs-label">Change status</div>
+      <div class="obs-value">DEPLOYED · VERIFIED</div>
+      <div class="obs-note">All ${p.total} completion conditions hold. Runtime readiness
+      is unchanged and separate.</div>
+    </div>
+    <div class="rows" style="margin-top:14px">
+      ${row("Change", esc(s.change_id), "mono")}
+      ${row("Source", `${esc(s.source_procedure_id)} ${esc(s.source_version)}`, "mono")}
+      ${row("Affected artifact", chip(s.affected_artifact_id, "ok"))}
+      ${row("Change", `${chip(s.previous_value, "warn")} → ${chip(s.current_value, "ok")}`)}
+      ${row("Physical observation", chip(state.field_verification.observation || "—", "ok"))}
+      ${row("Deterministic verdict", chip(s.verification_result, "ok"))}
+      ${row("Verification event", esc(s.verification_event_id), "mono")}
+      ${row("Delivery receipt", esc(s.delivery_ref), "mono")}
+      ${row("Proof ID", esc(s.proof_id), "mono")}
+      ${row("Canonical SHA-256", esc(shortHash(s.content_hash)), "mono")}
+      ${row("Completed", esc((s.completion_timestamp || "").replace("T", " ").split(".")[0]))}
+      ${row("Proof size", `${s.byte_count} bytes`, "mono")}
+    </div>
+    ${gate}
+    <div class="callout">${esc(p.hash_meaning)}. This is content integrity, not a
+    signature, attestation, or trusted timestamp.</div>`;
 }
 
 /* Implementation, runtime, and operation are three different questions. Rendering them
@@ -915,6 +1014,7 @@ function render() {
   renderEvidenceSummary();
   renderRequestHistory();
   renderCapabilityStatus();
+  renderProof();
   renderFleet();
   renderSecurity();
   renderTimeline();
@@ -927,6 +1027,7 @@ function render() {
 
 async function refresh(promise) {
   const buttons = [
+    $("btn-proof"),
     $("btn-analyze"),
     $("btn-deploy"),
     $("btn-deliver"),
@@ -1002,6 +1103,53 @@ dropZone.addEventListener("keydown", (e) => {
 );
 dropZone.addEventListener("drop", (e) => submitFieldEvidence(e.dataTransfer?.files?.[0]));
 fileInput.addEventListener("change", () => submitFieldEvidence(fileInput.files[0]));
+
+/* ---------------------------------------------------------------- proof actions */
+
+$("btn-proof").addEventListener("click", () => refresh(call("/api/hero/proof", "POST")));
+
+$("btn-proof-json").addEventListener("click", async () => {
+  try {
+    const doc = await call("/api/hero/proof");
+    /* The stored canonical bytes, not a re-serialisation of the model. */
+    $("proof-json").textContent = doc.canonical_json;
+    $("proof-json").hidden = false;
+    toast(`Canonical proof · ${doc.content_hash.slice(0, 12)}…`);
+  } catch (error) {
+    toast(String(error.message || error));
+  }
+});
+
+$("btn-proof-download").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/hero/proof/download");
+    if (!response.ok) throw new Error(`download → ${response.status}`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${state.proof.proof_id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast(String(error.message || error));
+  }
+});
+
+$("btn-proof-replay").addEventListener("click", async () => {
+  try {
+    /* Reads recorded evidence. Dispatches nothing, calls no model, mutates nothing. */
+    const audit = await call("/api/hero/proof/replay");
+    $("proof-json").innerHTML = highlightJson(audit);
+    $("proof-json").hidden = false;
+    toast(
+      `Replayed ${audit.verification_chronology.length} verification attempt(s) · ` +
+        `${audit.side_effects_executed} side effects`,
+    );
+  } catch (error) {
+    toast(String(error.message || error));
+  }
+});
 
 $("btn-copy").addEventListener("click", async () => {
   if (!selectedEvidence) return toast("No evidence selected");

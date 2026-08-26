@@ -419,7 +419,7 @@ def test_future_modules_are_marked_not_ready_rather_than_fake_success(
     assert statuses["Security"] == "ACTIVE"
     assert statuses["Evidence"] == "PARTIAL"
     assert statuses["Frontline"] == "ACTIVE"
-    assert statuses["Change Proof"] == "NOT WIRED"
+    assert statuses["Change Proof"] == "ACTIVE"
     assert statuses["Coverage"] == "NOT WIRED"
 
 
@@ -448,10 +448,11 @@ def test_change_proof_and_coverage_are_never_reported_as_complete(
     client: TestClient,
 ) -> None:
     body = deploy(client)
-    assert "proof" not in body
     assert "coverage" not in body
-    proof = next(g for g in body["future_capabilities"] if g["group"] == "Change Proof")
-    assert proof["status"] == "NOT WIRED"
+    # Remediation alone earns no proof: physical verification has not run.
+    assert body["proof"]["generated"] is False
+    assert body["proof"]["eligible"] is False
+    assert body["proof"]["change_deployed"] is False
 
 
 def test_the_timeline_is_labelled_as_ui_activity_not_workflow_state(

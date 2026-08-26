@@ -157,6 +157,23 @@
           <div class="body"><div class="timeline" id="timeline"></div></div>
         </section>
 
+        <section class="panel" id="proof-panel">
+          <header>
+            <h2>Change Proof</h2>
+            <span class="chip" id="proof-chip">PENDING</span>
+          </header>
+          <div class="body">
+            <div id="proof"></div>
+            <div class="actions" id="proof-actions" hidden>
+              <button id="btn-proof">Generate Change Proof</button>
+              <button class="ghost" id="btn-proof-json">View Proof JSON</button>
+              <button class="ghost" id="btn-proof-download">Download Proof</button>
+              <button class="ghost" id="btn-proof-replay">Replay Audit</button>
+            </div>
+            <pre class="json" id="proof-json" hidden></pre>
+          </div>
+        </section>
+
         <section class="panel" id="capability-panel">
           <header>
             <h2>Capability Status</h2>

@@ -126,12 +126,13 @@ def version(**over: Any) -> SourceVersion:
 # ============================ 1. owning-task semantics ================================
 
 
-def test_t080_steps_1_to_3_are_implemented_and_t080_remains_open() -> None:
+def test_t080_steps_1_to_3_are_part_of_the_completed_sequence() -> None:
+    """Steps 1-3 were this slice's contribution; T080 closed once all eleven were wired."""
     tasks = (REPO_ROOT / "specs" / "001-hero-change-deployment" / "tasks.md").read_text(
         encoding="utf-8"
     )
-    line = next(raw for raw in tasks.splitlines() if raw.startswith("- [ ] T080"))
-    assert "11-step boundary sequence" in line, "T080 must still be open"
+    line = next(raw for raw in tasks.splitlines() if raw.startswith("- [x] T080"))
+    assert "11-step boundary sequence" in line
 
     contract = (
         REPO_ROOT / "specs" / "001-hero-change-deployment" / "contracts" / "agents.md"
@@ -141,11 +142,13 @@ def test_t080_steps_1_to_3_are_implemented_and_t080_remains_open() -> None:
     assert "3. Truth Engine: validate ChangeSet" in contract
 
 
-def test_step_eleven_change_proof_is_still_unbuilt() -> None:
+def test_the_semantic_layer_still_cannot_generate_a_proof() -> None:
+    """Step 11 exists now, but nothing in the semantic path may reach the generator."""
     for path in (
         REPO_ROOT / "src" / "driftzero" / "agents" / "orchestrator.py",
-        REPO_ROOT / "src" / "driftzero_console" / "service.py",
+        REPO_ROOT / "src" / "driftzero" / "agents" / "change_intel.py",
         REPO_ROOT / "src" / "driftzero_adk" / "change_intel_runtime.py",
+        REPO_ROOT / "src" / "driftzero_adk" / "hero_workflow.py",
     ):
         assert "generate_change_proof" not in path.read_text(encoding="utf-8")
 

@@ -450,8 +450,11 @@ def test_delivery_is_not_deployment_or_verification(client: TestClient) -> None:
 
 def test_delivery_creates_no_change_proof(client: TestClient) -> None:
     body = deploy_and_deliver(client)
-    assert "proof" not in body
-    assert not any("PROOF" in e["event"] for e in body["timeline"])
+    # The panel exists and correctly reports that no proof was earned.
+    assert body["proof"]["generated"] is False
+    assert body["proof"]["proof_id"] is None
+    assert body["proof"]["change_deployed"] is False
+    assert not any(e["event"] == "PROOF_COMPLETE" for e in body["timeline"])
     assert not any("PASS" in e["event"] for e in body["timeline"])
 
 

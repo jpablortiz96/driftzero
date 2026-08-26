@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from driftzero.config import DriftZeroConfig
@@ -264,6 +264,55 @@ async def submit_frontline_field_evidence(
     if payload is None:  # pragma: no cover - delivery cannot be undone mid-request
         raise HTTPException(status_code=404, detail=f"change {change_id!r} is not open")
     return FrontlineView(**payload)
+
+
+@app.post("/api/hero/proof", response_model=HeroState)
+def generate_proof() -> HeroState:
+    """Step 11 — generate the Change Proof if the frozen seven invariants all hold.
+
+    Accepts no input. The browser cannot supply a proof id, a hash, a verdict, or a
+    workflow state, because there is nothing in the request to carry them.
+    """
+    return HeroState(**_service.generate_proof())
+
+
+@app.get("/api/hero/proof")
+def read_proof() -> dict:
+    """The stored canonical proof, including the exact bytes its hash covers."""
+    document = _service.get_proof_document()
+    if document is None:
+        raise HTTPException(status_code=404, detail="no Change Proof has been generated")
+    return document
+
+
+@app.get("/api/hero/proof/download")
+def download_proof() -> Response:
+    """Download the canonical proof bytes verbatim.
+
+    Serves ``canonical_json`` rather than re-serialising the model, so the downloaded
+    file is byte-for-byte what the SHA-256 was computed over.
+    """
+    document = _service.get_proof_document()
+    if document is None:
+        raise HTTPException(status_code=404, detail="no Change Proof has been generated")
+    filename = f"{document['document']['proof_id']}.json"
+    return Response(
+        content=document["canonical_json"],
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Proof-Content-Hash": document["content_hash"],
+        },
+    )
+
+
+@app.get("/api/hero/proof/replay")
+def replay_proof_audit() -> dict:
+    """Replay the recorded chronology. Executes no side effect of any kind."""
+    audit = _service.get_replay_audit()
+    if audit is None:
+        raise HTTPException(status_code=404, detail="no Change Proof has been generated")
+    return audit
 
 
 @app.get("/api/hero/evidence/{evidence_id}", response_model=EvidenceDocument)
