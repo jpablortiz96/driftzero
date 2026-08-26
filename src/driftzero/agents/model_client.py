@@ -95,6 +95,11 @@ def clear_model_client_provider() -> None:
     _provider = None
 
 
+def has_model_client_provider() -> bool:
+    """Whether a concrete client is registered. Never implies one works."""
+    return _provider is not None
+
+
 def get_model_client(config: SemanticModelConfig) -> SemanticModelClient:
     """Build the registered client, or fail loudly."""
     if _provider is None:

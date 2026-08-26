@@ -76,7 +76,7 @@ SCHEMA_NAME = "ChangeSet"
 INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
     re.compile(r"disregard\s+(the\s+)?(above|prior|previous)", re.IGNORECASE),
-    re.compile(r"call\s+(this|the)\s+tool", re.IGNORECASE),
+    re.compile(r"call\s+(all|this|the|every)\s+tools?", re.IGNORECASE),
     re.compile(r"change\s+the\s+system\s+prompt", re.IGNORECASE),
     re.compile(r"approve\s+this\s+change", re.IGNORECASE),
     re.compile(r"you\s+are\s+now\s+", re.IGNORECASE),
@@ -275,12 +275,21 @@ class ChangeIntelligenceAgent:
             f"source_evidence_ref: {change.source_evidence_ref}",
             "artifacts:",
         ]
-        lines.extend(
-            f"  - artifact_id: {a.artifact_id} | type: {a.artifact_type} | "
-            f"operation_id: {a.operation_id} | requirement_id: {a.requirement_id} | "
-            f"current_value: {a.current_value}"
-            for a in registry
-        )
+        for artifact in registry:
+            lines.append(
+                f"  - artifact_id: {artifact.artifact_id} | "
+                f"type: {artifact.artifact_type} | "
+                f"operation_id: {artifact.operation_id} | "
+                f"requirement_id: {artifact.requirement_id} | "
+                f"current_value: {artifact.current_value}"
+            )
+            # The structured content matters: an artifact is a candidate because of what
+            # it actually says, not because of its id. Every artifact is rendered the
+            # same way, so nothing here marks one as expected or likely.
+            lines.extend(
+                f"      {key}: {value}"
+                for key, value in sorted(artifact.requirements.items())
+            )
         return "\n".join(lines)
 
 

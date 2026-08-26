@@ -24,7 +24,11 @@ class HeroState(BaseModel):
     session_id: str
     environment: dict[str, Any]
     scenario: dict[str, Any]
-    artifact: dict[str, Any]
+    source: dict[str, Any] | None = None
+    intel: dict[str, Any] | None = None
+    crossing_1: dict[str, Any] | None = None
+    impact: dict[str, Any] | None = None
+    artifact: dict[str, Any] | None = None
     authorization: dict[str, Any]
     fleet: list[dict[str, Any]]
     remediation: dict[str, Any] | None = None

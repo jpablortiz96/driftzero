@@ -106,6 +106,15 @@ class GemmaConfig:
             raise ConfigurationError("gemma timeout_seconds must be positive")
 
 
+DEFAULT_SEMANTIC_PROVIDER = "disabled"
+"""Live semantic analysis is opt-in. An unconfigured instance makes no billable call."""
+
+SEMANTIC_PROVIDER_GOOGLE_ADK = "google_adk"
+SEMANTIC_PROVIDER_DISABLED = "disabled"
+
+DEFAULT_GEMINI_LOCATION = "global"
+"""Vertex location for Gemini. ``global`` is the route this deployment uses."""
+
 DEFAULT_FIELD_PROVIDER = "disabled"
 """Live inference is opt-in. An unconfigured instance makes no billable call."""
 
@@ -121,6 +130,71 @@ MAAS_ENDPOINT_TEMPLATE = (
     "/endpoints/openapi/chat/completions"
 )
 """The Vertex AI MaaS OpenAI-compatible endpoint G1 actually reached."""
+
+
+@dataclass(frozen=True)
+class SemanticProviderConfig:
+    """T080 steps 2-3 — how (and whether) change intelligence reaches a live model.
+
+    Deployment configuration lives here rather than inside agent logic, so switching a
+    project, a region, or a model is configuration and never a code change.
+
+    Fails closed: :attr:`enabled` is false unless a provider was explicitly selected, and
+    :meth:`validated` refuses an incomplete live configuration. A half-configured instance
+    must error rather than quietly fall back to a fabricated proposal.
+    """
+
+    provider: str = DEFAULT_SEMANTIC_PROVIDER
+    project: str = ""
+    location: str = DEFAULT_GEMINI_LOCATION
+    model: str = DEFAULT_SEMANTIC_MODEL_ID
+    semantic: SemanticModelConfig = SemanticModelConfig()
+
+    @property
+    def enabled(self) -> bool:
+        return self.provider not in ("", SEMANTIC_PROVIDER_DISABLED)
+
+    @property
+    def is_live(self) -> bool:
+        return self.provider == SEMANTIC_PROVIDER_GOOGLE_ADK
+
+    def missing_settings(self) -> tuple[str, ...]:
+        """Configuration a live ADK call needs but does not have."""
+        if not self.is_live:
+            return ()
+        missing = []
+        if not self.project.strip():
+            missing.append(f"{ENV_PREFIX}GCP_PROJECT")
+        if not self.location.strip():
+            missing.append(f"{ENV_PREFIX}GEMINI_LOCATION")
+        if not self.model.strip():
+            missing.append(f"{ENV_PREFIX}GEMINI_MODEL")
+        return tuple(missing)
+
+    def validated(self) -> SemanticProviderConfig:
+        """Return self, or raise if live analysis is requested but unusable."""
+        missing = self.missing_settings()
+        if missing:
+            raise ConfigurationError(
+                "live change intelligence requires " + ", ".join(missing)
+            )
+        return self
+
+    def as_disclosure(self) -> dict[str, object]:
+        """What a UI may honestly say about this configuration. Never a credential."""
+        return {
+            "provider": self.provider,
+            "enabled": self.enabled,
+            "live": self.is_live,
+            "runtime": "Google ADK" if self.is_live else None,
+            "project": self.project or None,
+            "location": self.location or None,
+            "model": self.model or None,
+            "timeout_seconds": self.semantic.timeout_seconds,
+            "max_attempts": self.semantic.max_attempts,
+            "missing_settings": list(self.missing_settings()),
+            "credentials": "APPLICATION_DEFAULT_CREDENTIALS",
+        }
 
 
 @dataclass(frozen=True)
@@ -215,6 +289,7 @@ class DriftZeroConfig:
     side_effect: SideEffectConfig = SideEffectConfig()
     gemma: GemmaConfig = GemmaConfig()
     field_provider: FieldProviderConfig = FieldProviderConfig()
+    semantic_provider: SemanticProviderConfig = SemanticProviderConfig()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DriftZeroConfig:
@@ -264,6 +339,19 @@ class DriftZeroConfig:
                 )
             ),
             gemma=GemmaConfig(timeout_seconds=gemma_timeout),
+            semantic_provider=SemanticProviderConfig(
+                provider=_text("SEMANTIC_PROVIDER", DEFAULT_SEMANTIC_PROVIDER),
+                project=_text("GCP_PROJECT", ""),
+                location=_text("GEMINI_LOCATION", DEFAULT_GEMINI_LOCATION),
+                model=_text("GEMINI_MODEL", model_id),
+                semantic=SemanticModelConfig(
+                    model_id=_text("GEMINI_MODEL", model_id),
+                    timeout_seconds=_float(
+                        "SEMANTIC_TIMEOUT_SECONDS", DEFAULT_SEMANTIC_TIMEOUT_SECONDS
+                    ),
+                    max_retries=_int("SEMANTIC_MAX_RETRIES", DEFAULT_SEMANTIC_MAX_RETRIES),
+                ),
+            ),
             field_provider=FieldProviderConfig(
                 provider=_text("FIELD_PROVIDER", DEFAULT_FIELD_PROVIDER),
                 project=_text("GCP_PROJECT", ""),

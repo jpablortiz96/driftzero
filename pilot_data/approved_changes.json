@@ -1,0 +1,15 @@
+{
+  "description": "Approvals recorded against a source-procedure version transition. The approval authorizes a scope of downstream artifacts; it does NOT name which one is affected.",
+  "changes": [
+    {
+      "change_id": "DZ-001",
+      "source_procedure_id": "PACKING-SOP",
+      "previous_version": "v13",
+      "source_version": "v14",
+      "approved_status": "APPROVED",
+      "approved_at": "2026-08-25T09:00:00+00:00",
+      "authorized_scope": ["WI-114", "WI-118", "WI-330", "WI-402"],
+      "scope_note": "Every work instruction under OP-PACK-01 that this approval may touch. Which of them is actually affected is not decided here."
+    }
+  ]
+}

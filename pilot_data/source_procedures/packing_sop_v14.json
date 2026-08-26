@@ -1,0 +1,19 @@
+{
+  "source_procedure_id": "PACKING-SOP",
+  "version": "v14",
+  "title": "Packing Standard Operating Procedure",
+  "operation_id": "OP-PACK-01",
+  "effective_from": "2026-08-20",
+  "requirements": {
+    "label_position": "TOP_RIGHT",
+    "packing_mode": "STANDARD",
+    "carton_seal": "H_TAPE",
+    "support_arm": "ATTACHED",
+    "max_stack_height": "4"
+  },
+  "notes": [
+    "The shipping label is applied to the TOP_RIGHT face of the carton after sealing.",
+    "The LEFT support arm remains attached throughout packing and is unrelated to labelling.",
+    "Cartons are stacked no more than four high on the outbound pallet."
+  ]
+}

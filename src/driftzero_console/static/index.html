@@ -43,12 +43,23 @@
               <div class="to" id="value-to">—</div>
             </div>
 
+            <div class="source-refs" id="source-refs"></div>
+
             <div class="actions">
-              <button class="primary" id="btn-deploy">Deploy Change</button>
+              <button class="primary" id="btn-analyze">Analyze Change</button>
+              <button id="btn-deploy">Deploy Change</button>
               <button id="btn-deliver">Deliver to Frontline</button>
               <button id="btn-reset">New Change</button>
             </div>
           </div>
+        </section>
+
+        <section class="panel" id="intel-panel">
+          <header>
+            <h2>Change Intelligence</h2>
+            <span class="chip" id="intel-chip">PENDING</span>
+          </header>
+          <div class="body"><div id="intel"></div></div>
         </section>
 
         <section class="panel">

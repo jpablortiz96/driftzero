@@ -1,0 +1,76 @@
+{
+  "catalog_id": "driftzero-pilot-catalog",
+  "description": "Downstream work instructions this deployment knows about.",
+  "artifacts": [
+    {
+      "artifact_id": "WI-114",
+      "artifact_type": "work_instruction",
+      "title": "Carton labelling and seal",
+      "operation_id": "OP-PACK-01",
+      "requirement_id": "label_position",
+      "current_value": "LEFT",
+      "authorized_for_remediation": true,
+      "requirements": {
+        "label_position": "LEFT",
+        "instructions": "Keep the LEFT support arm attached",
+        "packing_mode": "STANDARD"
+      }
+    },
+    {
+      "artifact_id": "WI-118",
+      "artifact_type": "work_instruction",
+      "title": "Carton selection and packing mode",
+      "operation_id": "OP-PACK-01",
+      "requirement_id": "packing_mode",
+      "current_value": "STANDARD",
+      "authorized_for_remediation": true,
+      "requirements": {
+        "packing_mode": "STANDARD",
+        "instructions": "Select the STANDARD carton unless the item exceeds the size chart",
+        "label_position": "LEFT"
+      }
+    },
+    {
+      "artifact_id": "WI-207",
+      "artifact_type": "work_instruction",
+      "title": "Outbound pallet labelling",
+      "operation_id": "OP-SHIP-02",
+      "requirement_id": "label_position",
+      "current_value": "LEFT",
+      "authorized_for_remediation": true,
+      "requirements": {
+        "label_position": "LEFT",
+        "instructions": "Apply the pallet placard to the LEFT stringer",
+        "pallet_wrap": "FULL"
+      }
+    },
+    {
+      "artifact_id": "WI-330",
+      "artifact_type": "work_instruction",
+      "title": "Rework and relabel",
+      "operation_id": "OP-PACK-01",
+      "requirement_id": "label_position",
+      "current_value": "TOP_RIGHT",
+      "authorized_for_remediation": true,
+      "requirements": {
+        "label_position": "TOP_RIGHT",
+        "instructions": "Reapply the label in the position the current SOP specifies",
+        "packing_mode": "STANDARD"
+      }
+    },
+    {
+      "artifact_id": "WI-402",
+      "artifact_type": "work_instruction",
+      "title": "Regulated goods packing (controlled document)",
+      "operation_id": "OP-PACK-01",
+      "requirement_id": "label_position",
+      "current_value": "LEFT",
+      "authorized_for_remediation": false,
+      "requirements": {
+        "label_position": "LEFT",
+        "instructions": "Label placement is fixed by the carrier dangerous-goods annex",
+        "packing_mode": "REGULATED"
+      }
+    }
+  ]
+}

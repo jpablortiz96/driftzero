@@ -83,7 +83,38 @@ def configure_providers() -> str:
     return f"field provider: {config.provider} -> {config.model}"
 
 
+def configure_semantic_provider() -> str:
+    """Composition root: install the real Google ADK runtime, if configured.
+
+    The ADK is imported **only** when ``DRIFTZERO_SEMANTIC_PROVIDER`` selects it, so an
+    unconfigured instance never needs ``google-adk`` installed — and the deterministic
+    core never imports it at all.
+
+    ASCII-only and never raises: a missing dependency degrades to "no analysis is
+    possible", which the UI states plainly, rather than to a fabricated proposal.
+    """
+    config = DriftZeroConfig.from_env().semantic_provider
+    if not config.is_live:
+        return f"semantic provider: {config.provider} (no live model call is possible)"
+    missing = config.missing_settings()
+    if missing:
+        return "semantic provider: MISCONFIGURED - missing " + ", ".join(missing)
+    try:
+        from driftzero_adk.install import install_change_intelligence  # noqa: PLC0415
+    except ImportError as exc:  # pragma: no cover - depends on the optional extra
+        return (
+            f"semantic provider: UNAVAILABLE - {exc}. Install the live extra: "
+            'pip install -e ".[live]"'
+        )
+    version = install_change_intelligence(config)
+    return (
+        f"semantic provider: google_adk (ADK {version}) -> {config.model} "
+        f"@ {config.location}"
+    )
+
+
 configure_providers()
+configure_semantic_provider()
 
 
 @app.get("/api/hero/state", response_model=HeroState)
@@ -108,9 +139,23 @@ def reset() -> HeroState:
     return HeroState(**_service.start_new_session())
 
 
+@app.post("/api/hero/analyze", response_model=HeroState)
+def analyze() -> HeroState:
+    """Run impact analysis: Change Intelligence → Crossing 1 → deterministic gate.
+
+    The server derives the source material, the prompt, the model, and the agent
+    identity. The browser supplies nothing — it cannot name a candidate, a target, or a
+    ChangeSet, because this endpoint accepts no input at all.
+    """
+    return HeroState(**_service.analyze_change())
+
+
 @app.post("/api/hero/deploy", response_model=HeroState)
 def deploy() -> HeroState:
-    """Execute the real path: agent → policy → mutation tool → Crossing 2."""
+    """Execute the real path: agent → policy → mutation tool → Crossing 2.
+
+    Refused server-side unless impact analysis produced exactly one qualified target.
+    """
     return HeroState(**_service.deploy_change())
 
 
@@ -252,6 +297,7 @@ def main() -> None:  # pragma: no cover - exercised by running the console
     # Re-run at startup so `python -m driftzero_console.app` reports what is actually
     # wired, and an operator sees a misconfiguration before uploading a photo.
     print(configure_providers())
+    print(configure_semantic_provider())
     print("runtime readiness: LOCAL_PILOT (not production-ready)")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
 

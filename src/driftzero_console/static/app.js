@@ -92,6 +92,15 @@ function renderModules() {
     .join("");
 }
 
+/* Mirrors the server's gate. The server refuses an unqualified deploy on its own; this
+ * only avoids offering an action that would be rejected. */
+function applyGating() {
+  const ready = Boolean(state.scenario.remediation_available);
+  $("btn-deploy").disabled = !ready;
+  $("btn-analyze").classList.toggle("primary", !ready);
+  $("btn-deploy").classList.toggle("primary", ready);
+}
+
 function renderScenario() {
   const s = state.scenario;
   $("session-chip").textContent = `CHANGE ${s.change_id}`;
@@ -102,6 +111,103 @@ function renderScenario() {
   $("requirement-id").textContent = s.requirement_id;
   $("value-from").textContent = s.previous_value;
   $("value-to").textContent = s.current_value;
+}
+
+function renderSource() {
+  const src = state.source;
+  if (!src) return;
+  $("source-refs").innerHTML = `<div class="rows">
+      ${row("Previous source", esc(src.previous_content_ref), "mono")}
+      ${row("Previous hash", esc(shortHash(src.previous_content_hash)), "mono")}
+      ${row("Current source", esc(src.current_content_ref), "mono")}
+      ${row("Current hash", esc(shortHash(src.current_content_hash)), "mono")}
+      ${row("Derivation", chip(src.derivation, "info"))}
+      ${row("Candidate catalog", `<b>${src.catalog_size}</b> artifacts`, "hl")}
+    </div>`;
+}
+
+/* Change Intelligence: what the model proposed, and — separately — what the Truth
+ * Engine decided. The two are never merged into one number. */
+function renderIntel() {
+  const i = state.intel;
+  const imp = state.impact;
+  const chipEl = $("intel-chip");
+  const out = $("intel");
+  if (!i) return;
+
+  if (i.status === "PENDING") {
+    chipEl.textContent = "PENDING";
+    chipEl.className = "chip";
+    out.innerHTML = i.provider_configured
+      ? `<div class="empty">Two source versions are loaded and hashed. Press
+         <b>Analyze Change</b> to extract the change and search the catalog for
+         affected work instructions.</div>`
+      : `<div class="empty">Live change intelligence is not configured on this
+         instance. Nothing is assumed in its place.</div>`;
+    return;
+  }
+
+  if (i.status === "PROVIDER_DISABLED" || i.status === "PROVIDER_UNAVAILABLE") {
+    chipEl.textContent = "NOT CONFIGURED";
+    chipEl.className = "chip warn";
+    out.innerHTML = `<div class="callout">${esc(i.detail || "")}</div>`;
+    return;
+  }
+
+  if (!i.succeeded) {
+    chipEl.textContent = "REVIEW REQUIRED";
+    chipEl.className = "chip bad";
+    out.innerHTML = `<div class="rows">
+        ${row("Analysis", chip(i.status, "bad"))}
+        ${row("Attempts", `<b>${i.attempts}</b>`, "hl")}
+      </div>
+      <div class="callout">${esc(i.failure_reason || "The proposal was not usable.")}
+      No remediation is available.</div>`;
+    return;
+  }
+
+  const c1 = state.crossing_1;
+  const qualified = Boolean(imp && imp.qualified);
+  chipEl.textContent = qualified ? "IMPACT QUALIFIED" : "REVIEW REQUIRED";
+  chipEl.className = `chip ${qualified ? "ok" : "bad"}`;
+
+  const evaluated = (imp?.evaluated || [])
+    .map(
+      (e) => `<div class="attempt-row">
+        <span class="hash">${esc(e.artifact_id)}</span>
+        ${chip(e.qualified ? "QUALIFIED" : "NOT AFFECTED", e.qualified ? "ok" : "")}
+        <span class="dz-sub">${esc(
+          e.qualified ? "all four conditions hold" : e.failed_conditions.join(", "),
+        )}</span>
+      </div>`,
+    )
+    .join("");
+
+  const disagreed = (imp?.evaluated || []).filter((e) => e.agent_proposal_disagreed).length;
+
+  out.innerHTML = `<div class="rows">
+      ${row("Semantic runtime", esc(i.runtime_label || "—"))}
+      ${row("Agent", esc(i.identity) + " " + chip(i.authority, "info"), "mono")}
+      ${row("Changed requirement", esc(i.requirement_id || "—"), "mono")}
+      ${row("Before", chip(i.previous_value, "warn"))}
+      ${row("After", chip(i.current_value, "ok"))}
+      ${row("Candidates proposed", `<b>${i.candidate_count}</b>`, "hl")}
+      ${row("Crossing 1", chip(c1 ? c1.verdict : "—", c1 && c1.accepted ? "ok" : "bad"))}
+      ${row("Impact gate", chip(imp ? imp.outcome : "—", qualified ? "ok" : "bad"))}
+      ${row("Qualified target", qualified ? chip(imp.affected_artifact_id, "ok") : chip("NONE", "bad"))}
+      ${row("Attempts", `<b>${i.attempts}</b>`, "hl")}
+      ${i.total_tokens ? row("Tokens", `<b>${i.total_tokens}</b>`, "hl") : ""}
+      ${i.adk_version ? row("ADK version", esc(i.adk_version), "mono") : ""}
+    </div>
+    <div class="sub-head" style="margin-top:14px">Deterministic qualification</div>
+    <div class="attempts">${evaluated}</div>
+    <div class="callout">${esc(i.authority_note)}
+    ${
+      disagreed
+        ? ` The agent proposed ${disagreed} candidate${disagreed === 1 ? "" : "s"} the
+            Truth Engine did not qualify; its opinion was not consulted.`
+        : ""
+    }</div>`;
 }
 
 function renderStages() {
@@ -115,12 +221,21 @@ function renderStages() {
   /* Implemented stages describe real change progress. Unimplemented capabilities are
      development diagnostics — they are never rendered as operational stages, and never
      counted, because a stage nobody built cannot be "pending" for this change. */
+  const imp = state.impact;
+  const intel = state.intel;
   const implemented = [
     {
-      label: "Source Change Approved",
-      sub: `${state.scenario.change_id} · ${state.scenario.previous_version} → ${state.scenario.source_version}`,
-      chip: chip("APPROVED", "ok"),
+      label: "Source Change Received",
+      sub: `${state.scenario.change_id} · ${state.scenario.previous_version} → ${state.scenario.source_version} · derived from source`,
+      chip: chip("RECEIVED", "ok"),
       done: true,
+    },
+    {
+      label: "Impact Analysis",
+      sub: impactStageSub(intel, imp),
+      chip: impactStageChip(intel, imp),
+      done: Boolean(imp && imp.qualified),
+      denied: Boolean(imp && imp.requires_review),
     },
     {
       label: "Authorization",
@@ -185,7 +300,6 @@ function renderStages() {
   ];
 
   const notImplemented = [
-    { label: "Impact Analysis", sub: "Change Intelligence Agent", chip: chip("NOT IMPLEMENTED", "warn") },
     { label: "Change Proof", sub: "Seven proof invariants — T080 step 11", chip: chip("NOT IMPLEMENTED", "warn") },
   ];
 
@@ -222,7 +336,28 @@ function changeStatus() {
   if (state.delivery && state.delivery.delivery_established)
     return { label: "AWAITING FIELD EVIDENCE", tone: "warn" };
   if (state.validated_execution) return { label: "AWAITING DELIVERY", tone: "warn" };
-  return { label: "AWAITING REMEDIATION", tone: "" };
+  const imp = state.impact;
+  if (imp && imp.requires_review) return { label: "IMPACT REVIEW REQUIRED", tone: "bad" };
+  if (imp && imp.qualified) return { label: "IMPACT QUALIFIED", tone: "warn" };
+  if (state.intel && state.intel.status !== "PENDING" && !state.intel.succeeded)
+    return { label: "IMPACT REVIEW REQUIRED", tone: "bad" };
+  return { label: "SOURCE CHANGE RECEIVED", tone: "" };
+}
+
+function impactStageSub(intel, imp) {
+  if (!intel || intel.status === "PENDING") return "Awaiting analysis of the source change";
+  if (!intel.provider_configured) return "Live change intelligence is not configured";
+  if (!intel.succeeded) return `Analysis did not produce a usable proposal — ${intel.status}`;
+  if (imp && imp.qualified)
+    return `${imp.candidate_count} candidates evaluated · ${imp.affected_artifact_id} qualified`;
+  return `${imp ? imp.qualified_count : 0} qualified of ${imp ? imp.candidate_count : 0} — review required`;
+}
+
+function impactStageChip(intel, imp) {
+  if (!intel || intel.status === "PENDING") return chip("PENDING");
+  if (!intel.succeeded) return chip("REVIEW REQUIRED", "bad");
+  if (imp && imp.qualified) return chip("QUALIFIED", "ok");
+  return chip("REVIEW REQUIRED", "bad");
 }
 
 function verdictStageSub(v) {
@@ -348,6 +483,7 @@ function renderFleet() {
           <span class="name">${esc(a.name)}</span>
           <div class="id">${esc(a.identity)}</div>
           <div class="role">${esc(a.role)}</div>
+          ${a.semantic_runtime ? `<div class="dz-sub">${esc(a.semantic_runtime)}</div>` : ""}
         </span>
         <span class="agent-right">
           ${chip(a.status, "info")}
@@ -705,6 +841,8 @@ function render() {
   renderEnvironment();
   renderModules();
   renderScenario();
+  renderSource();
+  renderIntel();
   renderStages();
   renderArtifact();
   renderEvidenceSummary();
@@ -719,7 +857,13 @@ function render() {
 }
 
 async function refresh(promise) {
-  const buttons = [$("btn-deploy"), $("btn-deliver"), $("btn-reset"), $("btn-security")];
+  const buttons = [
+    $("btn-analyze"),
+    $("btn-deploy"),
+    $("btn-deliver"),
+    $("btn-reset"),
+    $("btn-security"),
+  ];
   buttons.forEach((b) => (b.disabled = true));
   try {
     state = await promise;
@@ -731,6 +875,7 @@ async function refresh(promise) {
   }
 }
 
+$("btn-analyze").addEventListener("click", () => refresh(call("/api/hero/analyze", "POST")));
 $("btn-deploy").addEventListener("click", () => refresh(call("/api/hero/deploy", "POST")));
 $("btn-deliver").addEventListener("click", () => refresh(call("/api/hero/deliver", "POST")));
 $("btn-reset").addEventListener("click", () => {

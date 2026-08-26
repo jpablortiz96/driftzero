@@ -27,8 +27,13 @@ import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
+from driftzero.agents.change_intel import (
+    ChangeIntelligenceAgent,
+    ReadOnlyTools,
+)
 from driftzero.agents.enablement import (
     DeltaInstruction,
     DeltaStatus,
@@ -42,6 +47,11 @@ from driftzero.agents.field_verify import (
     evidence_is_replayable,
     get_field_observation_provider,
     has_field_observation_provider,
+)
+from driftzero.agents.model_client import (
+    ModelClientUnavailable,
+    get_model_client,
+    has_model_client_provider,
 )
 from driftzero.agents.orchestrator import (
     VerdictContext,
@@ -88,12 +98,24 @@ from driftzero.models.change import ApprovedChange
 from driftzero.models.classification import ClassificationLabel, DataClassification
 from driftzero.models.workflow import Workflow, WorkflowState
 from driftzero.orchestration import (
+    BoundaryResult,
     DeliveryCrossingContext,
     ObservationCrossingContext,
     RemediationCrossingContext,
+    accept_change_set,
     accept_delivery_result,
     accept_field_observation,
     accept_remediation_evidence,
+)
+from driftzero.sources.registry import (
+    ArtifactCatalog,
+    SourceChangeIngestion,
+    SourceProcedureStore,
+    SourceVersion,
+    ingest_source_change,
+    load_approved_change_record,
+    load_artifact_catalog,
+    load_source_version,
 )
 from driftzero.tools.artifact_mutation import (
     InMemoryArtifactRepository,
@@ -106,9 +128,15 @@ from driftzero.truth_engine.actions import (
     decide_retry,
     reconcile_delivery,
 )
+from driftzero.truth_engine.evidence import canonical_hash
 from driftzero.truth_engine.idempotency import (
     derive_delivery_action_id,
     derive_remediation_action_id,
+)
+from driftzero.truth_engine.impact import (
+    ImpactOutcome,
+    qualify_candidates,
+    resolve_cardinality,
 )
 from driftzero.truth_engine.state_machine import can_transition, transition
 
@@ -284,25 +312,101 @@ FUTURE_CAPABILITIES: tuple[dict[str, Any], ...] = (
 )
 
 
+def _proposal_hash(proposal: Any) -> str:
+    """Canonical hash of the accepted proposal, via the frozen M0 helper.
+
+    Binds the evidence to the exact structured output that was produced, so an auditor
+    can tell two analyses of the same source apart.
+    """
+    return canonical_hash(proposal.model_dump(mode="json"))
+
+
 def _classification() -> DataClassification:
     return DataClassification(labels=[ClassificationLabel.SYNTHETIC])
 
 
-def _change_from_case(case: ChangeCase) -> ApprovedChange:
-    return ApprovedChange(
-        change_id=case.change_id,
+PILOT_DATA_DIR = Path(__file__).resolve().parents[2] / "pilot_data"
+"""Where the pilot's real operational records live. Loaded as data, never inlined."""
+
+PILOT_CHANGE_ID = "DZ-001"
+
+
+@dataclass(frozen=True)
+class PilotDataset:
+    """Everything one change needs, all of it loaded rather than declared.
+
+    The dataset carries two source versions and the whole downstream catalog. It does
+    **not** carry an affected artifact: which artifact a change hits is discovered, not
+    configured, and a dataset able to state it would defeat the point of discovering it.
+    """
+
+    change_id: str
+    source_name: str
+    previous: SourceVersion
+    current: SourceVersion
+    catalog: ArtifactCatalog
+    authorized_scope: tuple[str, ...]
+    approved_status: str
+
+
+def load_pilot_dataset(root: Path = PILOT_DATA_DIR) -> PilotDataset:
+    """Load the pilot's real source versions, catalog, and approval record."""
+    procedures = root / "source_procedures"
+    record = load_approved_change_record(root / "approved_changes.json", PILOT_CHANGE_ID)
+    previous = load_source_version(
+        procedures / f"packing_sop_{record['previous_version']}.json"
+    )
+    current = load_source_version(
+        procedures / f"packing_sop_{record['source_version']}.json"
+    )
+    catalog = load_artifact_catalog(
+        root / "artifact_catalog.json", data_classification=_classification()
+    )
+    return PilotDataset(
+        change_id=record["change_id"],
+        source_name=current.title,
+        previous=previous,
+        current=current,
+        catalog=catalog,
+        authorized_scope=tuple(record["authorized_scope"]),
+        approved_status=record["approved_status"],
+    )
+
+
+def dataset_from_case(case: ChangeCase) -> PilotDataset:
+    """Build a dataset from an explicit :class:`ChangeCase`.
+
+    Keeps an arbitrary second case drivable end to end without a second data directory,
+    while still going through the same derivation path: two source versions in, change
+    derived from the diff, catalog searched for candidates.
+    """
+    common = {k: v for k, v in case.requirements.items() if k != case.requirement_id}
+    previous = SourceVersion(
         source_procedure_id=case.source_procedure_id,
-        source_version=case.source_version,
-        previous_version=case.previous_version,
+        version=case.previous_version,
         operation_id=case.operation_id,
-        requirement_id=case.requirement_id,
-        previous_value=case.previous_value,
-        current_value=case.current_value,
-        authorized_scope=[case.artifact_id],
+        title=case.source_name,
+        requirements={**common, case.requirement_id: case.previous_value},
+    )
+    current = SourceVersion(
+        source_procedure_id=case.source_procedure_id,
+        version=case.source_version,
+        operation_id=case.operation_id,
+        title=case.source_name,
+        requirements={**common, case.requirement_id: case.current_value},
+    )
+    catalog = ArtifactCatalog(
+        catalog_id=f"case-{case.change_id}",
+        artifacts=(_artifact_from_case(case),),
+    )
+    return PilotDataset(
+        change_id=case.change_id,
+        source_name=case.source_name,
+        previous=previous,
+        current=current,
+        catalog=catalog,
+        authorized_scope=(case.artifact_id,),
         approved_status="APPROVED",
-        source_evidence_ref=case.source_evidence_ref,
-        received_at=datetime(2026, 8, 25, 9, 0, tzinfo=UTC),
-        data_classification=_classification(),
     )
 
 
@@ -326,14 +430,22 @@ class _Session:
 
     session_id: str
     case: ChangeCase
+    dataset: PilotDataset
     change: ApprovedChange
+    ingestion: SourceChangeIngestion
+    source_store: SourceProcedureStore
     ledger: ActionLedger
     repository: InMemoryArtifactRepository
     broker: CapabilityBroker
     channel: LocalPilotDeliveryChannel
     field_store: FieldEvidenceStore
-    action_id: str
     delivery_action_id: str
+    action_id: str | None = None
+    """Derived only once a target qualifies. There is no action without a target."""
+    intel: dict[str, Any] | None = None
+    crossing_1: dict[str, Any] | None = None
+    impact: dict[str, Any] | None = None
+    qualified_artifact_id: str | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
     remediation: dict[str, Any] | None = None
     crossing: dict[str, Any] | None = None
@@ -363,52 +475,85 @@ class HeroConsoleService:
     no tool invocation, and no ledger primitive to its caller.
     """
 
-    def __init__(self, case: ChangeCase = PACKING_LABEL_PILOT) -> None:
-        self._case = case
+    def __init__(
+        self,
+        case: ChangeCase | None = None,
+        *,
+        pilot_data_dir: Path = PILOT_DATA_DIR,
+    ) -> None:
+        # No case given: run the real pilot dataset off disk. A case given: derive an
+        # equivalent dataset so an arbitrary second change takes the identical path.
+        self._case = case or PACKING_LABEL_PILOT
+        self._dataset = (
+            dataset_from_case(case) if case is not None else load_pilot_dataset(pilot_data_dir)
+        )
         self._sequence = 0
         self._session = self._new_session()
 
     # ------------------------------------------------------------------ session
 
     def _new_session(self) -> _Session:
+        """Step 1 — ingest a real source change. Impact stays undetermined.
+
+        The change is *derived* from the diff of two retrieved source versions, and the
+        repository is loaded from the whole catalog. Nothing here knows which artifact is
+        affected: ``affected_artifact_id`` is None and ``delivery_action_id`` cannot be
+        derived until a target exists.
+        """
         self._sequence += 1
-        case = self._case
-        change = _change_from_case(case)
-        artifact = _artifact_from_case(case)
+        dataset = self._dataset
+        workflow_id = f"{WORKFLOW_ID}-{self._sequence:03d}"
+        source_store = SourceProcedureStore()
+        ingestion = ingest_source_change(
+            change_id=dataset.change_id,
+            previous=dataset.previous,
+            current=dataset.current,
+            authorized_scope=dataset.authorized_scope,
+            approved_status=dataset.approved_status,
+            received_at=datetime(2026, 8, 25, 9, 0, tzinfo=UTC),
+            data_classification=_classification(),
+            store=source_store,
+        )
+        change = ingestion.change
         session = _Session(
             session_id=f"session-{self._sequence:03d}",
-            case=case,
+            case=self._case,
+            dataset=dataset,
             change=change,
+            ingestion=ingestion,
+            source_store=source_store,
             ledger=ActionLedger(),
-            repository=InMemoryArtifactRepository({case.artifact_id: artifact}),
+            repository=InMemoryArtifactRepository(
+                {a.artifact_id: a for a in dataset.catalog.artifacts}
+            ),
             broker=CapabilityBroker(clock=lambda: datetime.now(UTC)),
             channel=LocalPilotDeliveryChannel(),
             field_store=FieldEvidenceStore(),
-            action_id=derive_remediation_action_id(
-                workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
-                change=change,
-                artifact_id=case.artifact_id,
-            ),
             delivery_action_id=derive_delivery_action_id(
-                workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
-                change=change,
-                worker_id=DESTINATION_REF,
+                workflow_id=workflow_id, change=change, worker_id=DESTINATION_REF
             ),
         )
         session.workflow = Workflow(
-            workflow_id=f"{WORKFLOW_ID}-{self._sequence:03d}",
+            workflow_id=workflow_id,
             change_id=change.change_id,
             source_version=change.source_version,
             state=WorkflowState.CHANGE_RECEIVED,
-            affected_artifact_id=case.artifact_id,
-            candidate_artifact_refs=[case.artifact_id],
+            # Deliberately absent. Impact is a Truth Engine decision that has not been
+            # made yet, and asserting it here would be the whole product lying at boot.
+            affected_artifact_id=None,
+            candidate_artifact_refs=[],
             worker_id=DESTINATION_REF,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
             data_classification=_classification(),
         )
+        session.evidence[f"source-change-{session.session_id}"] = ingestion.as_evidence()
         self._record(
-            session, "CHANGE_CASE_LOADED", f"{case.change_id} — {case.source_name}"
+            session,
+            "SOURCE_CHANGE_RECEIVED",
+            f"{change.source_procedure_id} {ingestion.previous.version} → "
+            f"{ingestion.current.version}: {ingestion.delta.requirement_id} "
+            f"{ingestion.delta.previous_value} → {ingestion.delta.current_value}",
         )
         return session
 
@@ -448,8 +593,23 @@ class HeroConsoleService:
 
     # ------------------------------------------------------------------ projections
 
-    def _artifact_view(self, session: _Session) -> dict[str, Any]:
-        artifact = session.repository.read(session.case.artifact_id)
+    def _artifact_view(self, session: _Session) -> dict[str, Any] | None:
+        """The qualified target artifact, or None while impact is undetermined.
+
+        Returning None is the honest answer before analysis: this deployment knows a
+        catalog, not a target.
+        """
+        if session.qualified_artifact_id is None:
+            return None
+        return self._measure_artifact(session, session.qualified_artifact_id)
+
+    def _measure_artifact(self, session: _Session, artifact_id: str) -> dict[str, Any]:
+        """Read and hash one artifact by id, independent of impact qualification.
+
+        The security probe needs a before/after measurement of whatever it targeted,
+        which may be a catalog artifact no analysis has qualified.
+        """
+        artifact = session.repository.read(artifact_id)
         return {
             "artifact_id": artifact.artifact_id,
             "content_ref": artifact.content_ref,
@@ -524,9 +684,22 @@ class HeroConsoleService:
                     if is_authorized(identity, ToolCapability.ARTIFACT_MUTATION)
                     else "DENIED"
                 ),
+                # Which runtime an agent uses says nothing about what it may do. Change
+                # Intelligence gained a real ADK runtime and no operational capability.
+                "semantic_runtime": self._semantic_runtime_for(identity),
             }
             for identity, name, role in AGENT_ROLES
         ]
+
+    def _semantic_runtime_for(self, identity: AgentIdentity) -> str | None:
+        """The model runtime an agent actually calls, or None when it calls none."""
+        if identity is AgentIdentity.CHANGE_INTELLIGENCE:
+            config = DriftZeroConfig.from_env().semantic_provider
+            return f"Google ADK + Gemini {config.model}" if config.is_live else None
+        if identity is AgentIdentity.FIELD_VERIFICATION:
+            config = self._field_config()
+            return f"Vertex AI MaaS + {config.model}" if config.is_live else None
+        return None
 
     def _capability_columns(self) -> list[str]:
         """Column order for the fleet matrix. Derived from the enum, never a UI literal."""
@@ -549,7 +722,14 @@ class HeroConsoleService:
                 "current_value": change.current_value,
                 "authorized_scope": list(change.authorized_scope),
                 "action_id": session.action_id,
+                "affected_artifact_id": session.qualified_artifact_id,
+                "impact_determined": session.qualified_artifact_id is not None,
+                "remediation_available": session.qualified_artifact_id is not None,
             },
+            "source": self._source_view(session),
+            "intel": self._intel_state_view(),
+            "crossing_1": session.crossing_1,
+            "impact": session.impact,
             "artifact": self._artifact_view(session),
             "authorization": self._policy_view(),
             "fleet": self._fleet_view(),
@@ -578,16 +758,261 @@ class HeroConsoleService:
 
     # ------------------------------------------------------------------ use cases
 
-    def deploy_change(self) -> dict[str, Any]:
-        """Run the real remediation path, then the real Crossing 2 validation."""
-        session = self._session
-        self._record(session, "REMEDIATION_REQUESTED", "Approved DZ-001 intent submitted")
+    # ------------------------------------------------------------------ steps 2-3
 
-        artifact = session.repository.read(session.case.artifact_id)
+    def analyze_change(self) -> dict[str, Any]:
+        """Steps 2–3 — semantic impact proposal, Crossing 1, deterministic qualification.
+
+        The model proposes candidates. The Truth Engine decides which, if any, is the
+        authoritative target. Those are different jobs and this method keeps them apart:
+        it never reads ``candidate.is_affected`` and never picks between qualified
+        candidates.
+        """
+        session = self._session
+        config = DriftZeroConfig.from_env().semantic_provider
+        self._record(
+            session,
+            "IMPACT_ANALYSIS_REQUESTED",
+            f"{session.change.source_procedure_id} "
+            f"{session.change.previous_version} → {session.change.source_version}",
+        )
+
+        if not config.enabled or not has_model_client_provider():
+            session.intel = {
+                "status": "PROVIDER_DISABLED",
+                "detail": (
+                    "Live change intelligence is not configured for this instance, so no "
+                    "analysis was performed. Nothing was assumed in its place."
+                ),
+                **self._intel_static_view(config),
+            }
+            self._record(session, "SEMANTIC_PROVIDER_DISABLED", "no analysis was made")
+            return self.get_state()
+
+        try:
+            client = get_model_client(config.semantic)
+        except (ModelClientUnavailable, Exception) as exc:  # noqa: BLE001
+            session.intel = {
+                "status": "PROVIDER_UNAVAILABLE",
+                "detail": f"{type(exc).__name__}: {exc}",
+                **self._intel_static_view(config),
+            }
+            self._record(session, "SEMANTIC_PROVIDER_UNAVAILABLE", str(exc))
+            return self.get_state()
+
+        catalog = session.dataset.catalog
+        agent = ChangeIntelligenceAgent(
+            client=client,
+            config=config.semantic,
+            # Both reads run before the model call and their results are inputs. Model
+            # output can neither choose nor parameterize them.
+            tools=ReadOnlyTools(
+                read_approved_change=lambda cid: (
+                    session.change if cid == session.change.change_id else None
+                ),
+                read_artifact_registry=lambda: list(catalog.artifacts),
+            ),
+        )
+        result = agent.propose(session.change.change_id)
+
+        provider_evidence = getattr(client, "last_call_evidence", None)
+        session.intel = self._intel_view(session, result, config, provider_evidence)
+        evidence_id = f"change-intelligence-{session.session_id}"
+        session.evidence[evidence_id] = {
+            **(provider_evidence.as_evidence() if provider_evidence else {}),
+            "operation_id": f"intel-{session.session_id}",
+            "change_id": session.change.change_id,
+            "source_previous_hash": session.ingestion.previous.content_hash,
+            "source_current_hash": session.ingestion.current.content_hash,
+            "catalog_hash": catalog.catalog_hash,
+            "catalog_size": len(catalog.artifacts),
+            "status": str(result.status),
+            "attempts": result.attempts,
+            "repair_attempts_used": result.repair_attempts_used,
+            "injection_markers_detected": list(result.injection_markers_detected),
+            "unknown_artifact_ids": list(result.unknown_artifact_ids),
+            "proposal_hash": _proposal_hash(result.proposal) if result.proposal else None,
+            "candidate_count": (
+                len(result.proposal.candidate_affected_artifacts) if result.proposal else 0
+            ),
+            "authoritative": False,
+        }
+        session.intel["evidence_id"] = evidence_id
+
+        if not result.succeeded:
+            self._record(
+                session, "IMPACT_ANALYSIS_FAILED", result.failure_reason or str(result.status)
+            )
+            self._review_required(session)
+            return self.get_state()
+
+        boundary = self._validate_change_set(session, result)
+        if not boundary.accepted:
+            self._review_required(session)
+            return self.get_state()
+
+        self._qualify_impact(session, boundary)
+        return self.get_state()
+
+    def _review_required(self, session: _Session) -> None:
+        """Reach REVIEW_REQUIRED the way the frozen table permits.
+
+        There is no CHANGE_RECEIVED -> REVIEW_REQUIRED edge, so the workflow passes
+        through IMPACT_DETERMINED: analysis ran and its determination was that no
+        autonomous path exists.
+        """
+        self._advance(session, WorkflowState.IMPACT_DETERMINED)
+        self._advance(session, WorkflowState.REVIEW_REQUIRED)
+
+    def _validate_change_set(
+        self, session: _Session, result: Any
+    ) -> BoundaryResult:
+        """Crossing 1 — the frozen validator, against the authoritative change."""
+        boundary = accept_change_set(
+            result,
+            change=session.change,
+            known_artifact_ids=session.dataset.catalog.artifact_ids,
+            source_version_applicable=True,
+            rejection_ref=f"rej-changeset-{session.session_id}",
+        )
+        crossing_id = f"crossing1-{session.session_id}"
+        session.evidence[crossing_id] = {
+            "accepted": boundary.accepted,
+            "failed_layers": list(boundary.failed_layers),
+            "rejection_reason": boundary.rejection_reason,
+        }
+        session.crossing_1 = {
+            "verdict": "ACCEPTED" if boundary.accepted else "REJECTED",
+            "accepted": boundary.accepted,
+            "failed_layers": list(boundary.failed_layers),
+            "rejection_reason": boundary.rejection_reason,
+            "evidence_id": crossing_id,
+        }
+        self._record(
+            session,
+            "CROSSING_1_ACCEPTED" if boundary.accepted else "CROSSING_1_REJECTED",
+            "ChangeSet validated against the authoritative approved change",
+        )
+        return boundary
+
+    def _qualify_impact(self, session: _Session, boundary: BoundaryResult) -> None:
+        """The deterministic impact gate. The model's opinion is not consulted."""
+        proposal = boundary.accepted_change_set
+        catalog = session.dataset.catalog
+        pairs = [
+            (candidate, catalog.get(candidate.artifact_id))
+            for candidate in proposal.candidate_affected_artifacts
+        ]
+        known = [(c, a) for c, a in pairs if a is not None]
+        qualifications = qualify_candidates(known, session.change)
+        resolution = resolve_cardinality(qualifications)
+
+        session.workflow = session.workflow.model_copy(
+            update={
+                "candidate_artifact_refs": [c.artifact_id for c, _ in known],
+                "impact_reason": resolution.outcome.value,
+            }
+        )
+
+        session.impact = {
+            "outcome": str(resolution.outcome),
+            "qualified": resolution.outcome is ImpactOutcome.SINGLE_QUALIFIED_TARGET,
+            "requires_review": resolution.requires_review,
+            "affected_artifact_id": resolution.affected_artifact_id,
+            "candidate_count": len(known),
+            "qualified_count": len(resolution.qualified_artifact_ids),
+            "qualified_artifact_ids": list(resolution.qualified_artifact_ids),
+            "evaluated": [
+                {
+                    "artifact_id": q.artifact_id,
+                    "qualified": q.qualified,
+                    "failed_conditions": [str(c) for c in q.failed_conditions],
+                    "agent_proposed_is_affected": q.agent_proposed_is_affected,
+                    "agent_proposal_disagreed": q.agent_proposal_disagreed,
+                }
+                for q in qualifications
+            ],
+            "authority": "DRIFTZERO TRUTH ENGINE",
+        }
+        session.evidence[f"impact-{session.session_id}"] = dict(session.impact)
+
+        if resolution.affected_artifact_id is None:
+            session.qualified_artifact_id = None
+            session.action_id = None
+            self._record(
+                session,
+                "IMPACT_REVIEW_REQUIRED",
+                f"{resolution.outcome}: {len(resolution.qualified_artifact_ids)} qualified",
+            )
+            # Impact *was* determined — the determination is "no unique target" — so the
+            # workflow reaches REVIEW_REQUIRED through IMPACT_DETERMINED. The frozen
+            # table has no CHANGE_RECEIVED -> REVIEW_REQUIRED edge, and forcing one
+            # would be inventing a transition the domain does not define.
+            self._advance(session, WorkflowState.IMPACT_DETERMINED)
+            self._advance(session, WorkflowState.REVIEW_REQUIRED)
+            return
+
+        session.qualified_artifact_id = resolution.affected_artifact_id
+        session.workflow = session.workflow.model_copy(
+            update={"affected_artifact_id": resolution.affected_artifact_id}
+        )
+        # The action identity exists only now, because only now is there a target.
+        session.action_id = derive_remediation_action_id(
+            workflow_id=session.workflow.workflow_id,
+            change=session.change,
+            artifact_id=resolution.affected_artifact_id,
+        )
+        self._record(
+            session,
+            "IMPACT_QUALIFIED",
+            f"exactly one qualified target: {resolution.affected_artifact_id}",
+        )
+        self._advance(session, WorkflowState.IMPACT_DETERMINED)
+
+    # ------------------------------------------------------------------ remediation
+
+    def deploy_change(self) -> dict[str, Any]:
+        """Run the real remediation path, then the real Crossing 2 validation.
+
+        Refuses to run before a qualified target exists. This is the server's gate, not
+        a disabled button: a direct API call with no impact determination is rejected
+        here, where it cannot be bypassed.
+        """
+        session = self._session
+        if session.qualified_artifact_id is None or session.action_id is None:
+            self._record(
+                session,
+                "REMEDIATION_BLOCKED",
+                "no qualified impact target; run impact analysis first",
+            )
+            session.remediation = {
+                "status": "BLOCKED_NO_QUALIFIED_TARGET",
+                "blocked": True,
+                "detail": (
+                    "Remediation requires exactly one deterministically qualified "
+                    "artifact. Impact analysis has not produced one."
+                ),
+                "identity": None,
+                "dispatched": False,
+                "dispatch_count": session.repository.dispatch_count,
+                "evidence_id": None,
+                "remediation_type": None,
+                "reconciled": None,
+            }
+            return self.get_state()
+
+        target_id = session.qualified_artifact_id
+        self._record(
+            session,
+            "REMEDIATION_REQUESTED",
+            f"{session.change.change_id} → qualified target {target_id}",
+        )
+
+        artifact = session.repository.read(target_id)
         intent = RemediationIntent(
             action_id=session.action_id,
-            artifact_id=session.case.artifact_id,
-            requirement_id=session.case.requirement_id,
+            artifact_id=target_id,
+            requirement_id=session.change.requirement_id,
             expected_before_value=session.change.previous_value,
             expected_before_hash=artifact_content_hash(artifact),
             expected_after_value=session.change.current_value,
@@ -686,8 +1111,8 @@ class HeroConsoleService:
                 repository=session.repository,
                 change=session.change,
                 action_id=session.action_id,
-                expected_artifact_id=session.case.artifact_id,
-                expected_requirement_id=session.case.requirement_id,
+                expected_artifact_id=session.qualified_artifact_id,
+                expected_requirement_id=session.change.requirement_id,
                 source_version_applicable=True,
                 rejection_ref=f"rej-{session.session_id}",
             ),
@@ -727,15 +1152,22 @@ class HeroConsoleService:
             "driftzero-enablement → ARTIFACT_MUTATION",
         )
 
-        before = self._artifact_view(session)
+        target_id = (
+            session.qualified_artifact_id
+            or session.dataset.catalog.artifacts[0].artifact_id
+        )
+        before = self._measure_artifact(session, target_id)
         dispatches_before = session.repository.dispatch_count
 
-        artifact = session.repository.read(session.case.artifact_id)
+        artifact = session.repository.read(target_id)
+        requirement_id = session.change.requirement_id
         intent = RemediationIntent(
-            action_id=f"{session.action_id}-security-probe",
-            artifact_id=session.case.artifact_id,
-            requirement_id=session.case.requirement_id,
-            expected_before_value=artifact.requirements[session.case.requirement_id],
+            action_id=f"{session.action_id or 'probe'}-security-probe",
+            artifact_id=target_id,
+            requirement_id=requirement_id,
+            expected_before_value=artifact.requirements.get(
+                requirement_id, session.change.previous_value
+            ),
             expected_before_hash=artifact_content_hash(artifact),
             expected_after_value=session.change.current_value,
             source_procedure_id=session.change.source_procedure_id,
@@ -758,7 +1190,7 @@ class HeroConsoleService:
             broker=session.broker, identity=AgentIdentity.ENABLEMENT
         ).remediate(intent, tool_context)
 
-        after = self._artifact_view(session)
+        after = self._measure_artifact(session, target_id)
         record = result.denial_evidence
         evidence_id = f"denial-evidence-{session.session_id}"
         denial: dict[str, Any] = {}
@@ -810,7 +1242,7 @@ class HeroConsoleService:
         Composition happens only after Crossing 2 accepted the remediation: teaching a
         delta that was never validated would push unverified content to the floor.
         """
-        artifact = session.repository.read(session.case.artifact_id)
+        artifact = session.repository.read(session.qualified_artifact_id)
         result = FrontlineEnablementAgent().compose_delta(
             change=session.change,
             artifact=artifact,
@@ -1377,6 +1809,103 @@ class HeroConsoleService:
             "history": list(verification_history(session.verification_events)),
         }
 
+    def _intel_static_view(self, config: Any) -> dict[str, Any]:
+        """Change-intelligence facts independent of any particular analysis."""
+        return {
+            "provider_configured": config.enabled and has_model_client_provider(),
+            "provider": config.as_disclosure(),
+            "runtime_label": (
+                f"Gemini {config.model} · Google ADK" if config.is_live else None
+            ),
+            "identity": str(AgentIdentity.CHANGE_INTELLIGENCE),
+            "authority": "READ / ANALYZE",
+            "authority_note": (
+                "The agent proposes candidates. It does not choose the affected "
+                "artifact, authorize remediation, or set workflow state."
+            ),
+        }
+
+    def _intel_view(
+        self, session: _Session, result: Any, config: Any, provider_evidence: Any
+    ) -> dict[str, Any]:
+        """Project one analysis attempt. Adds no judgement of its own."""
+        proposal = result.proposal
+        return {
+            "status": str(result.status),
+            "succeeded": result.succeeded,
+            "failure_reason": result.failure_reason,
+            "attempts": result.attempts,
+            "repair_attempts_used": result.repair_attempts_used,
+            "injection_markers_detected": list(result.injection_markers_detected),
+            "unknown_artifact_ids": list(result.unknown_artifact_ids),
+            # Restated on every payload: a proposal is never authoritative.
+            "authoritative": False,
+            "requirement_id": proposal.requirement_id if proposal else None,
+            "previous_value": proposal.previous_value if proposal else None,
+            "current_value": proposal.current_value if proposal else None,
+            "candidate_count": (
+                len(proposal.candidate_affected_artifacts) if proposal else 0
+            ),
+            "candidates": (
+                [
+                    {
+                        "artifact_id": c.artifact_id,
+                        "impact_reason": c.impact_reason,
+                        "agent_proposed_is_affected": c.is_affected,
+                    }
+                    for c in proposal.candidate_affected_artifacts
+                ]
+                if proposal
+                else []
+            ),
+            "invocation_id": (
+                provider_evidence.invocation_id if provider_evidence else None
+            ),
+            "model": provider_evidence.model if provider_evidence else None,
+            "adk_version": provider_evidence.adk_version if provider_evidence else None,
+            "total_tokens": (
+                provider_evidence.total_tokens if provider_evidence else None
+            ),
+            "latency_seconds": (
+                provider_evidence.latency_seconds if provider_evidence else None
+            ),
+            **self._intel_static_view(config),
+        }
+
+    def _intel_state_view(self) -> dict[str, Any]:
+        """The impact panel before any analysis, or the latest attempt after one."""
+        session = self._session
+        if session.intel is not None:
+            return session.intel
+        config = DriftZeroConfig.from_env().semantic_provider
+        return {
+            "status": "PENDING",
+            "succeeded": False,
+            "authoritative": False,
+            "candidate_count": 0,
+            "candidates": [],
+            **self._intel_static_view(config),
+        }
+
+    def _source_view(self, session: _Session) -> dict[str, Any]:
+        """The real source material this change was derived from."""
+        ingestion = session.ingestion
+        return {
+            **ingestion.as_evidence(),
+            "source_name": session.dataset.source_name,
+            "previous_resolves": session.source_store.resolve(
+                ingestion.previous.content_ref
+            )
+            is not None,
+            "current_resolves": session.source_store.resolve(
+                ingestion.current.content_ref
+            )
+            is not None,
+            "catalog_size": len(session.dataset.catalog.artifacts),
+            "catalog_hash": session.dataset.catalog.catalog_hash,
+            "evidence_id": f"source-change-{session.session_id}",
+        }
+
     def _field_config(self) -> FieldProviderConfig:
         """Read configuration fresh, so live mode can be enabled without a rebuild."""
         return DriftZeroConfig.from_env().field_provider
@@ -1470,6 +1999,16 @@ class HeroConsoleService:
             "history": [],
             **self._field_static_view(),
         }
+
+    @property
+    def current_change(self) -> ApprovedChange:
+        """The approved change this session derived from its source versions."""
+        return self._session.change
+
+    @property
+    def current_catalog(self) -> ArtifactCatalog:
+        """The downstream artifacts this session will search. Never a shortlist."""
+        return self._session.dataset.catalog
 
     def get_evidence(self, evidence_id: str) -> dict[str, Any] | None:
         return self._session.evidence.get(evidence_id)
