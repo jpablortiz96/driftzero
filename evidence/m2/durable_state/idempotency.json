@@ -1,0 +1,7 @@
+{
+  "different_owner": "REFUSED: refusing to overwrite idempotency_keys/delivery-key: existing record differs (already claimed by 'runtime-a')",
+  "first_claim_granted": true,
+  "mechanism": "Firestore create() precondition \u2014 not read-then-write",
+  "owner_after_contest": "runtime-a",
+  "same_owner_reclaim_granted": false
+}

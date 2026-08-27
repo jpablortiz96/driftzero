@@ -12,6 +12,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Cloud adapters (T092/T093) live in src/driftzero_cloud/, outside the M0 purity
+# boundary. They are an EXTRA on purpose: `pip install driftzero` must never pull a
+# Google SDK into an environment that only runs the deterministic core.
+cloud = [
+    "google-cloud-firestore>=2.29",
+    "google-cloud-storage>=3.13",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

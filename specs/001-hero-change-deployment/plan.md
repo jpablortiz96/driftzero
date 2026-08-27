@@ -81,10 +81,6 @@ src/
 │   │   ├── verification.py     # VerificationEvent, FieldObservation
 │   │   ├── proof.py            # ChangeProof, EvidenceManifest
 │   │   └── classification.py   # DataClassification, LineageEntry
-│   ├── store/                  # Persistence layer
-│   │   ├── __init__.py
-│   │   ├── firestore.py        # Firestore client
-│   │   └── gcs.py              # Cloud Storage client
 │   ├── api/                    # FastAPI routes
 │   │   ├── __init__.py
 │   │   └── routes.py
@@ -92,6 +88,12 @@ src/
 │   │   ├── static/
 │   │   └── templates/
 │   └── cli.py                  # CLI for testing/demo
+├── src/driftzero_cloud/        # Cloud adapters — OUTSIDE the M0 purity boundary
+│   ├── __init__.py
+│   ├── ports.py                # structural Protocols (typing aid only)
+│   ├── serialization.py        # explicit document encode/decode
+│   ├── firestore.py            # Firestore persistence adapter (T092)
+│   └── gcs.py                  # Cloud Storage evidence adapter (T093)
 ├── tests/
 │   ├── unit/
 │   │   └── truth_engine/       # Deterministic logic tests
@@ -447,7 +449,7 @@ Authoritative per-requirement mapping. One validation group may serve several re
 | **FR-005** | Deterministic verification separating raw evidence, derived observation, comparator | `agents/field_verify` (observation), `truth_engine/verification` (comparator) | M0 (comparator) → G1/M3 (observation) | VS-1; VS-5 multimodal; VS-10 (observation rejected) | `reports/multimodal_eval.json`; `g1_gemma_feasibility.json`; `security/observation_rejected.json` | SC-006, SC-007, SC-012 |
 | **FR-006** | Generate immutable auditable Change Proof only on all 7 conditions | `truth_engine/proof_generator`, `ProofValidator` | M0 | VS-1 (7 invariants); VS-2 step 7 | `runs/hero_run_001/change_proof.json`; `MANIFEST.json` | SC-008, SC-009 |
 | **FR-007** | Idempotent handling of repeated logical events; transport duplicate ≠ new attempt | `truth_engine/idempotency`, `ActionExecution` ledger | M0 → M2 | VS-3 duplicate change; **VS-13** (duplicate field evidence, duplicate delivery, single proof) | `runs/hero_run_001/idempotency_log.json` | SC-010 |
-| **FR-008** | Persist state across restarts; reconcile side effects deterministically | Firestore `store/`, `ActionExecution` reconciliation | M0 (logic) → M2 (real restart) | VS-1 retry dedup; **VS-13** (crash-after-mutation reconciliation) | `runs/hero_run_001/restart_recovery.json` | SC-011 |
+| **FR-008** | Persist state across restarts; reconcile side effects deterministically | Firestore `driftzero_cloud/`, `ActionExecution` reconciliation | M0 (logic) → M2 (real restart) | VS-1 retry dedup; **VS-13** (crash-after-mutation reconciliation) | `runs/hero_run_001/restart_recovery.json` | SC-011 |
 | **FR-009** | Supersede an incomplete workflow when a newer applicable version arrives | `truth_engine/supersession` | M0 | VS-1; VS-4 supersession | `runs/hero_run_001/state_transitions.json` | SC-015 |
 | **FR-010** | Explicit non-exclusive data classification capturing lineage | `models/classification` (`DataClassification`, `LineageEntry`), `truth_engine/evidence` (`EvidenceManifest`) | M0 (model) → M2 (real+synthetic lineage) | **VS-12 — Data Classification & Lineage Validation** | `reports/data_lineage.json` | SC-013 |
 | **FR-011** | Fail closed on ambiguous/malformed/unauthorized/insufficient conditions | `truth_engine/*` (all crossings), state machine | M0 → M1 | VS-1 fail-closed cases; VS-6 injection; VS-8; VS-10; **VS-13** (unsafe reconciliation) | `security/*.json`; `runs/hero_run_001/state_transitions.json` | SC-012 |

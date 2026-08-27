@@ -7,7 +7,7 @@ lifetime of *that server process*.
 This is not persistence, and nothing here may describe it as such
 --------------------------------------------------------------
 Nothing is serialised, nothing touches disk, and a restart loses every workflow. Durable
-storage is T092's (``src/driftzero/store/firestore.py``, M2). An unknown workflow id is
+storage is T092's (``src/driftzero_cloud/firestore.py``, M2). An unknown workflow id is
 refused rather than recreated: silently minting a fresh workflow under a requested id
 would let ``status`` print ``CHANGE_RECEIVED`` as though it were history, which is the
 exact failure this design exists to avoid.

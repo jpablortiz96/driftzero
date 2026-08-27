@@ -1,0 +1,9 @@
+{
+  "conflicting_proof_under_same_id": "REFUSED: refusing to overwrite workflows/wf-m2-durable-001/proofs/act-generate_proof-368e87026fffac75eaf5b1c295ae08fc: existing record differs (a different proof is already stored under this proof_id)",
+  "content_hash": "ab1995d01e12838c41e64445fd9edb2df2ad44730b9b02087212c5173e68032d",
+  "hash_meaning": "SHA-256 over the proof's canonical JSON excluding its own content_hash field. Persistence copies it; it never recomputes proof hash semantics.",
+  "hash_unchanged_by_persistence": true,
+  "identical_rewrite_created_new_record": false,
+  "proof_id": "act-generate_proof-368e87026fffac75eaf5b1c295ae08fc",
+  "recomputed_hash_matches": true
+}

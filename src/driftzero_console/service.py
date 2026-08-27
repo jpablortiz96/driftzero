@@ -23,6 +23,7 @@ test had to be relaxed to accommodate a UI.
 
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -158,6 +159,26 @@ from driftzero.truth_engine.proof_generator import (
     ProofValidator,
 )
 from driftzero.truth_engine.state_machine import can_transition, transition
+from driftzero_console.persistence import DurableSink, NullSink
+
+
+def _persists(method: Any) -> Any:
+    """Flush authoritative records after an operation that can mutate them.
+
+    Applied as a decorator rather than as a call before each ``return`` because these
+    methods have several exit paths, and a missed one would silently persist a stale
+    snapshot — which looks exactly like working durability until a restart.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        result = method(self, *args, **kwargs)
+        session = getattr(self, "_session", None)
+        if session is not None:
+            self._persist(session)
+        return result
+
+    return wrapper
 
 
 class Environment(StrEnum):
@@ -524,6 +545,7 @@ class HeroConsoleService:
         pilot_data_dir: Path = PILOT_DATA_DIR,
         dataset: PilotDataset | None = None,
         workflow_namespace: str | None = None,
+        persistence: DurableSink | None = None,
     ) -> None:
         # A dataset given: run exactly that (the CLI injects one built from a fixture).
         # A case given: derive an equivalent dataset so an arbitrary second change takes
@@ -538,8 +560,15 @@ class HeroConsoleService:
                 if case is not None
                 else load_pilot_dataset(pilot_data_dir)
             )
+        # Injected, never detected. A None sink is the LOCAL_PILOT path and behaves
+        # exactly as it did before durable persistence existed.
+        self._persistence: DurableSink = persistence or NullSink()
         self._sequence = 0
         self._session = self._new_session()
+
+    @property
+    def persistence(self) -> DurableSink:
+        return self._persistence
 
     # ------------------------------------------------------------------ session
 
@@ -625,6 +654,34 @@ class HeroConsoleService:
         # workflow actually occupied is retained.
         session.state_history.append(workflow.state)
         session.workflow = transition(workflow, target, occurred_at=datetime.now(UTC))
+        self._persist(session)
+
+    @staticmethod
+    def _workflow_id_of(session: _Session) -> str:
+        """The workflow id this session's records belong to.
+
+        Ledger records used to be stamped with the module-level ``WORKFLOW_ID``
+        constant while the workflow itself carried a per-instance namespaced id. In
+        memory the field is written but never read, so nothing surfaced. Under durable
+        persistence it decides which workflow a ledger record is filed under, and every
+        workflow in the database would have collided on one id.
+        """
+        return session.workflow.workflow_id if session.workflow else WORKFLOW_ID
+
+    def _persist(self, session: _Session) -> None:
+        """Flush the authoritative records to the durable sink, if one is configured.
+
+        The ledger is flushed alongside the aggregate rather than at each individual
+        ledger call: a record is keyed on its stable ``action_id``, so re-writing it is
+        an update of the same document and can never produce a duplicate entry.
+        """
+        if session.workflow is None:
+            return
+        self._persistence.record_workflow(
+            session.workflow, [str(state) for state in session.state_history]
+        )
+        for action in session.ledger.all_records():
+            self._persistence.record_action(action)
 
     def _record(self, session: _Session, event: str, detail: str) -> None:
         session.events.append(
@@ -821,6 +878,7 @@ class HeroConsoleService:
 
     # ------------------------------------------------------------------ steps 2-3
 
+    @_persists
     def analyze_change(self) -> dict[str, Any]:
         """Steps 2–3 — semantic impact proposal, Crossing 1, deterministic qualification.
 
@@ -1033,6 +1091,7 @@ class HeroConsoleService:
 
     # ------------------------------------------------------------------ remediation
 
+    @_persists
     def deploy_change(self) -> dict[str, Any]:
         """Run the real remediation path, then the real Crossing 2 validation.
 
@@ -1093,7 +1152,7 @@ class HeroConsoleService:
             repository=session.repository,
             capability=None,
             capability_verifier=session.broker.verify,
-            workflow_id=WORKFLOW_ID,
+            workflow_id=self._workflow_id_of(session),
             change=session.change,
             source_version_applicable=True,
             data_classification=_classification(),
@@ -1259,7 +1318,7 @@ class HeroConsoleService:
             repository=session.repository,
             capability=None,
             capability_verifier=session.broker.verify,
-            workflow_id=WORKFLOW_ID,
+            workflow_id=self._workflow_id_of(session),
             change=session.change,
             source_version_applicable=True,
             data_classification=_classification(),
@@ -1409,6 +1468,7 @@ class HeroConsoleService:
         )
         return self.get_frontline(change_id)
 
+    @_persists
     def deliver_to_frontline(self) -> dict[str, Any]:
         """Deliver the composed delta through the pilot channel, then validate it.
 
@@ -1454,7 +1514,7 @@ class HeroConsoleService:
         if session.ledger.get(session.delivery_action_id) is None:
             session.ledger.plan(
                 action_id=session.delivery_action_id,
-                workflow_id=WORKFLOW_ID,
+                workflow_id=self._workflow_id_of(session),
                 action_type=ActionType.DELIVER_DELTA,
                 target_ref=DESTINATION_REF,
                 intent={
@@ -1575,6 +1635,7 @@ class HeroConsoleService:
 
     # ------------------------------------------------------------------ field evidence
 
+    @_persists
     def submit_field_evidence(
         self,
         raw: bytes,
@@ -2286,6 +2347,7 @@ class HeroConsoleService:
             delivery_receipt_ref=session.delivery_receipt_ref,
         )
 
+    @_persists
     def generate_proof(self) -> dict[str, Any]:
         """Step 11 — generate the Change Proof, or explain exactly what blocks it.
 
@@ -2305,6 +2367,9 @@ class HeroConsoleService:
             return self.get_state()
 
         outcome = attempt_proof(context, store=session.proof_store)
+        if outcome.generated and outcome.stored is not None:
+            # Write-once, unchanged. The sink never recomputes a hash.
+            self._persistence.record_proof(outcome.stored.proof)
         session.proof = self._proof_view(session, outcome)
 
         if not outcome.generated:

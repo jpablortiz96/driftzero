@@ -277,6 +277,73 @@ class FieldProviderConfig:
         }
 
 
+DEFAULT_PERSISTENCE = "memory"
+"""Durable persistence is opt-in. An unconfigured process stays in-memory, so no test
+and no offline run can reach Google Cloud by accident."""
+
+PERSISTENCE_MEMORY = "memory"
+PERSISTENCE_FIRESTORE = "firestore"
+
+DEFAULT_FIRESTORE_DATABASE = "(default)"
+
+
+@dataclass(frozen=True)
+class PersistenceConfig:
+    """T092/T093 — where durable state and evidence live.
+
+    Configuration only: this module is inside the M0 purity boundary and must never
+    import a Google SDK. The adapters in ``driftzero_cloud`` read these values; nothing
+    here opens a connection.
+
+    Fails closed the same way the model providers do. ``backend`` is ``memory`` unless a
+    durable backend is explicitly selected, and :meth:`validated` refuses a
+    half-configured cloud backend rather than silently writing somewhere unintended.
+    """
+
+    backend: str = DEFAULT_PERSISTENCE
+    project: str = ""
+    database: str = DEFAULT_FIRESTORE_DATABASE
+    evidence_bucket: str = ""
+    region: str = ""
+
+    @property
+    def is_durable(self) -> bool:
+        return self.backend == PERSISTENCE_FIRESTORE
+
+    def missing_settings(self) -> tuple[str, ...]:
+        """Configuration a durable backend needs but does not have."""
+        if not self.is_durable:
+            return ()
+        missing = []
+        if not self.project.strip():
+            missing.append(f"{ENV_PREFIX}GCP_PROJECT")
+        if not self.database.strip():
+            missing.append(f"{ENV_PREFIX}FIRESTORE_DATABASE")
+        if not self.evidence_bucket.strip():
+            missing.append(f"{ENV_PREFIX}EVIDENCE_BUCKET")
+        return tuple(missing)
+
+    def validated(self) -> PersistenceConfig:
+        """Return self, or raise if durable persistence is requested but unusable."""
+        missing = self.missing_settings()
+        if missing:
+            raise ConfigurationError(
+                "durable persistence requires " + ", ".join(missing)
+            )
+        return self
+
+    def as_disclosure(self) -> dict[str, object]:
+        """What a UI may honestly say about persistence. Never a credential."""
+        return {
+            "backend": self.backend,
+            "durable": self.is_durable,
+            "project": self.project or None,
+            "database": self.database if self.is_durable else None,
+            "evidence_bucket": self.evidence_bucket or None,
+            "missing_settings": list(self.missing_settings()),
+        }
+
+
 @dataclass(frozen=True)
 class DriftZeroConfig:
     """The injectable application configuration.
@@ -290,6 +357,7 @@ class DriftZeroConfig:
     gemma: GemmaConfig = GemmaConfig()
     field_provider: FieldProviderConfig = FieldProviderConfig()
     semantic_provider: SemanticProviderConfig = SemanticProviderConfig()
+    persistence: PersistenceConfig = PersistenceConfig()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DriftZeroConfig:
@@ -363,6 +431,13 @@ class DriftZeroConfig:
                     max_retries=_int("SEMANTIC_MAX_RETRIES", DEFAULT_SEMANTIC_MAX_RETRIES),
                     allow_structured_repair=False,
                 ),
+            ),
+            persistence=PersistenceConfig(
+                backend=_text("PERSISTENCE", DEFAULT_PERSISTENCE),
+                project=_text("GCP_PROJECT", ""),
+                database=_text("FIRESTORE_DATABASE", DEFAULT_FIRESTORE_DATABASE),
+                evidence_bucket=_text("EVIDENCE_BUCKET", ""),
+                region=_text("GCP_REGION", ""),
             ),
         )
 

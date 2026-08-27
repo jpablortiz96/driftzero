@@ -199,8 +199,8 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 - [ ] T089 [MANUAL] [M2] Create the Firestore database, the `driftzero-approved-changes` Pub/Sub topic with a push subscription, and the `driftzero-evidence-$PROJECT_ID` GCS bucket with lifecycle policy (quickstart MS-9–MS-11)
 - [x] T090 [MANUAL] [M2] Record the secret-handling decision (local `.env` vs Secret Manager) and apply it per quickstart MS-12
 - [x] T091 [MANUAL] [M2] Create the CORE runtime service accounts `driftzero-run-sa` and `driftzero-gemma-sa` with only the scoped roles listed in quickstart MS-12b; verify with `gcloud projects get-iam-policy`. **This is not Agent Identity and not per-agent IAM identity** (quickstart MS-12b)
-- [ ] T092 [P] [M2] Implement the Firestore persistence adapter (workflows, action ledger, proofs, idempotency keys) in `src/driftzero/store/firestore.py` (depends T017, T032)
-- [ ] T093 [P] [M2] Implement the Cloud Storage evidence adapter (raw evidence, before/after artifacts, rendered proofs) in `src/driftzero/store/gcs.py` (depends T039)
+- [x] T092 [P] [M2] Implement the Firestore persistence adapter (workflows, action ledger, proofs, idempotency keys) in `src/driftzero_cloud/firestore.py` (depends T017, T032)
+- [x] T093 [P] [M2] Implement the Cloud Storage evidence adapter (raw evidence, before/after artifacts, rendered proofs) in `src/driftzero_cloud/gcs.py` (depends T039)
 - [ ] T094 [M2] Implement the FastAPI routes from contracts/agents.md § API Contract in `src/driftzero/api/routes.py`: `POST /api/v1/changes`, `GET /workflows/{id}`, `POST /workflows/{id}/verify` (multipart, carries `submission_id`), `GET /workflows/{id}/proof`, `GET /workflows/{id}/evidence` (depends T081, T092)
 - [ ] T095 [M2] Implement the Pub/Sub push handler for approved change ingestion in `src/driftzero/api/pubsub.py` with `change_id` idempotency at the boundary (depends T029, T094)
 - [ ] T096 [M2] Create the `Dockerfile` and deployment configuration for the single `driftzero-api` Cloud Run service — `--service-account=driftzero-run-sa@…`, `--max-instances=2 --min-instances=0` (quickstart MS-13) (depends T094)

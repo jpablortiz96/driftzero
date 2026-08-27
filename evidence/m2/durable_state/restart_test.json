@@ -1,0 +1,54 @@
+{
+  "closes_limitation": "T081 process-local workflow registry",
+  "fabricated_defaults": false,
+  "identical": true,
+  "live_model_calls": 0,
+  "provider_calls": 2,
+  "runtime_a": {
+    "ledger": {
+      "act-deliver_delta-3b3832c85f69c63d5bdf3fd56463e48a": "COMPLETED",
+      "act-remediate_artifact-43994e9afb91096b9a77c8323fd428dc": "COMPLETED"
+    },
+    "proof_content_hash": "ab1995d01e12838c41e64445fd9edb2df2ad44730b9b02087212c5173e68032d",
+    "proof_id": "act-generate_proof-368e87026fffac75eaf5b1c295ae08fc",
+    "state": "PROOF_COMPLETE",
+    "state_history": [
+      "CHANGE_RECEIVED",
+      "IMPACT_DETERMINED",
+      "REMEDIATION_PENDING",
+      "REMEDIATION_COMPLETED",
+      "FRONTLINE_DELIVERY_COMPLETED",
+      "VERIFICATION_PASSED"
+    ],
+    "verification_results": [
+      "FAIL",
+      "PASS"
+    ],
+    "workflow_id": "wf-m2-durable-001"
+  },
+  "runtime_b_recovered": {
+    "ledger": {
+      "act-deliver_delta-3b3832c85f69c63d5bdf3fd56463e48a": "COMPLETED",
+      "act-remediate_artifact-43994e9afb91096b9a77c8323fd428dc": "COMPLETED"
+    },
+    "proof_content_hash": "ab1995d01e12838c41e64445fd9edb2df2ad44730b9b02087212c5173e68032d",
+    "proof_id": "act-generate_proof-368e87026fffac75eaf5b1c295ae08fc",
+    "revision": 13,
+    "state": "PROOF_COMPLETE",
+    "state_history": [
+      "CHANGE_RECEIVED",
+      "IMPACT_DETERMINED",
+      "REMEDIATION_PENDING",
+      "REMEDIATION_COMPLETED",
+      "FRONTLINE_DELIVERY_COMPLETED",
+      "VERIFICATION_PASSED"
+    ],
+    "verification_results": [
+      "FAIL",
+      "PASS"
+    ],
+    "workflow_id": "wf-m2-durable-001"
+  },
+  "unknown_proof_returns_none": true,
+  "unknown_workflow_returns_none": true
+}

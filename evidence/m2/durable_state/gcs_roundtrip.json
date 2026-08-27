@@ -1,0 +1,31 @@
+{
+  "conflicting_content": "REFUSED: refusing to overwrite gs://driftzero-evidence-driftzero-runtime-2026/workflows/wf-m2-durable-001/evidence/sub-001: existing record differs (stored object is 696422 bytes with hash 664cf4e7248b\u2026, refusing to overwrite immutable evidence)",
+  "content_hash": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+  "content_type": "image/jpeg",
+  "generation": 1,
+  "hash_note": "SHA-256 of the raw object bytes \u2014 object identity. Distinct from ChangeProof.content_hash, which hashes canonical proof JSON.",
+  "identical_rewrite_created_new_object": false,
+  "immutability_mechanism": "if_generation_match=0 write-once precondition",
+  "object_ref": "gs://driftzero-evidence-driftzero-runtime-2026/workflows/wf-m2-durable-001/evidence/sub-001",
+  "path_traversal": [
+    {
+      "input": "../../etc/passwd",
+      "result": "REJECTED: evidence_id may not contain a path separator"
+    },
+    {
+      "input": "a/b",
+      "result": "REJECTED: evidence_id may not contain a path separator"
+    },
+    {
+      "input": "..",
+      "result": "REJECTED: evidence_id is a reserved path segment"
+    },
+    {
+      "input": "",
+      "result": "REJECTED: evidence_id must be a non-empty string"
+    }
+  ],
+  "readback_identical": true,
+  "sha256_of_raw_bytes_matches": true,
+  "size": 696422
+}

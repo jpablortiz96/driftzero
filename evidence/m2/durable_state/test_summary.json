@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "passed": true,
+  "summary": "71 passed, 1 warning in 4.13s",
+  "targets": [
+    "tests/integration/test_cloud_persistence.py",
+    "tests/integration/test_restart_persistence.py"
+  ]
+}

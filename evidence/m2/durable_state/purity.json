@@ -1,0 +1,19 @@
+{
+  "adapter_files": [
+    "__init__.py",
+    "composition.py",
+    "errors.py",
+    "firestore.py",
+    "gcs.py",
+    "ports.py",
+    "serialization.py"
+  ],
+  "adapter_google_imports": [
+    "google"
+  ],
+  "core_files_scanned": 47,
+  "domain_imports_adapter": [],
+  "google_imports_inside_src_driftzero": [],
+  "pickle_in_adapters": [],
+  "subprocess_in_adapters": []
+}

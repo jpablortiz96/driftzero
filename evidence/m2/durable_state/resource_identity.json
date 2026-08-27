@@ -1,0 +1,10 @@
+{
+  "evidence_bucket": "driftzero-evidence-driftzero-runtime-2026",
+  "firestore_database": "(default)",
+  "legacy_mutations": 0,
+  "legacy_project": "driftzero-agentic-2026",
+  "note": "This capture runs against in-memory doubles so it is reproducible and free. The same behaviours are exercised against real Firestore and Cloud Storage by tests/integration/test_cloud_smoke.py.",
+  "offline_capture": true,
+  "project": "driftzero-runtime-2026",
+  "region": "us-central1"
+}

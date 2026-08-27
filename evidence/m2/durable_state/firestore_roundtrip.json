@@ -1,0 +1,28 @@
+{
+  "collections": [
+    "workflows/{workflow_id}",
+    "workflows/{workflow_id}/actions/{action_id}",
+    "workflows/{workflow_id}/proofs/{proof_id}",
+    "idempotency_keys/{stable_key}"
+  ],
+  "ledger": {
+    "act-deliver_delta-3b3832c85f69c63d5bdf3fd56463e48a": "COMPLETED",
+    "act-remediate_artifact-43994e9afb91096b9a77c8323fd428dc": "COMPLETED"
+  },
+  "revision": 13,
+  "serialization": "pydantic model_dump(mode='json'); no pickle, no repr",
+  "state": "PROOF_COMPLETE",
+  "state_history": [
+    "CHANGE_RECEIVED",
+    "IMPACT_DETERMINED",
+    "REMEDIATION_PENDING",
+    "REMEDIATION_COMPLETED",
+    "FRONTLINE_DELIVERY_COMPLETED",
+    "VERIFICATION_PASSED"
+  ],
+  "verification_results": [
+    "FAIL",
+    "PASS"
+  ],
+  "workflow_id": "wf-m2-durable-001"
+}
