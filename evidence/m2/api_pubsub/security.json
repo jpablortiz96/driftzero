@@ -1,0 +1,20 @@
+{
+  "api_files": [
+    "__init__.py",
+    "app.py",
+    "models.py",
+    "pubsub.py",
+    "routes.py",
+    "runtime.py"
+  ],
+  "cloud_run_url_guessed": false,
+  "core_files_scanned": 47,
+  "domain_imports_api": [],
+  "fastapi_inside_purity_boundary": [],
+  "google_inside_purity_boundary": [],
+  "legacy_project_referenced": false,
+  "pubsub_client_sdk_in_handler": false,
+  "subprocess_in_api": [],
+  "subscription_created_by_app": false,
+  "trust_boundary": "Authentication is Cloud Run's. The push subscription is created with --push-auth-service-account, Google signs each request with an OIDC token, and Cloud Run validates it before the request reaches this process \u2014 so only an authenticated caller with roles/run.invoker arrives here. This handler therefore does not re-validate the OIDC token: duplicating Cloud Run's authentication layer in application code would add a second, weaker implementation of a check that has already passed. What this handler does own is authorization of CONTENT: a correctly authenticated caller still may not state a conclusion."
+}

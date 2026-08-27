@@ -1,0 +1,50 @@
+{
+  "client_submission_id_honoured": false,
+  "evidence": {
+    "affected_artifact_ref": "fixtures/multi_candidate_artifacts.json#0#v2",
+    "complete": true,
+    "delivery_ref": "local_pilot_frontline:receipt:rcpt-0001-delta-chg-2026-0817-0001-session-001",
+    "rejected_result_refs": [],
+    "remediation_evidence_refs": [
+      "fixtures/multi_candidate_artifacts.json#0",
+      "fixtures/multi_candidate_artifacts.json#0#v2"
+    ],
+    "source_change_ref": "source:proc-warehouse-packing:v2",
+    "state_transition_refs": [
+      "CHANGE_RECEIVED",
+      "IMPACT_DETERMINED",
+      "REMEDIATION_PENDING",
+      "REMEDIATION_COMPLETED",
+      "FRONTLINE_DELIVERY_COMPLETED"
+    ],
+    "verification_event_ids": [
+      "vev-session-001-001",
+      "vev-session-001-002"
+    ],
+    "verification_refs": [
+      "vev-session-001-001",
+      "vev-session-001-002"
+    ],
+    "workflow_id": "wf-api-001-001"
+  },
+  "final_state": "PROOF_COMPLETE",
+  "proof_content_hash": "4ecaaac89fc673f03615a8edc85d0ce6b829462647d997b33c7cec6afc1b71b8",
+  "proof_revalidates": true,
+  "provider_calls": 2,
+  "routes": {
+    "GET /api/v1/workflows/{id}": 200,
+    "GET /api/v1/workflows/{id}/evidence": 200,
+    "GET /api/v1/workflows/{id}/proof": 200,
+    "GET /health": 200,
+    "GET /ready": 200,
+    "POST /api/v1/changes": 201,
+    "POST /api/v1/workflows/{id}/verify": 200
+  },
+  "server_derived_submission_id": "fev-60b5b7555bf726f3a41747cf95ada43f",
+  "unknown_workflow_status": 404,
+  "verification_chronology": [
+    "FAIL",
+    "PASS"
+  ],
+  "workflow_id": "wf-api-001-001"
+}

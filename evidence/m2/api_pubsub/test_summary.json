@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "passed": true,
+  "summary": "97 passed, 4 warnings in 4.42s",
+  "targets": [
+    "tests/integration/test_api_routes.py",
+    "tests/integration/test_pubsub_ingestion.py"
+  ]
+}

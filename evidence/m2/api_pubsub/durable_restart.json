@@ -1,0 +1,16 @@
+{
+  "durable": true,
+  "fabricated_defaults": false,
+  "live_workflows_in_fresh_process": 0,
+  "proof_content_hash": "4ecaaac89fc673f03615a8edc85d0ce6b829462647d997b33c7cec6afc1b71b8",
+  "proof_status": 200,
+  "recovered_state": "PROOF_COMPLETE",
+  "source": "DURABLE_STORE",
+  "status_code": 200,
+  "unknown_workflow_status": 404,
+  "verification_results": [
+    "FAIL",
+    "PASS"
+  ],
+  "workflow_id": "wf-api-001-001"
+}

@@ -1,0 +1,22 @@
+{
+  "accepted": {
+    "acked": true,
+    "status": 200
+  },
+  "duplicate": {
+    "acked": true,
+    "status": 200
+  },
+  "permanently_invalid": {
+    "acked": true,
+    "rationale": "Pub/Sub retries every non-2xx and no dead-letter topic is configured yet, so a 4xx would redeliver a message that can never succeed. The rejection is explicit in the body. Revisit at T089 when a dead-letter topic can be attached.",
+    "retryable": false,
+    "status": 200
+  },
+  "transient_failure": {
+    "acked": false,
+    "rationale": "a write that did not happen must never be reported as success",
+    "retryable": true,
+    "status": 503
+  }
+}

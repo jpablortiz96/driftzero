@@ -1,0 +1,14 @@
+{
+  "all_failed_closed": true,
+  "cases": {
+    "malformed_base64": "REJECTED: MALFORMED_BASE64",
+    "malformed_json": "REJECTED: MALFORMED_JSON",
+    "malformed_utf8": "REJECTED: MALFORMED_UTF8",
+    "missing_change_id": "REJECTED: MISSING_CHANGE_ID",
+    "missing_data": "REJECTED: MISSING_DATA",
+    "missing_message": "REJECTED: MISSING_MESSAGE",
+    "non_string_data": "REJECTED: MALFORMED_DATA",
+    "payload_not_object": "REJECTED: MALFORMED_PAYLOAD"
+  },
+  "manufactured_change_from_invalid_message": false
+}

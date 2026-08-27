@@ -1,0 +1,20 @@
+{
+  "batch": "M2_BATCH_C",
+  "credentials_clean": true,
+  "deployment": "NOT_DEPLOYED",
+  "duplicate_idempotent_across_restart": true,
+  "envelope_fails_closed": true,
+  "http_refusals_complete": true,
+  "live_model_calls": 0,
+  "pubsub_refusals_complete": true,
+  "purity_violations": [],
+  "restart_recovered_state": "PROOF_COMPLETE",
+  "routes_ok": true,
+  "tasks": "T094, T095",
+  "tests": "97 passed, 4 warnings in 4.42s",
+  "timestamp": "2026-08-27T21:59:11+00:00",
+  "verification_chronology": [
+    "FAIL",
+    "PASS"
+  ]
+}

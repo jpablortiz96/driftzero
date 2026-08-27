@@ -81,13 +81,17 @@ src/
 │   │   ├── verification.py     # VerificationEvent, FieldObservation
 │   │   ├── proof.py            # ChangeProof, EvidenceManifest
 │   │   └── classification.py   # DataClassification, LineageEntry
-│   ├── api/                    # FastAPI routes
-│   │   ├── __init__.py
-│   │   └── routes.py
 │   ├── web/                    # Thin HTML/JS demo frontend
 │   │   ├── static/
 │   │   └── templates/
 │   └── cli.py                  # CLI for testing/demo
+├── src/driftzero_api/          # Production HTTP surface — OUTSIDE the M0 purity boundary
+│   ├── __init__.py
+│   ├── models.py               # typed request/response contracts
+│   ├── runtime.py              # composition: registry + durable persistence
+│   ├── routes.py               # FastAPI routes (T094)
+│   ├── pubsub.py               # Pub/Sub push handler (T095)
+│   └── app.py                  # ASGI entrypoint (T096 target)
 ├── src/driftzero_cloud/        # Cloud adapters — OUTSIDE the M0 purity boundary
 │   ├── __init__.py
 │   ├── ports.py                # structural Protocols (typing aid only)

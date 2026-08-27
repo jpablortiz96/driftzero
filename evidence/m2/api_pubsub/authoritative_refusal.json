@@ -1,0 +1,129 @@
+{
+  "fields_tested": 15,
+  "http": {
+    "affected_artifact_id": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "authorization": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "authorized": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "candidate_affected_artifacts": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "change_deployed": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "content_hash": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "impact": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "observed_value": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "proof_hash": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "proof_id": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "qualified_target": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "state": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "verdict": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "verification_result": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    },
+    "workflow_state": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 400
+    }
+  },
+  "http_all_refused": true,
+  "pubsub": {
+    "affected_artifact_id": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "authorization": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "authorized": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "candidate_affected_artifacts": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "change_deployed": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "content_hash": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "impact": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "observed_value": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "proof_hash": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "proof_id": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "qualified_target": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "state": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "verdict": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "verification_result": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    },
+    "workflow_state": {
+      "error": "AUTHORITATIVE_FIELD_REFUSED",
+      "status": 200
+    }
+  },
+  "pubsub_all_refused": true
+}

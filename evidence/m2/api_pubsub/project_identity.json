@@ -1,0 +1,10 @@
+{
+  "deployment": "NOT_DEPLOYED",
+  "legacy_mutations": 0,
+  "legacy_project": "driftzero-agentic-2026",
+  "project": "driftzero-runtime-2026",
+  "pubsub_topic": "driftzero-approved-changes",
+  "push_path": "/api/v1/pubsub/push",
+  "push_subscription_blocked_by": "T096 must expose a Cloud Run URL first",
+  "push_subscription_created": false
+}

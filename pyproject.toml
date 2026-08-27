@@ -19,6 +19,14 @@ cloud = [
     "google-cloud-firestore>=2.29",
     "google-cloud-storage>=3.13",
 ]
+# The production HTTP surface (T094/T095) in src/driftzero_api/. Declared separately
+# from `console` so a deployment installs the API without the demo console, and so the
+# API's dependency on FastAPI is stated rather than inherited by coincidence.
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

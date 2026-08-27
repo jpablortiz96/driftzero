@@ -1,0 +1,15 @@
+{
+  "deduplicated_on": "change_id (T029) backed by the T092 durable claim",
+  "duplicate_delivery": 0,
+  "duplicate_proof": 0,
+  "duplicate_remediation": 0,
+  "durable_change_claims": [
+    "change-chg-2026-0817-0001"
+  ],
+  "first_outcome": "NEW_LOGICAL_CHANGE",
+  "live_workflows_in_restarted_process": 0,
+  "not_deduplicated_on": "messageId \u2014 Pub/Sub may redeliver under a new one",
+  "same_workflow": true,
+  "second_outcome_after_restart": "TRANSPORT_DUPLICATE",
+  "workflow_documents": 1
+}
