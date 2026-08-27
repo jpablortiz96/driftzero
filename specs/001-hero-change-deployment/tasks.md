@@ -179,8 +179,8 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 - [x] T079 [M1] Implement the Field Verification Agent wrapper in `src/driftzero/agents/field_verify.py` returning `FieldObservation` only (no PASS/FAIL), with Crossing 4 validation; backed by T068 fallback or the G1-selected route (depends T038, T067)
 - [x] T080 [M1] Implement the ADK `SequentialAgent` orchestrator with the 11-step boundary sequence and the async pause after delivery in `src/driftzero/agents/orchestrator.py`; the Truth Engine validates pre/post conditions at every step (depends T072, T076, T078, T079)
 - [x] T081 [M1] Implement the CLI entry points `inject-change`, `status`, `verify`, `proof --validate` in `src/driftzero/cli.py` (depends T080)
-- [ ] T082 [M1] Local end-to-end test in `tests/integration/test_local_hero_flow.py`: synthetic change → ChangeSet → impact → remediation → delivery → FAIL evidence → corrected PASS → `PROOF_COMPLETE`, with the Truth Engine authoritative at every crossing (depends T081)
-- [ ] T083 [M1] Agent output validation tests in `tests/integration/test_agent_output_validation.py`: hallucinated/malformed structured output, retry exhaustion → `REVIEW_REQUIRED`, tool permission denial for the Enablement Agent (depends T075, T082)
+- [x] T082 [M1] Local end-to-end test in `tests/integration/test_local_hero_flow.py`: synthetic change → ChangeSet → impact → remediation → delivery → FAIL evidence → corrected PASS → `PROOF_COMPLETE`, with the Truth Engine authoritative at every crossing (depends T081)
+- [x] T083 [M1] Agent output validation tests in `tests/integration/test_agent_output_validation.py`: hallucinated/malformed structured output, retry exhaustion → `REVIEW_REQUIRED`, tool permission denial for the Enablement Agent (depends T075, T082)
 - [ ] T084 [M1] **M1 EXIT GATE** — local end-to-end semantic workflow passes with the Truth Engine authoritative at every crossing; record to `evidence/runs/hero_run_local/` (depends T082, T083)
 
 **Checkpoint**: The hero workflow runs locally with real Gemini calls over synthetic fixtures.
