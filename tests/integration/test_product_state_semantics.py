@@ -261,12 +261,15 @@ def test_a_configured_field_provider_reports_configured(
     assert "Vertex AI MaaS" in observation["runtime_detail"]
 
 
-def test_change_proof_remains_not_wired(client: Any) -> None:
-    proof = capability(client.post("/api/hero/analyze").json(), "change_proof")
-    assert proof["implementation"] == "NOT_YET_WIRED"
-    assert proof["runtime"] == "UNAVAILABLE"
-    assert proof["operation"] == "UNAVAILABLE"
-    assert "step 11" in proof["runtime_detail"]
+def test_change_proof_is_implemented_but_not_yet_earned(client: Any) -> None:
+    """Wired since T080 step 11 — and correctly reporting that nothing earned it yet."""
+    state = client.post("/api/hero/analyze").json()
+    proof = capability(state, "change_proof")
+    assert proof["implementation"] == "IMPLEMENTED"
+    assert proof["runtime"] == "DETERMINISTIC"
+    assert "seven frozen completion conditions" in proof["runtime_detail"]
+    assert state["proof"]["generated"] is False
+    assert state["proof"]["change_deployed"] is False
 
 
 def test_the_roadmap_no_longer_calls_the_comparator_unwired(client: Any) -> None:
@@ -322,7 +325,8 @@ def test_the_pipeline_claims_nothing_completed_after_impact_analysis(
     assert state["field_verification"]["observation"] is None
     assert state["verdict"]["result"] is None
     assert state["verdict"]["change_deployed"] is False
-    assert capability(state, "change_proof")["implementation"] == "NOT_YET_WIRED"
+    assert state["proof"]["generated"] is False
+    assert state["proof"]["eligible"] is False
 
 
 def test_no_frontend_asset_states_a_capability_status_of_its_own() -> None:
