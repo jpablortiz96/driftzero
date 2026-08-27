@@ -355,11 +355,13 @@ def test_no_endpoint_accepts_a_filesystem_path_or_patch(client: TestClient) -> N
     schema = client.get("/openapi.json").json()
     parameters = [
         parameter["name"]
-        for operations in schema["paths"].values()
+        for route, operations in schema["paths"].items()
         for operation in operations.values()
         for parameter in operation.get("parameters", [])
     ]
-    assert sorted(set(parameters)) == ["change_id", "evidence_id"]
+    # workflow_id addresses the T081 CLI adapter; it is an opaque server-issued
+    # identifier, not a path, a patch, or a value the caller may choose meaningfully.
+    assert sorted(set(parameters)) == ["change_id", "evidence_id", "workflow_id"]
     for forbidden in ("path", "file", "dir", "uri", "url", "patch", "value", "identity"):
         assert not any(forbidden in name.lower() for name in parameters)
 

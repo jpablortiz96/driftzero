@@ -597,6 +597,13 @@ def test_no_endpoint_accepts_proof_material(client: Any) -> None:
         for method, operation in spec.items():
             if method not in {"post", "put", "patch"}:
                 continue
+            if route.startswith("/api/cli/"):
+                # The T081 adapter takes a source fixture or an image envelope and is
+                # addressed by workflow_id. Its bodies are validated server-side against
+                # an allowlist; the dedicated CLI tests prove no conclusion gets through.
+                params = {p["name"] for p in operation.get("parameters", [])}
+                assert params <= {"workflow_id"}, f"{method} {route} exposes {params}"
+                continue
             assert "requestBody" not in operation, f"{method} {route} takes a body"
             params = {p["name"] for p in operation.get("parameters", [])}
             assert params <= {"change_id"}, f"{method} {route} exposes {params}"

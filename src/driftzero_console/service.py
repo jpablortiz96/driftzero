@@ -138,7 +138,11 @@ from driftzero.truth_engine.actions import (
     decide_retry,
     reconcile_delivery,
 )
-from driftzero.truth_engine.evidence import assemble_evidence_manifest, canonical_hash
+from driftzero.truth_engine.evidence import (
+    assemble_evidence_manifest,
+    canonical_hash,
+    canonical_json,
+)
 from driftzero.truth_engine.idempotency import (
     derive_delivery_action_id,
     derive_remediation_action_id,
@@ -148,7 +152,11 @@ from driftzero.truth_engine.impact import (
     qualify_candidates,
     resolve_cardinality,
 )
-from driftzero.truth_engine.proof_generator import ProofContext
+from driftzero.truth_engine.proof_generator import (
+    ProofContext,
+    ProofValidationFailure,
+    ProofValidator,
+)
 from driftzero.truth_engine.state_machine import can_transition, transition
 
 
@@ -514,13 +522,22 @@ class HeroConsoleService:
         case: ChangeCase | None = None,
         *,
         pilot_data_dir: Path = PILOT_DATA_DIR,
+        dataset: PilotDataset | None = None,
+        workflow_namespace: str | None = None,
     ) -> None:
-        # No case given: run the real pilot dataset off disk. A case given: derive an
-        # equivalent dataset so an arbitrary second change takes the identical path.
+        # A dataset given: run exactly that (the CLI injects one built from a fixture).
+        # A case given: derive an equivalent dataset so an arbitrary second change takes
+        # the identical path. Neither: run the real pilot dataset off disk.
         self._case = case or PACKING_LABEL_PILOT
-        self._dataset = (
-            dataset_from_case(case) if case is not None else load_pilot_dataset(pilot_data_dir)
-        )
+        self._workflow_namespace = workflow_namespace or WORKFLOW_ID
+        if dataset is not None:
+            self._dataset = dataset
+        else:
+            self._dataset = (
+                dataset_from_case(case)
+                if case is not None
+                else load_pilot_dataset(pilot_data_dir)
+            )
         self._sequence = 0
         self._session = self._new_session()
 
@@ -536,7 +553,10 @@ class HeroConsoleService:
         """
         self._sequence += 1
         dataset = self._dataset
-        workflow_id = f"{WORKFLOW_ID}-{self._sequence:03d}"
+        # Namespaced per service instance. Two workflows injected into one runtime must
+        # never share an id: the registry is keyed on it, and a collision would silently
+        # replace an existing workflow with a new one under the same name.
+        workflow_id = f"{self._workflow_namespace}-{self._sequence:03d}"
         source_store = SourceProcedureStore()
         ingestion = ingest_source_change(
             change_id=dataset.change_id,
@@ -2425,6 +2445,58 @@ class HeroConsoleService:
             "document": stored.proof.model_dump(mode="json"),
         }
 
+    def validate_proof(self) -> dict[str, Any] | None:
+        """Authoritative Change Proof validation through the frozen ``ProofValidator``.
+
+        This is the workflow-scoped check, not the portable file check: it revalidates
+        all seven completion conditions, the proof identity, the content hash, and the
+        manifest's recorded content hashes against resolved content — none of which a
+        standalone JSON file could supply on its own.
+
+        No validation logic lives here. The verdict is the frozen validator's.
+        """
+        session = self._session
+        if session.workflow is None:
+            return None
+        stored = session.proof_store.find_workflow(session.workflow.workflow_id)
+        context = self._proof_context(session)
+        if stored is None or context is None:
+            return None
+
+        resolved = {
+            ref: canonical_json(document)
+            for ref, document in session.evidence.items()
+            if ref in stored.proof.evidence_manifest.content_hashes
+        }
+        result = ProofValidator().validate(stored.proof, context, resolved)
+        eligibility = evaluate_eligibility(context)
+        return {
+            "proof_id": stored.proof.proof_id,
+            "proof_ref": stored.proof_ref,
+            "schema_valid": True,
+            "content_hash_valid": (
+                ProofValidationFailure.PROOF_HASH_MISMATCH not in result.failures
+            ),
+            "proof_identity_valid": (
+                ProofValidationFailure.PROOF_IDENTITY_MISMATCH not in result.failures
+            ),
+            "proof_invariants_valid": (
+                ProofValidationFailure.UNMET_COMPLETION_CONDITION not in result.failures
+            ),
+            "evidence_manifest_valid": (
+                ProofValidationFailure.CONTENT_HASH_MISMATCH not in result.failures
+            ),
+            "authoritative_validation": "VALID" if result.valid else "INVALID",
+            "failures": [str(f) for f in result.failures],
+            "failed_conditions": [str(c) for c in result.failed_conditions],
+            "mismatched_refs": list(result.mismatched_refs),
+            "satisfied_conditions": eligibility.satisfied_count,
+            "total_conditions": eligibility.total,
+            "content_hash": stored.content_hash,
+            "hash_preimage": HASH_PREIMAGE_LABEL,
+            "hash_meaning": HASH_MEANING,
+        }
+
     def get_replay_audit(self) -> dict[str, Any] | None:
         """Render the recorded chronology. Executes nothing and dispatches nothing."""
         session = self._session
@@ -2438,6 +2510,11 @@ class HeroConsoleService:
             verification_events=session.verification_events,
             timeline=session.events,
         )
+
+    @property
+    def workflow_id(self) -> str:
+        """This session's workflow identity. Stable for the life of the session."""
+        return self._session.workflow.workflow_id
 
     @property
     def current_change(self) -> ApprovedChange:

@@ -20,6 +20,9 @@ Run locally::
 
 from __future__ import annotations
 
+import base64
+import json
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,9 +32,18 @@ from fastapi.staticfiles import StaticFiles
 from driftzero.config import DriftZeroConfig
 from driftzero.field.evidence import MAX_IMAGE_BYTES
 from driftzero.proof.store import HASH_PREIMAGE_LABEL
+from driftzero_adk.hero_workflow import HeroWorkflowRun
 from driftzero_console.schemas import EvidenceDocument, FrontlineView, HeroState
 from driftzero_console.service import HeroConsoleService
+from driftzero_console.workflows import (
+    REGISTRY_NOTE,
+    FixtureRejected,
+    UnknownWorkflow,
+    WorkflowRegistry,
+    dataset_from_fixture,
+)
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).parent / "static"
 HOST = "127.0.0.1"
 PORT = 8080
@@ -320,6 +332,165 @@ def replay_proof_audit() -> dict:
     if audit is None:
         raise HTTPException(status_code=404, detail="no Change Proof has been generated")
     return audit
+
+
+# ============================ T081 — CLI adapter ======================================
+#
+# Transport only. Every consequential step below delegates to the same T080 orchestration
+# and application use cases the browser drives; no business truth lives in these routes.
+# They exist because the CLI runs as separate OS processes and needs one long-lived
+# runtime to talk to.
+
+_registry = WorkflowRegistry()
+
+
+def get_registry() -> WorkflowRegistry:
+    """Accessor so tests can inspect or reset what this process is holding."""
+    return _registry
+
+
+@app.post("/api/cli/workflows")
+async def cli_inject_change(request: Request) -> dict:
+    """Ingest a source change and run T080 steps 1-7, pausing at step 8.
+
+    The body is a source-change fixture. It is validated against a strict allowlist
+    first: a fixture that carries an affected artifact, a workflow state, a verdict, or
+    a proof is refused outright, because those are conclusions this runtime derives.
+    """
+    try:
+        payload = json.loads((await request.body()).decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"fixture is not valid JSON: {exc}") from exc
+
+    directory = _fixture_directory(request)
+    try:
+        dataset = dataset_from_fixture(payload, directory=directory)
+    except FixtureRejected as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # A unique namespace per injection. Without it every injected workflow would be
+    # named wf-dz-001-001 and the second would replace the first in the registry.
+    service = HeroConsoleService(
+        dataset=dataset, workflow_namespace=f"wf-{uuid.uuid4().hex[:12]}"
+    )
+    workflow_id = _registry.register(service)
+
+    run = HeroWorkflowRun(service=service)
+    log = await run.start()
+    _registry.set_run(workflow_id, run)
+
+    state = service.get_state()
+    return {
+        "workflow_id": workflow_id,
+        "change_id": state["scenario"]["change_id"],
+        "state": state["verdict"]["workflow_state"],
+        "paused": log.paused_at is not None,
+        "pause_reason": (
+            "awaiting physical field evidence" if log.paused_at else None
+        ),
+        "paused_at": log.paused_at,
+        "steps_executed": list(log.executed),
+        "impact": state["impact"],
+        "runtime_readiness": state["environment"]["runtime_readiness"],
+        "registry_note": REGISTRY_NOTE,
+    }
+
+
+@app.get("/api/cli/workflows/{workflow_id}")
+def cli_status(workflow_id: str) -> dict:
+    """Project the authoritative state of one workflow. Zero side effects."""
+    service = _resolve(workflow_id)
+    state = service.get_state()
+    return {
+        "workflow_id": workflow_id,
+        "change_id": state["scenario"]["change_id"],
+        "workflow_state": state["verdict"]["workflow_state"],
+        "impact": state["impact"],
+        "remediation": state["remediation_state"],
+        "delivery": state["delivery"],
+        "field_verification": state["field_verification"],
+        "deterministic_verdict": state["verdict"],
+        "proof": state["proof"],
+        "change_deployed": state["verdict"]["change_deployed"],
+        "runtime_readiness": state["environment"]["runtime_readiness"],
+        "production_ready": state["environment"]["production_ready"],
+        "registry_note": REGISTRY_NOTE,
+    }
+
+
+@app.post("/api/cli/workflows/{workflow_id}/verify")
+async def cli_verify(workflow_id: str, request: Request) -> dict:
+    """Submit field evidence and resume the same paused workflow.
+
+    The body carries image bytes and two **claims** — filename and declared content
+    type — which are recorded and never trusted. The MIME type is sniffed from the bytes
+    server-side, exactly as the browser upload path does.
+    """
+    service = _resolve(workflow_id)
+    try:
+        payload = json.loads((await request.body()).decode("utf-8"))
+        raw = base64.b64decode(payload["content_base64"], validate=True)
+    except (json.JSONDecodeError, UnicodeDecodeError, KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"expected a base64 image envelope: {exc}"
+        ) from exc
+    if len(raw) > UPLOAD_BODY_LIMIT:
+        raise HTTPException(status_code=413, detail="field evidence is too large")
+
+    service.submit_field_evidence(
+        raw,
+        declared_filename=str(payload.get("filename") or "")[:255] or None,
+        declared_content_type=str(payload.get("declared_content_type") or "") or None,
+    )
+
+    run = _registry.get_run(workflow_id)
+    if run is not None:
+        # Resume the same ADK invocation: steps 9-11, without re-running 1-7.
+        await run.resume()
+
+    # A *corrected* submission after a FAIL arrives once the sequence has already run to
+    # completion, so there is nothing left for ADK to resume and step 11 would never fire
+    # again. Invoking the gate directly keeps the recovery path whole. It is the same
+    # frozen seven-invariant gate either way, and it is idempotent: a blocked proof stays
+    # blocked, and an existing proof is returned unchanged rather than regenerated.
+    service.generate_proof()
+
+    return cli_status(workflow_id)
+
+
+@app.post("/api/cli/workflows/{workflow_id}/proof/validate")
+def cli_proof_validate(workflow_id: str) -> dict:
+    """Authoritative Change Proof validation through the frozen ProofValidator."""
+    service = _resolve(workflow_id)
+    result = service.validate_proof()
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"workflow {workflow_id!r} has generated no Change Proof",
+        )
+    return {"workflow_id": workflow_id, **result}
+
+
+def _resolve(workflow_id: str) -> HeroConsoleService:
+    try:
+        return _registry.get(workflow_id)
+    except UnknownWorkflow as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _fixture_directory(request: Request) -> Path:
+    """Where to look for the source documents that accompany a fixture.
+
+    The client may name a directory it already read the fixture from. It is resolved and
+    confined to the repository, so a header cannot walk the filesystem.
+    """
+    raw = request.headers.get("x-fixture-dir")
+    if not raw:
+        return REPO_ROOT / "fixtures"
+    candidate = (REPO_ROOT / raw).resolve()
+    if not candidate.is_dir() or REPO_ROOT not in candidate.parents and candidate != REPO_ROOT:
+        raise HTTPException(status_code=400, detail="fixture directory is out of bounds")
+    return candidate
 
 
 @app.get("/api/hero/evidence/{evidence_id}", response_model=EvidenceDocument)

@@ -244,21 +244,44 @@ pytest tests/unit/truth_engine/ -v
 
 ### VS-2: End-to-End Hero Flow (Local)
 **Proves**: SC-001 → SC-009, SC-014
+**Prerequisite — the LOCAL_PILOT runtime must be running.** The CLI is a stateless HTTP
+client; the workflow lives in the runtime process. Start it in its own terminal and leave
+it running for the whole sequence:
+
 ```bash
-# 1. Inject synthetic approved change
+# Terminal A — leave this running
+python -m driftzero_console.app
+```
+
+> Workflow state is **process-local** to that runtime. It survives across separate CLI
+> invocations while the runtime is up, and is **lost when the runtime restarts** — a
+> previously issued `$WF_ID` will then fail rather than silently reappear. Durable
+> persistence is introduced in T092 (M2).
+
+```bash
+# Terminal B — each command below is a separate OS process
+# 1. Inject synthetic approved change and capture the workflow id
 python -m driftzero.cli inject-change --fixture fixtures/hero_change.json
+
+# POSIX shell:
+WF_ID=$(python -m driftzero.cli inject-change --fixture fixtures/hero_change.json |
+         python -c "import json,sys; print(json.load(sys.stdin)['workflow_id'])")
+
+# PowerShell:
+# $WF_ID = (python -m driftzero.cli inject-change --fixture fixtures/hero_change.json |
+#           ConvertFrom-Json).workflow_id
 
 # 2. Verify workflow progresses through states
 python -m driftzero.cli status --workflow-id $WF_ID
 
 # 3. Submit INCORRECT field evidence (LEFT)
-python -m driftzero.cli verify --workflow-id $WF_ID --image fixtures/label_left.jpg
+python -m driftzero.cli verify --workflow-id $WF_ID --image fixtures/multimodal/label_left_01.jpg
 
 # 4. Confirm FAIL
 python -m driftzero.cli status --workflow-id $WF_ID  # VERIFICATION_FAILED
 
 # 5. Submit CORRECT field evidence (TOP_RIGHT)
-python -m driftzero.cli verify --workflow-id $WF_ID --image fixtures/label_top_right.jpg
+python -m driftzero.cli verify --workflow-id $WF_ID --image fixtures/multimodal/label_top_right_01.jpg
 
 # 6. Confirm PASS and PROOF_COMPLETE
 python -m driftzero.cli status --workflow-id $WF_ID  # PROOF_COMPLETE
