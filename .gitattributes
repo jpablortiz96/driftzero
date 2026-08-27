@@ -1,0 +1,5 @@
+# The M1 exit gate records a byte-exact bundle and checksums the files it wrote.
+# core.autocrlf=true would rewrite LF to CRLF on checkout, changing the bytes the
+# recorded SHA-256 was taken over and making `sha256sum -c SHA256SUMS.txt`
+# unreadable on POSIX. Treat this evidence as opaque content, never as source.
+evidence/runs/** -text

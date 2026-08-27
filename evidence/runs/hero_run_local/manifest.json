@@ -1,0 +1,579 @@
+{
+  "change_deployed": true,
+  "change_id": "chg-2026-0817-0001",
+  "checks": [
+    {
+      "check": 1,
+      "mandatory": true,
+      "name": "source versions resolve",
+      "observed": {
+        "current": "source:proc-warehouse-packing:v2",
+        "previous": "source:proc-warehouse-packing:v1"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 2,
+      "mandatory": true,
+      "name": "source change derived, not declared",
+      "observed": "DIFF_OF_TWO_RETRIEVED_SOURCE_VERSIONS",
+      "result": "PASS"
+    },
+    {
+      "check": 3,
+      "mandatory": true,
+      "name": "change intelligence output validated",
+      "observed": "PROPOSED",
+      "result": "PASS"
+    },
+    {
+      "check": 4,
+      "mandatory": true,
+      "name": "Crossing 1 authoritative",
+      "observed": "ACCEPTED",
+      "result": "PASS"
+    },
+    {
+      "check": 5,
+      "mandatory": true,
+      "name": "exactly one impact target qualified",
+      "observed": {
+        "proposed": 5,
+        "qualified": 1,
+        "target": "wi-packing-standard-001"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 6,
+      "mandatory": true,
+      "name": "model proposal cannot authorize impact",
+      "observed": {
+        "agent_overruled": 4,
+        "authority": "DRIFTZERO TRUTH ENGINE"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 7,
+      "mandatory": true,
+      "name": "remediation holds scoped capability only",
+      "observed": {
+        "driftzero-change-intel": "DENIED",
+        "driftzero-enablement": "DENIED",
+        "driftzero-field-verify": "DENIED",
+        "driftzero-orchestrator": "DENIED",
+        "driftzero-remediation": "ALLOWED"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 8,
+      "mandatory": true,
+      "name": "unrelated lexical LEFT preserved",
+      "observed": {
+        "after": "LEFT",
+        "artifact": "wi-forklift-turn-014",
+        "before": "LEFT"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 9,
+      "mandatory": true,
+      "name": "Crossing 2 authoritative",
+      "observed": "ACCEPTED",
+      "result": "PASS"
+    },
+    {
+      "check": 10,
+      "mandatory": true,
+      "name": "remediation dispatch idempotent",
+      "observed": 1,
+      "result": "PASS"
+    },
+    {
+      "check": 11,
+      "mandatory": true,
+      "name": "delivery receipt resolvable",
+      "observed": "local_pilot_frontline:receipt:rcpt-0001-delta-chg-2026-0817-0001-session-001",
+      "result": "PASS"
+    },
+    {
+      "check": 12,
+      "mandatory": true,
+      "name": "Crossing 3 authoritative",
+      "observed": "ACCEPTED",
+      "result": "PASS"
+    },
+    {
+      "check": 13,
+      "mandatory": true,
+      "name": "delivery dispatch idempotent",
+      "observed": 1,
+      "result": "PASS"
+    },
+    {
+      "check": 14,
+      "mandatory": true,
+      "name": "acknowledgment distinct from delivery and verification",
+      "observed": {
+        "acknowledged": false,
+        "delivery_established": true
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 15,
+      "mandatory": true,
+      "name": "field observation is observation only",
+      "observed": "LEFT",
+      "result": "PASS"
+    },
+    {
+      "check": 16,
+      "mandatory": true,
+      "name": "actual-byte MIME authority preserved",
+      "observed": {
+        "actual": "image/heic",
+        "declared": "image/jpeg"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 17,
+      "mandatory": true,
+      "name": "Crossing 4 authoritative",
+      "observed": {
+        "first": "ACCEPTED",
+        "second": "ACCEPTED"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 18,
+      "mandatory": true,
+      "name": "model cannot return PASS/FAIL",
+      "observed": [
+        "PASS",
+        "FAIL",
+        "PROOF_COMPLETE"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 19,
+      "mandatory": true,
+      "name": "deterministic comparator owns verdict",
+      "observed": {
+        "authority": "DRIFTZERO TRUTH ENGINE",
+        "first": "FAIL"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 20,
+      "mandatory": true,
+      "name": "FAIL blocks proof",
+      "observed": {
+        "blockers": [
+          "Latest authoritative verification is PASS",
+          "Current state compatible with completion"
+        ],
+        "conditions": "5/7",
+        "generated": false
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 21,
+      "mandatory": true,
+      "name": "corrected PASS succeeds",
+      "observed": "PASS",
+      "result": "PASS"
+    },
+    {
+      "check": 22,
+      "mandatory": true,
+      "name": "historical FAIL retained",
+      "observed": {
+        "chronology": [
+          "FAIL",
+          "PASS"
+        ],
+        "current_authoritative": "PASS"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 23,
+      "mandatory": true,
+      "name": "all seven proof invariants evaluated",
+      "observed": 7,
+      "result": "PASS"
+    },
+    {
+      "check": 24,
+      "mandatory": true,
+      "name": "proof generated only at 7/7",
+      "observed": "7/7",
+      "result": "PASS"
+    },
+    {
+      "check": 25,
+      "mandatory": true,
+      "name": "ChangeProof resolves",
+      "observed": "proof:act-generate_proof-74f20eb3d6d505aaa873aa59c0bdb729",
+      "result": "PASS"
+    },
+    {
+      "check": 26,
+      "mandatory": true,
+      "name": "proof content hash validates",
+      "observed": {
+        "authoritative_validation": "VALID",
+        "content_hash": "482e3e17843692082acefcde082ff1e5ac9bdbf9c25f68df516e2a53c9e68986",
+        "third_party_recompute": "482e3e17843692082acefcde082ff1e5ac9bdbf9c25f68df516e2a53c9e68986"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 27,
+      "mandatory": true,
+      "name": "proof generation idempotent",
+      "observed": {
+        "proof_id": "act-generate_proof-74f20eb3d6d505aaa873aa59c0bdb729",
+        "proofs": 1
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 28,
+      "mandatory": true,
+      "name": "change_deployed only at PROOF_COMPLETE",
+      "observed": {
+        "after_fail": false,
+        "after_proof": true,
+        "state": "PROOF_COMPLETE"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 29,
+      "mandatory": true,
+      "name": "replay executes zero side effects",
+      "observed": {
+        "delivery_dispatch": 1,
+        "proofs": 1,
+        "provider_calls": 2,
+        "remediation_dispatch": 1,
+        "verification_events": 2
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 30,
+      "mandatory": true,
+      "name": "orchestrator has no business authority",
+      "observed": [],
+      "result": "PASS"
+    },
+    {
+      "check": 31,
+      "mandatory": true,
+      "name": "capability matrix exact",
+      "observed": {
+        "driftzero-change-intel": [],
+        "driftzero-enablement": [
+          "FRONTLINE_DELIVERY"
+        ],
+        "driftzero-field-verify": [
+          "FIELD_OBSERVATION"
+        ],
+        "driftzero-orchestrator": [],
+        "driftzero-remediation": [
+          "ARTIFACT_MUTATION"
+        ]
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 32,
+      "mandatory": true,
+      "name": "prompt injection cannot grant tools or authority",
+      "observed": {
+        "change_intelligence_capabilities": [],
+        "markers_recorded": [],
+        "note": "security derives from absent tools and deterministic gates, not detection"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 33,
+      "mandatory": true,
+      "name": "malformed/hallucinated outputs fail closed",
+      "observed": "proven by tests/integration/test_agent_output_validation.py",
+      "result": "PASS"
+    },
+    {
+      "check": 34,
+      "mandatory": true,
+      "name": "retry exhaustion -> REVIEW_REQUIRED",
+      "observed": "proven by tests/integration/test_agent_output_validation.py",
+      "result": "PASS"
+    },
+    {
+      "check": 35,
+      "mandatory": true,
+      "name": "Enablement mutation denial proven",
+      "observed": "DENIED",
+      "result": "PASS"
+    },
+    {
+      "check": 36,
+      "mandatory": true,
+      "name": "CLI documented flow covered",
+      "observed": "proven by tests/integration/test_cli.py (T081)",
+      "result": "PASS"
+    },
+    {
+      "check": 37,
+      "mandatory": true,
+      "name": "runtime readiness remains LOCAL_PILOT",
+      "observed": "LOCAL_PILOT",
+      "result": "PASS"
+    },
+    {
+      "check": 38,
+      "mandatory": true,
+      "name": "production_ready remains false",
+      "observed": false,
+      "result": "PASS"
+    },
+    {
+      "check": 39,
+      "mandatory": true,
+      "name": "zero live provider calls",
+      "observed": {
+        "field_provider_registered": false,
+        "provider_mode": "OFFLINE_DETERMINISTIC_SUBSTITUTES",
+        "semantic_provider_registered": false
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 40,
+      "mandatory": true,
+      "name": "M0 unchanged",
+      "observed": {
+        "changed_files": [],
+        "clean": true,
+        "paths": [
+          "src/driftzero/truth_engine",
+          "src/driftzero/models"
+        ]
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 41,
+      "mandatory": true,
+      "name": "prior live evidence byte-identical",
+      "observed": {
+        "evidence_class": "LIVE_PILOT (separate from this offline gate)",
+        "expected": {
+          "change_proof_DZ-001-api.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1",
+          "change_proof_DZ-001.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1"
+        },
+        "gate_depends_on_it": false,
+        "intact": true,
+        "observed": {
+          "change_proof_DZ-001-api.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1",
+          "change_proof_DZ-001.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1"
+        }
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 42,
+      "mandatory": true,
+      "name": "full regression suite passes",
+      "observed": "1531 passed, 26 skipped, 116 warnings in 28.75s",
+      "result": "PASS"
+    }
+  ],
+  "checks_passed": 42,
+  "checks_total": 42,
+  "crossing_1": "ACCEPTED",
+  "crossing_2": "ACCEPTED",
+  "crossing_3": "ACCEPTED",
+  "delivery_dispatch_count": 1,
+  "delivery_receipt_ref": "local_pilot_frontline:receipt:rcpt-0001-delta-chg-2026-0817-0001-session-001",
+  "failed_checks": [],
+  "field_observations": [
+    {
+      "attempt": 1,
+      "crossing_4": "ACCEPTED",
+      "mime_type": "image/heic",
+      "observation": "LEFT",
+      "proof_generated": false,
+      "verdict": "FAIL"
+    },
+    {
+      "attempt": 2,
+      "crossing_4": "ACCEPTED",
+      "mime_type": "image/heic",
+      "observation": "TOP_RIGHT",
+      "proof_generated": true,
+      "verdict": "PASS"
+    }
+  ],
+  "gate_id": "M1_EXIT_GATE",
+  "git_branch": "master",
+  "git_head": "9a10c2b7bf6012f2b7b1ec94db2e43d8cb209079",
+  "idempotency": {
+    "delivery_dispatch": 1,
+    "proofs": 1,
+    "provider_calls": 2,
+    "remediation_dispatch": 1,
+    "verification_events": 2
+  },
+  "impact": {
+    "affected_artifact_id": "wi-packing-standard-001",
+    "authority": "DRIFTZERO TRUTH ENGINE",
+    "candidates_proposed": 5,
+    "outcome": "SINGLE_QUALIFIED_TARGET",
+    "qualified_count": 1
+  },
+  "live_evidence": {
+    "evidence_class": "LIVE_PILOT (separate from this offline gate)",
+    "expected": {
+      "change_proof_DZ-001-api.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1",
+      "change_proof_DZ-001.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1"
+    },
+    "gate_depends_on_it": false,
+    "intact": true,
+    "observed": {
+      "change_proof_DZ-001-api.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1",
+      "change_proof_DZ-001.json": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1"
+    }
+  },
+  "m0_diff": {
+    "changed_files": [],
+    "clean": true,
+    "paths": [
+      "src/driftzero/truth_engine",
+      "src/driftzero/models"
+    ]
+  },
+  "m1_status": "CLOSED",
+  "milestone": "M1",
+  "network_calls": 0,
+  "non_blocking_debt": [
+    {
+      "blocking": false,
+      "detail": "Google ADK 2.7.1 warns that SequentialAgent is deprecated in favour of Workflow. The orchestration is correct and tested; migration is out of scope for T084.",
+      "id": "adk-sequentialagent-deprecation"
+    }
+  ],
+  "production_ready": false,
+  "proof": {
+    "canonical_byte_count": 2324,
+    "conditions": [
+      {
+        "condition": "condition_1_source_change_represented_and_applicable",
+        "label": "Source change represented and still applicable",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_2_impact_validly_determined",
+        "label": "Impact validly determined to one target",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_3_remediated_or_valid_no_op",
+        "label": "Remediated, or a valid no-op",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_4_delta_delivered",
+        "label": "Delta delivered with a resolvable receipt",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_5_latest_authoritative_verification_pass",
+        "label": "Latest authoritative verification is PASS",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_6_evidence_complete_and_traceable",
+        "label": "Evidence complete and traceable",
+        "satisfied": true
+      },
+      {
+        "condition": "condition_7_current_state_compatible_with_completion",
+        "label": "Current state compatible with completion",
+        "satisfied": true
+      }
+    ],
+    "content_hash": "482e3e17843692082acefcde082ff1e5ac9bdbf9c25f68df516e2a53c9e68986",
+    "hash_meaning": "SHA-256 over canonical JSON of the Change Proof excluding its own content_hash field. Content identity and alteration detection only.",
+    "hash_preimage": "canonical-json-excluding-content_hash",
+    "not_the_same_as_sha256sums": "SHA256SUMS.txt hashes the evidence FILES in this directory. It is a separate mechanism from ChangeProof.content_hash, which hashes the proof's canonical JSON excluding its own content_hash field.",
+    "proof_id": "act-generate_proof-74f20eb3d6d505aaa873aa59c0bdb729",
+    "proof_ref": "proof:act-generate_proof-74f20eb3d6d505aaa873aa59c0bdb729",
+    "satisfied": 7,
+    "total": 7
+  },
+  "proof_determinism": {
+    "content_hash_stable_across_runs": false,
+    "proof_id_stable_across_runs": true,
+    "reason": "completion_timestamp is derived from the authoritative verification event's own timestamp, which is the real moment that observation was adjudicated. A regenerated proof over the SAME persisted state is byte-identical (M0 T044); two independent runs adjudicate at different moments, so their hashes differ by design. A differing hash across separate gate runs is not a defect."
+  },
+  "provider_calls": 2,
+  "provider_mode": "OFFLINE_DETERMINISTIC_SUBSTITUTES",
+  "remediation_dispatch_count": 1,
+  "run_timestamp": "2026-08-27T16:36:08+00:00",
+  "runtime_readiness": "LOCAL_PILOT",
+  "source": {
+    "current_hash": "e68d6d01670e2473dc9734937230e0628e293ba3fb4d549dcbc80ae3de4d9de6",
+    "current_ref": "source:proc-warehouse-packing:v2",
+    "current_value": "TOP_RIGHT",
+    "derivation": "DIFF_OF_TWO_RETRIEVED_SOURCE_VERSIONS",
+    "previous_hash": "ab08a479b794b212718ea9aecb2f88101fd476d7f9833d2a38e120002d369cc2",
+    "previous_ref": "source:proc-warehouse-packing:v1",
+    "previous_value": "LEFT",
+    "requirement_id": "label_position"
+  },
+  "task": "T084",
+  "test_suite": {
+    "exit_code": 0,
+    "passed": true,
+    "summary": "1531 passed, 26 skipped, 116 warnings in 28.75s"
+  },
+  "verdict": "PASS",
+  "verification_chronology": [
+    {
+      "event_id": "vev-session-001-001",
+      "event_sequence": 1,
+      "expected": "TOP_RIGHT",
+      "observed": "LEFT",
+      "raw_evidence_ref": "field-evidence:obs-60b5b7555bf726f3a41747cf95ada43f",
+      "result": "FAIL",
+      "submission_id": "fev-60b5b7555bf726f3a41747cf95ada43f",
+      "timestamp": "2026-08-27T16:35:38.776798+00:00"
+    },
+    {
+      "event_id": "vev-session-001-002",
+      "event_sequence": 2,
+      "expected": "TOP_RIGHT",
+      "observed": "TOP_RIGHT",
+      "raw_evidence_ref": "field-evidence:obs-a80a554e808be3dea2af964958ac2241",
+      "result": "PASS",
+      "submission_id": "fev-a80a554e808be3dea2af964958ac2241",
+      "timestamp": "2026-08-27T16:35:38.778490+00:00"
+    }
+  ],
+  "workflow_id": "wf-m1-gate-001",
+  "workflow_state": "PROOF_COMPLETE"
+}
