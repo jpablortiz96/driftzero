@@ -1,0 +1,7 @@
+{
+  "billing_quota_project": "driftzero-runtime-2026",
+  "core_project": "driftzero-runtime-2026",
+  "legacy_project": "driftzero-agentic-2026",
+  "legacy_quarantined": true,
+  "note": "billing/quota_project was observed set to the legacy project and was corrected to the runtime project; a billing read had been attributed to the legacy project before the fix."
+}

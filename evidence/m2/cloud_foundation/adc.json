@@ -1,0 +1,10 @@
+{
+  "credential_type": "authorized_user",
+  "has_refresh_token": true,
+  "present": true,
+  "quota_project_id": "driftzero-runtime-2026",
+  "refresh_token_recorded": false,
+  "token_acquired": true,
+  "token_length": 254,
+  "token_recorded": false
+}

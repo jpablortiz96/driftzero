@@ -1,0 +1,22 @@
+{
+  "batch": "M2_BATCH_A",
+  "complete": [
+    "T086",
+    "T087",
+    "T088",
+    "T090",
+    "T091"
+  ],
+  "gpu_endpoints_created": 0,
+  "legacy_project_mutations": 0,
+  "live_model_calls": 0,
+  "note": "Captured from live gcloud output against driftzero-runtime-2026. No Gemini or Gemma inference was invoked. SHA256SUMS.txt hashes these evidence files only.",
+  "open": [
+    "T085",
+    "T089"
+  ],
+  "project": "driftzero-runtime-2026",
+  "region": "us-central1",
+  "tasks": "T085-T091",
+  "timestamp": "2026-08-27T20:17:57+00:00"
+}

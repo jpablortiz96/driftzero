@@ -1,0 +1,16 @@
+{
+  "push_subscription": {
+    "blocked_by": "T096",
+    "created": false,
+    "reason": "quickstart MS-10 requires a push subscription to the Cloud Run endpoint. The driftzero-api Cloud Run service is created by T096, so no valid push endpoint URL exists yet. Creating one against a guessed or non-existent URL would accumulate failed deliveries."
+  },
+  "subscriptions": [],
+  "topic": {
+    "labels": {
+      "app": "driftzero",
+      "environment": "hackathon",
+      "managed-by": "driftzero"
+    },
+    "name": "projects/driftzero-runtime-2026/topics/driftzero-approved-changes"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "database": {
+    "appEngineIntegrationMode": "DISABLED",
+    "concurrencyMode": "PESSIMISTIC",
+    "createTime": "2026-08-27T20:05:30.066344Z",
+    "databaseEdition": "STANDARD",
+    "deleteProtectionState": "DELETE_PROTECTION_DISABLED",
+    "earliestVersionTime": "2026-08-27T20:05:30.066344Z",
+    "enhancedTextSearchQueryMode": "ENHANCED_QUERY_MODE_ENABLED",
+    "etag": "IKC1ibvQwZYDMLb2/uTNwZYD",
+    "freeTier": true,
+    "locationId": "us-central1",
+    "name": "projects/driftzero-runtime-2026/databases/(default)",
+    "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+    "realtimeUpdatesMode": "REALTIME_UPDATES_MODE_ENABLED",
+    "type": "FIRESTORE_NATIVE",
+    "uid": "24fad728-dd5e-4911-ace1-30586232974f",
+    "updateTime": "2026-08-27T20:05:30.066344Z",
+    "versionRetentionPeriod": "3600s"
+  },
+  "expected_location": "us-central1"
+}

@@ -1,0 +1,66 @@
+{
+  "deferred": {
+    "roles/run.invoker": {
+      "blocked_by": "M3/T102",
+      "principal": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "reason": "a resource-level binding cannot be created before the service exists; it is not a project-level role and does not appear in gcloud projects get-iam-policy.",
+      "resource": "gemma-verification (Cloud Run)"
+    },
+    "roles/secretmanager.secretAccessor": {
+      "granted": false,
+      "reason": "T090 selected local .env; no secret exists to access."
+    }
+  },
+  "driftzero-gemma-sa": {
+    "broad_roles": [],
+    "bucket_roles": [
+      "roles/storage.objectViewer"
+    ],
+    "email": "driftzero-gemma-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "expected_project_roles": [
+      "roles/cloudtrace.agent",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter"
+    ],
+    "has_firestore": false,
+    "has_pubsub": false,
+    "matches_contract": true,
+    "project_roles": [
+      "roles/cloudtrace.agent",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter"
+    ],
+    "unexpected_roles": []
+  },
+  "driftzero-run-sa": {
+    "broad_roles": [],
+    "bucket_roles": [
+      "roles/storage.objectAdmin"
+    ],
+    "email": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "expected_project_roles": [
+      "roles/aiplatform.user",
+      "roles/cloudtrace.agent",
+      "roles/datastore.user",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/pubsub.subscriber"
+    ],
+    "matches_contract": true,
+    "project_roles": [
+      "roles/aiplatform.user",
+      "roles/cloudtrace.agent",
+      "roles/datastore.user",
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/pubsub.subscriber"
+    ],
+    "unexpected_roles": []
+  },
+  "no_service_account_keys": true,
+  "service_accounts": [
+    "driftzero-gemma-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "1086395542194-compute@developer.gserviceaccount.com"
+  ]
+}

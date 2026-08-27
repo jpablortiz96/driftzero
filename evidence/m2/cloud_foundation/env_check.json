@@ -1,0 +1,22 @@
+{
+  "example_template": true,
+  "exists": true,
+  "git_ignore_rule": ".gitignore:1:.env\t.env",
+  "git_ignored": true,
+  "keys": [
+    "GOOGLE_CLOUD_PROJECT",
+    "GOOGLE_CLOUD_REGION",
+    "FIRESTORE_DATABASE",
+    "GCS_EVIDENCE_BUCKET",
+    "PUBSUB_TOPIC",
+    "GEMINI_MODEL",
+    "DRIFTZERO_GCP_PROJECT",
+    "DRIFTZERO_GCP_LOCATION",
+    "DRIFTZERO_GEMINI_MODEL",
+    "DRIFTZERO_GEMINI_LOCATION",
+    "DRIFTZERO_GEMMA_MODEL"
+  ],
+  "secret_shaped_keys": [],
+  "tracked_by_git": false,
+  "values_recorded": false
+}

@@ -1,0 +1,68 @@
+{
+  "T085": {
+    "billing_enabled": true,
+    "budget_created": true,
+    "budget_thresholds": [
+      0.25,
+      0.5,
+      0.75
+    ],
+    "complete": false,
+    "credits_verified": false,
+    "open_because": "MS-3 credit balance is Console-only and unverifiable here",
+    "project_active": true
+  },
+  "T086": {
+    "complete": true,
+    "missing": [],
+    "required_enabled": 11,
+    "required_total": 11
+  },
+  "T087": {
+    "adc_present": true,
+    "adc_quota_project": "driftzero-runtime-2026",
+    "adc_token_acquired": true,
+    "complete": true,
+    "region_recorded": "us-central1"
+  },
+  "T088": {
+    "complete": true,
+    "env_exists": true,
+    "git_ignored": true,
+    "secret_shaped_keys": [],
+    "tracked_by_git": false
+  },
+  "T089": {
+    "bucket_created": true,
+    "bucket_lifecycle_deletes_evidence": false,
+    "bucket_lifecycle_rules": 1,
+    "bucket_location": "US-CENTRAL1",
+    "bucket_uniform_access": true,
+    "complete": false,
+    "firestore_created": true,
+    "firestore_location": "us-central1",
+    "firestore_type": "FIRESTORE_NATIVE",
+    "open_because": "push subscription requires the T096 Cloud Run endpoint",
+    "push_subscription_created": false,
+    "sub_resources_complete": true,
+    "topic_created": true
+  },
+  "T090": {
+    "applied": true,
+    "complete": true,
+    "decision": "LOCAL_ENV"
+  },
+  "T091": {
+    "complete": true,
+    "gemma_sa_bucket_roles": [
+      "roles/storage.objectViewer"
+    ],
+    "gemma_sa_has_no_firestore_or_pubsub": true,
+    "gemma_sa_matches_contract": true,
+    "no_broad_roles": true,
+    "run_sa_bucket_roles": [
+      "roles/storage.objectAdmin"
+    ],
+    "run_sa_matches_contract": true
+  }
+}

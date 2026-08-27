@@ -1,0 +1,63 @@
+{
+  "no_gpu_endpoint": true,
+  "no_persistent_accelerator": true,
+  "no_service_account_keys": true,
+  "project": "driftzero-runtime-2026",
+  "region": "us-central1",
+  "region_rationale": "quickstart MS-7 requires one region for Firestore, Cloud Run, GCS and Vertex AI, chosen for availability of the G1-selected accelerator; us-central1 is that region and is the value already in .env.example.",
+  "resources_created": [
+    {
+      "billing": "serverless, free tier covers demo volume",
+      "id": "(default)",
+      "kind": "firestore.database",
+      "location": "us-central1"
+    },
+    {
+      "billing": "serverless, free tier",
+      "id": "driftzero-approved-changes",
+      "kind": "pubsub.topic",
+      "location": "global"
+    },
+    {
+      "billing": "per GiB stored; lifecycle transitions to NEARLINE at 30 days",
+      "id": "driftzero-evidence-driftzero-runtime-2026",
+      "kind": "storage.bucket",
+      "location": "us-central1"
+    },
+    {
+      "billing": "free",
+      "id": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "kind": "iam.serviceAccount"
+    },
+    {
+      "billing": "free",
+      "id": "driftzero-gemma-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "kind": "iam.serviceAccount"
+    },
+    {
+      "billing": "free",
+      "id": "driftzero-runtime-2026 hackathon guard",
+      "kind": "billing.budget"
+    }
+  ],
+  "resources_reused": [
+    {
+      "id": "driftzero-runtime-2026",
+      "kind": "project",
+      "note": "already existed and was ACTIVE"
+    },
+    {
+      "id": "017DAD-B6637E-E072D9",
+      "kind": "billing.account",
+      "note": "already linked, billingEnabled true"
+    },
+    {
+      "kind": "adc",
+      "note": "already configured with the correct quota project"
+    },
+    {
+      "kind": "services",
+      "note": "5 of the 11 required APIs were already enabled"
+    }
+  ]
+}

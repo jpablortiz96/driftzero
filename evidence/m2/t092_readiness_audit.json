@@ -1,0 +1,99 @@
+{
+  "audit": "T092_READINESS",
+  "mode": "READ_ONLY",
+  "implemented": false,
+  "date": "2026-08-27",
+  "exact_task_wording": "- [ ] T092 [P] [M2] Implement the Firestore persistence adapter (workflows, action ledger, proofs, idempotency keys) in `src/driftzero/store/firestore.py` (depends T017, T032)",
+
+  "1_exact_target_path": {
+    "path": "src/driftzero/store/firestore.py",
+    "exists": false,
+    "parent_package_exists": false,
+    "note": "src/driftzero/store/ does not exist yet; T092 would create it."
+  },
+
+  "2_required_google_dependency": {
+    "package": "google-cloud-firestore",
+    "import_root": "google",
+    "installed_in_this_environment": false,
+    "declared_in_pyproject": false,
+    "note": "pyproject declares exactly one runtime dependency: pydantic>=2.0."
+  },
+
+  "3_inside_purity_boundary": {
+    "answer": "YES",
+    "why": "tests/unit/truth_engine/test_no_cloud_imports.py::_source_files() globs Path('src/driftzero').rglob('*.py'), which is recursive. Any file under src/driftzero/ is scanned, including a new store/ subpackage.",
+    "files_currently_scanned": 47
+  },
+
+  "4_would_fail_m0_purity": {
+    "answer": "YES — three separate tests, demonstrated empirically",
+    "method": "the guard's own FORBIDDEN_ROOTS and _imported_roots() were applied to a minimal candidate adapter written outside the repository; nothing was placed inside src/driftzero/",
+    "failures": [
+      {
+        "test": "test_no_forbidden_imports_in_source",
+        "reason": "'google' is in FORBIDDEN_ROOTS; imported roots were ['driftzero', 'google']"
+      },
+      {
+        "test": "test_core_declares_only_pydantic_as_a_third_party_dependency",
+        "reason": "third-party surface would become ['google'], violating third_party <= {'pydantic'}"
+      },
+      {
+        "test": "test_no_model_or_agent_sdk_named_anywhere_in_the_core",
+        "reason": "the banned literal 'google.cloud' appears in the source text"
+      }
+    ],
+    "also_would_fail": "test_importing_both_packages_loads_no_forbidden_module only if the adapter became transitively reachable from driftzero.models or driftzero.truth_engine; a leaf module under driftzero.store is not imported by those packages, so the runtime scan would not catch it on its own."
+  },
+
+  "5_persistence_port_already_defined": {
+    "answer": "NO",
+    "evidence": "the only Protocol in src/driftzero/ is ArtifactRepository in tools/artifact_mutation.py. The four concerns T092 names are concrete classes with no interface: Workflow (models/workflow.py), ActionLedger (truth_engine/actions.py), ProofStore (proof/store.py), and idempotency keys carried as stable action_id lookups inside truth_engine/actions.py.",
+    "consequence": "there is currently no seam for T092 to implement against. A port has to come from somewhere."
+  },
+
+  "6_adapter_can_live_outside_m0": {
+    "answer": "YES, and the repository already does exactly this three times",
+    "precedent": [
+      {"package": "src/driftzero_adk/", "imports": ["google.adk.agents", "google.adk.apps", "google.adk.events", "google.adk.runners", "google.adk.sessions", "google.genai"]},
+      {"package": "src/driftzero_providers/", "imports": ["google.auth", "google.auth.transport.requests"]},
+      {"package": "src/driftzero_console/", "imports": [], "role": "composition root"}
+    ],
+    "google_imports_inside_src_driftzero": 0,
+    "why_it_does_not_violate_T092": "T092's substance is 'implement the Firestore persistence adapter for workflows, action ledger, proofs, idempotency keys'. Only the file path conflicts with the purity boundary, not the behaviour. Every acceptance-relevant property of the adapter is reachable from a sibling package."
+  },
+
+  "7_spec_amendment_required": {
+    "answer": "YES — a path correction, nothing more",
+    "change": "src/driftzero/store/firestore.py -> src/driftzero_cloud/firestore.py",
+    "scope": "one path in one task line; no change to what T092 must do",
+    "also_affects": [
+      "T093 [P] [M2] names src/driftzero/store/gcs.py and has the identical conflict for google-cloud-storage",
+      "T094 names src/driftzero/api/routes.py (FastAPI) — same boundary question, not part of this audit"
+    ],
+    "note": "T093 was not audited here, but it carries the same defect and should be corrected in the same amendment rather than discovered separately."
+  },
+
+  "8_clean_composition_root_solution": {
+    "answer": "YES, and it requires zero M0 modification",
+    "mechanism": "Python Protocols are structural. A port declared OUTSIDE the boundary is satisfied by the existing M0 concrete classes as they already are — no inheritance, no registration, no edit to a frozen file.",
+    "steps": [
+      "declare the persistence ports in src/driftzero_cloud/ports.py, shaped to the existing ProofStore / ActionLedger / FieldEvidenceStore / SourceProcedureStore surfaces",
+      "implement src/driftzero_cloud/firestore.py against those ports using google-cloud-firestore",
+      "let src/driftzero_console/service.py — which already constructs SourceProcedureStore(), ActionLedger() and FieldEvidenceStore() at lines 560-585 — select the in-memory or Firestore implementation",
+      "keep domain truth in the Truth Engine: Firestore stores records, it never adjudicates"
+    ],
+    "existing_seam": "src/driftzero_console/service.py is already the composition root and is already outside the purity boundary",
+    "m0_files_touched": 0
+  },
+
+  "prohibited_workarounds_considered_and_rejected": {
+    "importlib_dynamic_import": "rejected — evades the AST guard without removing the dependency; the runtime scan and the intent both still stand against it",
+    "shelling_to_gcloud": "rejected — makes a CLI a production dependency and hides an unauthenticated subprocess boundary",
+    "hand_written_firestore_rest": "rejected — reimplements an SDK to dodge a lint rule, and would still need an HTTP client, which is equally forbidden",
+    "weakening_the_purity_guard": "rejected — the guard is the M0 exit-gate contract (T060)",
+    "moving_domain_truth_into_firestore": "rejected — the Truth Engine is authoritative; Firestore is a record store"
+  },
+
+  "verdict": "REAL CONTRADICTION between T092's declared path and the M0 purity boundary. The contradiction is entirely in the path, and a one-line spec amendment plus the existing composition root resolves it with no change to M0 and no weakening of the guard. T092 was NOT implemented."
+}

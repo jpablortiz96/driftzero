@@ -193,12 +193,12 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Depends on**: stable M0/M1 boundaries (T060, T084).
 
 - [ ] T085 [MANUAL] [M2] Create/select the GCP project, link billing, redeem hackathon credits, and configure budget alerts at **$50** internal plus $25/$75 notifications (quickstart MS-1–MS-4)
-- [ ] T086 [MANUAL] [M2] Enable the 11 core APIs listed in quickstart MS-5 and verify with `gcloud services list --enabled`
-- [ ] T087 [MANUAL] [M2] Configure ADC (`gcloud auth application-default login`) and record the single selected region in `.env` (quickstart MS-6, MS-7)
-- [ ] T088 [MANUAL] [M2] Create the local `.env` from `.env.example`; verify `git check-ignore -v .env` and that no secret is committed (quickstart MS-8)
+- [x] T086 [MANUAL] [M2] Enable the 11 core APIs listed in quickstart MS-5 and verify with `gcloud services list --enabled`
+- [x] T087 [MANUAL] [M2] Configure ADC (`gcloud auth application-default login`) and record the single selected region in `.env` (quickstart MS-6, MS-7)
+- [x] T088 [MANUAL] [M2] Create the local `.env` from `.env.example`; verify `git check-ignore -v .env` and that no secret is committed (quickstart MS-8)
 - [ ] T089 [MANUAL] [M2] Create the Firestore database, the `driftzero-approved-changes` Pub/Sub topic with a push subscription, and the `driftzero-evidence-$PROJECT_ID` GCS bucket with lifecycle policy (quickstart MS-9–MS-11)
-- [ ] T090 [MANUAL] [M2] Record the secret-handling decision (local `.env` vs Secret Manager) and apply it per quickstart MS-12
-- [ ] T091 [MANUAL] [M2] Create the CORE runtime service accounts `driftzero-run-sa` and `driftzero-gemma-sa` with only the scoped roles listed in quickstart MS-12b; verify with `gcloud projects get-iam-policy`. **This is not Agent Identity and not per-agent IAM identity** (quickstart MS-12b)
+- [x] T090 [MANUAL] [M2] Record the secret-handling decision (local `.env` vs Secret Manager) and apply it per quickstart MS-12
+- [x] T091 [MANUAL] [M2] Create the CORE runtime service accounts `driftzero-run-sa` and `driftzero-gemma-sa` with only the scoped roles listed in quickstart MS-12b; verify with `gcloud projects get-iam-policy`. **This is not Agent Identity and not per-agent IAM identity** (quickstart MS-12b)
 - [ ] T092 [P] [M2] Implement the Firestore persistence adapter (workflows, action ledger, proofs, idempotency keys) in `src/driftzero/store/firestore.py` (depends T017, T032)
 - [ ] T093 [P] [M2] Implement the Cloud Storage evidence adapter (raw evidence, before/after artifacts, rendered proofs) in `src/driftzero/store/gcs.py` (depends T039)
 - [ ] T094 [M2] Implement the FastAPI routes from contracts/agents.md § API Contract in `src/driftzero/api/routes.py`: `POST /api/v1/changes`, `GET /workflows/{id}`, `POST /workflows/{id}/verify` (multipart, carries `submission_id`), `GET /workflows/{id}/proof`, `GET /workflows/{id}/evidence` (depends T081, T092)

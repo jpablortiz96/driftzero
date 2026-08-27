@@ -1,0 +1,40 @@
+{
+  "bucket": {
+    "creation_time": "2026-08-27T20:06:22+0000",
+    "default_storage_class": "STANDARD",
+    "generation": 1787861182364747491,
+    "labels": {
+      "app": "driftzero",
+      "environment": "hackathon",
+      "managed-by": "driftzero"
+    },
+    "lifecycle_config": {
+      "rule": [
+        {
+          "action": {
+            "storageClass": "NEARLINE",
+            "type": "SetStorageClass"
+          },
+          "condition": {
+            "age": 30,
+            "matchesStorageClass": [
+              "STANDARD"
+            ]
+          }
+        }
+      ]
+    },
+    "location": "US-CENTRAL1",
+    "location_type": "region",
+    "metageneration": 5,
+    "name": "driftzero-evidence-driftzero-runtime-2026",
+    "public_access_prevention": "inherited",
+    "soft_delete_policy": {
+      "effectiveTime": "2026-08-27T20:06:22.545000+00:00",
+      "retentionDurationSeconds": "604800"
+    },
+    "storage_url": "gs://driftzero-evidence-driftzero-runtime-2026/",
+    "uniform_bucket_level_access": true,
+    "update_time": "2026-08-27T20:11:09+0000"
+  }
+}
