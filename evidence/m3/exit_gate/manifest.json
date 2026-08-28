@@ -1,0 +1,344 @@
+{
+  "accelerators_provisioned": 0,
+  "checks": [
+    {
+      "check": 1,
+      "evidence_class": "HISTORICAL_G1",
+      "name": "G1 recorded GO",
+      "observed": "GO",
+      "result": "PASS"
+    },
+    {
+      "check": 2,
+      "evidence_class": "HISTORICAL_G1",
+      "name": "G1 selected the Vertex AI MaaS route",
+      "observed": "vertex_ai_maas",
+      "result": "PASS"
+    },
+    {
+      "check": 3,
+      "evidence_class": "HISTORICAL_G1",
+      "name": "G1 recorded that self-deployment is not required",
+      "observed": false,
+      "result": "PASS"
+    },
+    {
+      "check": 4,
+      "evidence_class": "HISTORICAL_G1",
+      "name": "self-deploy is recorded as NOT the active route",
+      "observed": "NOT_THE_ACTIVE_ROUTE",
+      "result": "PASS"
+    },
+    {
+      "check": 5,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "no accelerator was provisioned",
+      "observed": {
+        "compute_instances": [],
+        "note": "Vertex AI MaaS is serverless: no endpoint and no accelerator to list.",
+        "vertex_endpoints": []
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 6,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "multimodal evaluation recorded",
+      "observed": "evidence/reports/multimodal_eval.json",
+      "result": "PASS"
+    },
+    {
+      "check": 7,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "evaluation ran against real MaaS",
+      "observed": {
+        "provider": "vertex_ai_maas",
+        "traffic_type": "ON_DEMAND"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 8,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "evaluation used the G1-selected model",
+      "observed": "google/gemma-4-26b-a4b-it-maas",
+      "result": "PASS"
+    },
+    {
+      "check": 9,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "every fixture returned an in-domain observation",
+      "observed": {
+        "in_domain": 3,
+        "inference_count": 3
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 10,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "every fixture matched its expected observation",
+      "observed": 3,
+      "result": "PASS"
+    },
+    {
+      "check": 11,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "evaluation used the production adapter",
+      "observed": "src/driftzero_providers/vertex_maas.py (T103)",
+      "result": "PASS"
+    },
+    {
+      "check": 12,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "real camera hero run recorded",
+      "observed": "evidence/runs/hero_run_001/real_camera_hero_run.json",
+      "result": "PASS"
+    },
+    {
+      "check": 13,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "LEFT photo produced FAIL then TOP_RIGHT produced PASS",
+      "observed": [
+        "FAIL",
+        "PASS"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 14,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the FAIL blocked the proof",
+      "observed": "VERIFICATION_FAILED",
+      "result": "PASS"
+    },
+    {
+      "check": 15,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the corrected PASS reached PROOF_COMPLETE",
+      "observed": "PROOF_COMPLETE",
+      "result": "PASS"
+    },
+    {
+      "check": 16,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "all seven proof conditions satisfied",
+      "observed": "7/7",
+      "result": "PASS"
+    },
+    {
+      "check": 17,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the proof revalidates against its own hash",
+      "observed": "fcab4e10cfcbb6677e4371a6a11647c4c61d952ebeb63e0107921e036c502aa8",
+      "result": "PASS"
+    },
+    {
+      "check": 18,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "exactly one inference per photograph",
+      "observed": 2,
+      "result": "PASS"
+    },
+    {
+      "check": 19,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the model returned positions, not verdicts",
+      "observed": [
+        "LEFT",
+        "TOP_RIGHT"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 20,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "no model output contained a verdict token",
+      "observed": [
+        "LEFT",
+        "TOP_RIGHT"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 21,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the verdict came from the Truth Engine",
+      "observed": "DRIFTZERO TRUTH ENGINE deterministic comparator",
+      "result": "PASS"
+    },
+    {
+      "check": 22,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the model set no workflow state or proof",
+      "observed": {
+        "crossing_4_mandatory": true,
+        "model_returned": [
+          "LEFT",
+          "TOP_RIGHT"
+        ],
+        "model_set_proof": false,
+        "model_set_verdict": false,
+        "model_set_workflow_state": false,
+        "verdict_source": "DRIFTZERO TRUTH ENGINE deterministic comparator"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 23,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "Crossing 4 remained mandatory",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": 24,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "fixture manifest exists and is versioned",
+      "observed": "driftzero.m3.multimodal_manifest.v1",
+      "result": "PASS"
+    },
+    {
+      "check": 25,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "MIME is derived from bytes, not the extension",
+      "observed": [
+        [
+          "label_ambiguous_01.jpg",
+          "image/heic"
+        ],
+        [
+          "label_left_01.jpg",
+          "image/heic"
+        ],
+        [
+          "label_top_right_01.jpg",
+          "image/heic"
+        ]
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 26,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "the hero run recorded the actual MIME of both photographs",
+      "observed": {
+        "left": "image/heic",
+        "top_right": "image/heic"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 27,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "only real physical fixtures were evaluated",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": 28,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "name": "no credential in the M3 evidence",
+      "observed": "clean",
+      "result": "PASS"
+    },
+    {
+      "check": 29,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M0 unchanged",
+      "observed": [],
+      "result": "PASS"
+    },
+    {
+      "check": 30,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M0 purity guard green",
+      "observed": "purity",
+      "result": "PASS"
+    },
+    {
+      "check": 31,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "field verification regression green",
+      "observed": "T079",
+      "result": "PASS"
+    },
+    {
+      "check": 32,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M1 still CLOSED",
+      "observed": {
+        "checks": "41/41",
+        "m1_status": "CLOSED",
+        "verdict": "PASS"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 33,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M2 still CLOSED",
+      "observed": {
+        "checks": "36/36",
+        "m2_status": "CLOSED",
+        "verdict": "PASS"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 34,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "full regression suite passes",
+      "observed": "1785 passed, 52 skipped, 118 warnings in 33.03s",
+      "result": "PASS"
+    }
+  ],
+  "checks_passed": 34,
+  "checks_total": 34,
+  "context": {
+    "evaluation": {
+      "correct": 3,
+      "inference_count": 3,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "provider": "vertex_ai_maas",
+      "traffic_type": "ON_DEMAND"
+    },
+    "g1": {
+      "serving_route": "vertex_ai_maas",
+      "verdict": "GO"
+    },
+    "hero_run": {
+      "chronology": [
+        "FAIL",
+        "PASS"
+      ],
+      "final_state": "PROOF_COMPLETE",
+      "inference_count": 2,
+      "proof_content_hash": "fcab4e10cfcbb6677e4371a6a11647c4c61d952ebeb63e0107921e036c502aa8"
+    },
+    "total_live_inferences": 5
+  },
+  "evidence_class_counts": {
+    "HISTORICAL_G1": 4,
+    "OFFLINE_DETERMINISTIC": 9,
+    "REAL_MAAS_EXECUTION": 21
+  },
+  "failed_checks": [],
+  "gate_id": "M3_EXIT_GATE",
+  "gemma_live_demo_dependency_authorised": true,
+  "m3_status": "CLOSED",
+  "milestone": "M3",
+  "open_tasks": [
+    "T085 \u2014 promotional credit expiry date not yet provided"
+  ],
+  "persistent_endpoints": 0,
+  "t085_blocks_this_gate": false,
+  "task": "T107",
+  "test_suite": {
+    "passed": true,
+    "summary": "1785 passed, 52 skipped, 118 warnings in 33.03s"
+  },
+  "timestamp": "2026-08-28T15:13:39+00:00",
+  "total_live_inferences_this_batch": 5,
+  "verdict": "PASS"
+}

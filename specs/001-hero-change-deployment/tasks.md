@@ -220,12 +220,12 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Depends on**: M2 (T101) and the G1 decision (T067). **MUST NOT depend on M4.**
 **Conditional**: run only if T067 returned **GO**; otherwise the T068 fallback remains in place and this phase is documented as deferred.
 
-- [ ] T102 [M3] Provision/deploy the Gemma verification serving route **selected by G1**, using the verified configuration recorded by T062/T063 — never a route hardcoded here. For the currently selected route this is Vertex AI Model Garden, `google/gemma4@gemma-4-12b-it`, `g4-standard-48`, `NVIDIA_RTX_PRO_6000` ×1, `us-central1`. **Do not provision until T063 is satisfied and billing/cost authorization is explicitly restored.** (quickstart MS-15) (depends T063, T067, T091)
-- [ ] T103 [M3] Implement the production Gemma inference adapter with strict structured-observation output in `src/driftzero/agents/gemma_client.py`, 60 s configurable timeout, out-of-enum values rejected (depends T079, T102)
-- [ ] T104 [M3] Build the versioned multimodal evaluation fixture set under `fixtures/multimodal/` with a `manifest.json` recording expected observations per image (depends T064)
-- [ ] T105 [M3] Multimodal evaluation run in `tests/multimodal/test_gemma_observations.py`; emit results to `evidence/reports/multimodal_eval.json` (depends T103, T104)
-- [ ] T106 [M3] Real camera-capture end-to-end test: submit a LEFT photo → FAIL, then a TOP_RIGHT photo → PASS → `PROOF_COMPLETE`; record to `evidence/runs/hero_run_001/` (depends T105)
-- [ ] T107 [M3] **M3 EXIT GATE** — empirical results recorded; only now may Gemma become a live-demo dependency (depends T106)
+- [x] T102 [M3] Provision/deploy the Gemma verification serving route **selected by G1**, using the verified configuration recorded by T062/T063 — never a route hardcoded here. For the route G1 actually selected and recorded this is **Vertex AI MaaS**, `google/gemma-4-26b-a4b-it-maas`, serverless **ON_DEMAND**, `us-central1` — which requires **no accelerator, no endpoint and no provisioning at all**. The superseded self-deploy shape (`g4-standard-48`, `NVIDIA_RTX_PRO_6000` ×1) is recorded by G1 as `PLATFORM_SUPPORTED` only: the platform admitted that shape, no deployment ever completed, and `self_deploy_status: NOT_THE_ACTIVE_ROUTE`. **Do not provision until T063 is satisfied and billing/cost authorization is explicitly restored** — that gate still governs any future self-deploy, which may be reinstated **only** on new evidence of a successful self-deploy *and* a granted GPU quota. (quickstart MS-15) (depends T063, T067, T091)
+- [x] T103 [M3] Implement the production Gemma inference adapter with strict structured-observation output in `src/driftzero_providers/vertex_maas.py`, 60 s configurable timeout, out-of-enum values rejected (depends T079, T102)
+- [x] T104 [M3] Build the versioned multimodal evaluation fixture set under `fixtures/multimodal/` with a `manifest.json` recording expected observations per image (depends T064)
+- [x] T105 [M3] Multimodal evaluation run in `tests/multimodal/test_gemma_observations.py`; emit results to `evidence/reports/multimodal_eval.json` (depends T103, T104)
+- [x] T106 [M3] Real camera-capture end-to-end test: submit a LEFT photo → FAIL, then a TOP_RIGHT photo → PASS → `PROOF_COMPLETE`; record to `evidence/runs/hero_run_001/` (depends T105)
+- [x] T107 [M3] **M3 EXIT GATE** — empirical results recorded; only now may Gemma become a live-demo dependency (depends T106)
 
 **Checkpoint**: Core hero flow proven end-to-end with real physical evidence. **S1 acceptance is achievable from here — everything below is optional or packaging.**
 

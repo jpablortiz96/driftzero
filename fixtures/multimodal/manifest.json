@@ -1,0 +1,58 @@
+{
+  "directory_role": "CANONICAL_REAL_PHYSICAL",
+  "domain_note": "The closed domain the comparator adjudicates against. An observation outside it is rejected, never coerced to the nearest member.",
+  "expected_observation_source": "fixtures/multimodal/provenance.json (T064). What a human saw when the photograph was taken cannot be derived from the file, so it is read from the record where that judgement was made.",
+  "fixture_count": 3,
+  "fixtures": [
+    {
+      "actual_container": "HEIC",
+      "actual_mime_type": "image/heic",
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "declared_extension": ".jpg",
+      "expected_observation": "INCONCLUSIVE",
+      "extension_matches_content": false,
+      "filename": "label_ambiguous_01.jpg",
+      "provenance_class": "REAL_PHYSICAL",
+      "sha256": "0ebfab6bb9b5077b77eda421a9e62de225bbd288c973f8a56611a52d5f5efb76",
+      "size_bytes": 1465013
+    },
+    {
+      "actual_container": "HEIC",
+      "actual_mime_type": "image/heic",
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "declared_extension": ".jpg",
+      "expected_observation": "LEFT",
+      "extension_matches_content": false,
+      "filename": "label_left_01.jpg",
+      "provenance_class": "REAL_PHYSICAL",
+      "sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+      "size_bytes": 696422
+    },
+    {
+      "actual_container": "HEIC",
+      "actual_mime_type": "image/heic",
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "declared_extension": ".jpg",
+      "expected_observation": "TOP_RIGHT",
+      "extension_matches_content": false,
+      "filename": "label_top_right_01.jpg",
+      "provenance_class": "REAL_PHYSICAL",
+      "sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+      "size_bytes": 702867
+    }
+  ],
+  "mime_note": "actual_mime_type is sniffed from the file's own bytes. These fixtures are HEIC containers named .jpg, so the extension is a claim and the bytes are the authority \u2014 the same rule the ingestion path applies at Crossing 4.",
+  "observation_domain": [
+    "LEFT",
+    "TOP_RIGHT",
+    "INCONCLUSIVE"
+  ],
+  "physical_capture_satisfied": true,
+  "schema": "driftzero.m3.multimodal_manifest.v1",
+  "synthetic_directory": {
+    "excluded_from_this_manifest": true,
+    "path": "fixtures/multimodal/synthetic/",
+    "role": "GENERATED \u2014 never evaluated as real physical evidence"
+  },
+  "task": "T104"
+}

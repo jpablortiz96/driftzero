@@ -1,0 +1,32 @@
+{
+  "accelerator_inventory": {
+    "compute_instances": [],
+    "note": "Vertex AI MaaS is serverless: no endpoint and no accelerator to list.",
+    "vertex_endpoints": []
+  },
+  "cost_class": {
+    "accelerator_hours": 0,
+    "billing_model": "per-token on demand",
+    "fixed_cost": 0,
+    "max_output_tokens": 8
+  },
+  "identity": {
+    "caller_identity": "Application Default Credentials (aiplatform.user)",
+    "driftzero-gemma-sa": "unchanged \u2014 no Cloud Run service exists for it to run, because MaaS needs none; permissions not broadened",
+    "service_account_keys": 0
+  },
+  "model": "google/gemma-4-26b-a4b-it-maas",
+  "project": "driftzero-runtime-2026",
+  "provisioning_performed": "NONE",
+  "provisioning_required": false,
+  "region": "us-central1",
+  "serving_route": "vertex_ai_maas",
+  "superseded_path": {
+    "g1_status": "PLATFORM_SUPPORTED only \u2014 the platform admitted the shape; no deployment ever completed",
+    "reinstatement_condition": "new evidence of a successful self-deploy AND a granted GPU quota",
+    "shape": "Vertex AI Model Garden self-deploy, g4-standard-48, NVIDIA_RTX_PRO_6000 x1"
+  },
+  "task": "T102",
+  "traffic_type": "ON_DEMAND",
+  "why_nothing_was_provisioned": "T102 binds to 'the route selected by G1, using the verified configuration recorded by T062/T063 \u2014 never a route hardcoded here'. G1 recorded vertex_ai_maas with requires_self_deployment=false and self_deploy_status=NOT_THE_ACTIVE_ROUTE. A serverless ON_DEMAND route has no endpoint, no accelerator and no resource to create, so provisioning would have meant standing up the superseded path the record rejects."
+}

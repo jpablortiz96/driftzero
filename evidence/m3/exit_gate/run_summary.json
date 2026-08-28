@@ -1,0 +1,12 @@
+{
+  "accelerators_provisioned": 0,
+  "checks_passed": 34,
+  "checks_total": 34,
+  "failed_checks": [],
+  "gate_id": "M3_EXIT_GATE",
+  "m3_status": "CLOSED",
+  "task": "T107",
+  "timestamp": "2026-08-28T15:13:39+00:00",
+  "total_live_inferences_this_batch": 5,
+  "verdict": "PASS"
+}
