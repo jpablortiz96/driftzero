@@ -1,0 +1,51 @@
+{
+  "concurrent_resume": {
+    "evidence_class": "OFFLINE_DETERMINISTIC",
+    "mechanism": "durable Firestore lease, not an in-process lock",
+    "outcome": "REFUSED: held by instance-1"
+  },
+  "dead_letter": {
+    "evidence_class": "REAL_GOOGLE_CLOUD",
+    "max_delivery_attempts": 5,
+    "topic": "driftzero-approved-changes-dlq"
+  },
+  "duplicate_event": {
+    "deduplicated_on": "change_id",
+    "evidence_class": "REAL_GOOGLE_CLOUD",
+    "idempotency_claims": [
+      "change-push-58ccdf0d9d",
+      "change-smoke-b619925b46",
+      "change-smoke-ebbf23a558",
+      "change-t097-7406f62457"
+    ],
+    "mechanism": "T029 classify_change_event over the T092 durable claim",
+    "not_deduplicated_on": "messageId",
+    "one_workflow_per_change": true,
+    "real_pubsub_redelivery": "two publishes of one change_id produced exactly one workflow (tests/integration/test_cloud_idempotency.py, real Pub/Sub)",
+    "workflows": [
+      {
+        "change_id": "smoke-ebbf23a558",
+        "state": "CHANGE_RECEIVED",
+        "workflow_id": "wf-api-002-001"
+      },
+      {
+        "change_id": "push-58ccdf0d9d",
+        "state": "CHANGE_RECEIVED",
+        "workflow_id": "wf-api-003-001"
+      },
+      {
+        "change_id": "t097-7406f62457",
+        "state": "CHANGE_RECEIVED",
+        "workflow_id": "wf-f858fe9c-001-001"
+      }
+    ]
+  },
+  "duplicate_evidence": {
+    "evidence_class": "REAL_GOOGLE_CLOUD",
+    "mechanism": "Firestore create() precondition; GCS if_generation_match=0",
+    "objects": "differing bytes at an immutable ref are refused by real GCS",
+    "proof": "a differing proof under one proof_id is refused by real Firestore"
+  },
+  "task": "T101",
+  "timestamp": "2026-08-28T14:35:41+00:00"
+}

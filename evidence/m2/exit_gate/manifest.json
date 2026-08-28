@@ -1,0 +1,361 @@
+{
+  "checks": [
+    {
+      "check": 1,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "runtime A paused awaiting field verification",
+      "observed": "AWAITING_FIELD_VERIFICATION",
+      "result": "PASS"
+    },
+    {
+      "check": 2,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "workflow completed across three separate processes",
+      "observed": "PROOF_COMPLETE",
+      "result": "PASS"
+    },
+    {
+      "check": 3,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "verification chronology is FAIL then PASS",
+      "observed": [
+        "FAIL",
+        "PASS"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 4,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "FAIL blocked the proof",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": 5,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "corrected PASS produced the proof",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": 6,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "exactly one proof exists",
+      "observed": 1,
+      "result": "PASS"
+    },
+    {
+      "check": 7,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "recovered proof still validates against its own hash",
+      "observed": "c392d288e4c153ffbd2cda8a295151b9b17bc237bbbc186f9285df76678b6596",
+      "result": "PASS"
+    },
+    {
+      "check": 8,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "no duplicate logical action",
+      "observed": [
+        "act-deliver_delta-f51e2085975a9b33017dd6ff881d3695",
+        "act-remediate_artifact-c97f9af6c7baa8f38239152fa93691e2"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 9,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "remediation dispatched exactly once",
+      "observed": {
+        "DELIVER_DELTA": 1,
+        "REMEDIATE_ARTIFACT": 1
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 10,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "delivery dispatched exactly once",
+      "observed": {
+        "DELIVER_DELTA": 1,
+        "REMEDIATE_ARTIFACT": 1
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 11,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "resumed process redispatched no remediation",
+      "observed": 0,
+      "result": "PASS"
+    },
+    {
+      "check": 12,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "resumed process redispatched no delivery",
+      "observed": 0,
+      "result": "PASS"
+    },
+    {
+      "check": 13,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "exactly two field observations across three processes",
+      "observed": 2,
+      "result": "PASS"
+    },
+    {
+      "check": 14,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "concurrent resume admits exactly one owner",
+      "observed": "REFUSED: held by instance-1",
+      "result": "PASS"
+    },
+    {
+      "check": 15,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "Cloud Run revision READY",
+      "observed": "driftzero-api-00003-2sb",
+      "result": "PASS"
+    },
+    {
+      "check": 16,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "Cloud Run runs as driftzero-run-sa",
+      "observed": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "result": "PASS"
+    },
+    {
+      "check": 17,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "service is private (allUsers absent)",
+      "observed": false,
+      "result": "PASS"
+    },
+    {
+      "check": 18,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "unauthenticated invocation refused",
+      "observed": {
+        "/health": 403,
+        "/ready": 403
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 19,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "authenticated health succeeds",
+      "observed": 200,
+      "result": "PASS"
+    },
+    {
+      "check": 20,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "max-instances is 2",
+      "observed": "2",
+      "result": "PASS"
+    },
+    {
+      "check": 21,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "deployed runtime reports durable Firestore",
+      "observed": {
+        "durable": true,
+        "persistence_backend": "firestore"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 22,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "deployed runtime reports CLOUD_PILOT, not production",
+      "observed": {
+        "production_ready": false,
+        "runtime_mode": "CLOUD_PILOT"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 23,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "Firestore (default) database exists",
+      "observed": [
+        "(default)"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 24,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "evidence bucket has uniform access",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": 25,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "Pub/Sub push is authenticated",
+      "observed": "https://driftzero-api-eepb64ze2q-uc.a.run.app/api/v1/pubsub/push",
+      "result": "PASS"
+    },
+    {
+      "check": 26,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "push endpoint targets the live service URL",
+      "observed": "https://driftzero-api-eepb64ze2q-uc.a.run.app/api/v1/pubsub/push",
+      "result": "PASS"
+    },
+    {
+      "check": 27,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "dead-letter topic configured",
+      "observed": "driftzero-approved-changes-dlq",
+      "result": "PASS"
+    },
+    {
+      "check": 28,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "dead-letter attempts bounded at 5",
+      "observed": 5,
+      "result": "PASS"
+    },
+    {
+      "check": 29,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "deployed service wrote workflows to real Firestore",
+      "observed": 3,
+      "result": "PASS"
+    },
+    {
+      "check": 30,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "workflow ids are unique in the real store",
+      "observed": [
+        "wf-api-002-001",
+        "wf-api-003-001",
+        "wf-f858fe9c-001-001"
+      ],
+      "result": "PASS"
+    },
+    {
+      "check": 31,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "one workflow per logical change in the real store",
+      "observed": {
+        "changes": 3,
+        "workflows": 3
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 32,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "core project is the runtime project",
+      "observed": "driftzero-runtime-2026",
+      "result": "PASS"
+    },
+    {
+      "check": 33,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "name": "quota project is not the legacy project",
+      "observed": "driftzero-runtime-2026",
+      "result": "PASS"
+    },
+    {
+      "check": 34,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M0 unchanged",
+      "observed": [],
+      "result": "PASS"
+    },
+    {
+      "check": 35,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M0 purity guard green",
+      "observed": "tests/unit/truth_engine",
+      "result": "PASS"
+    },
+    {
+      "check": 36,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "M1 exit gate still PASS and CLOSED",
+      "observed": {
+        "checks": "41/41",
+        "m1_status": "CLOSED",
+        "verdict": "PASS"
+      },
+      "result": "PASS"
+    },
+    {
+      "check": 37,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "name": "full regression suite passes",
+      "observed": "1780 passed, 46 skipped, 118 warnings in 49.70s",
+      "result": "PASS"
+    }
+  ],
+  "checks_passed": 37,
+  "checks_total": 37,
+  "cloud": {
+    "allUsers_present": false,
+    "authenticated_health": 200,
+    "bucket_uniform_access": true,
+    "core_project": "driftzero-runtime-2026",
+    "dead_letter_topic": "driftzero-approved-changes-dlq",
+    "firestore_databases": [
+      "(default)"
+    ],
+    "max_delivery_attempts": 5,
+    "max_instances": "2",
+    "push_authenticated": true,
+    "push_endpoint": "https://driftzero-api-eepb64ze2q-uc.a.run.app/api/v1/pubsub/push",
+    "quota_project": "driftzero-runtime-2026",
+    "readiness": {
+      "deployment": "CLOUD_RUN",
+      "durable": true,
+      "evidence_bucket": "driftzero-evidence-driftzero-runtime-2026",
+      "missing_settings": [],
+      "persistence_backend": "firestore",
+      "pilot_limitations": [
+        "the source-procedure corpus and artifact catalog are controlled pilot fixtures shipped with the image, not a live source registry; a production runtime would read them from Cloud Storage and Firestore",
+        "a workflow recovered from durable storage can be read but not resumed in a new instance; resuming a persisted run is T097"
+      ],
+      "production_ready": false,
+      "project": "driftzero-runtime-2026",
+      "ready": true,
+      "revision": "driftzero-api-00003-2sb",
+      "runtime_mode": "CLOUD_PILOT"
+    },
+    "ready_condition": "True",
+    "revision": "driftzero-api-00003-2sb",
+    "service_account": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "unauthenticated_status": {
+      "/health": 403,
+      "/ready": 403
+    },
+    "url": "https://driftzero-api-eepb64ze2q-uc.a.run.app"
+  },
+  "evidence_class_counts": {
+    "OFFLINE_DETERMINISTIC": 18,
+    "REAL_GOOGLE_CLOUD": 19
+  },
+  "failed_checks": [],
+  "gate_id": "M2_EXIT_GATE",
+  "live_model_calls": 0,
+  "m2_status": "CLOSED",
+  "milestone": "M2",
+  "open_m2_tasks": [
+    "T085 \u2014 promotional credit balance, Console-only verification"
+  ],
+  "production_ready": false,
+  "t085_blocks_this_gate": false,
+  "task": "T101",
+  "test_suite": {
+    "exit_code": 0,
+    "passed": true,
+    "summary": "1780 passed, 46 skipped, 118 warnings in 49.70s"
+  },
+  "timestamp": "2026-08-28T14:35:41+00:00",
+  "tokens_recorded": false,
+  "verdict": "PASS"
+}

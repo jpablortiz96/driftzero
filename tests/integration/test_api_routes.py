@@ -361,10 +361,12 @@ def test_the_proof_survives_a_restart_with_an_identical_hash(
     assert compute_proof_hash(ChangeProof.model_validate(after)) == after["content_hash"]
 
 
-def test_a_durable_workflow_is_readable_but_not_silently_re_driven(
-    durable: Any, providers: Any
-) -> None:
-    """Rebuilding a persisted run here would start a second logical execution."""
+def test_a_terminal_workflow_is_never_resumed(durable: Any, providers: Any) -> None:
+    """Since T097 an eligible workflow resumes — a completed one still must not.
+
+    PROOF_COMPLETE is TERMINAL_SUCCESS in the frozen state model. Resuming it would
+    reopen a change that has already been proven done.
+    """
     client, runtime, database = durable["client"], durable["runtime"], durable["database"]
     workflow_id = client.post("/api/v1/changes", json=hero_body()).json()["workflow_id"]
     drive_to_proof(client, runtime, workflow_id)
@@ -384,7 +386,8 @@ def test_a_durable_workflow_is_readable_but_not_silently_re_driven(
         files={"file": ("x.jpg", LEFT_IMG.read_bytes(), "image/jpeg")},
     )
     assert response.status_code == 409
-    assert response.json()["detail"]["error"] == "WORKFLOW_NOT_RESUMABLE_HERE"
+    assert response.json()["detail"]["error"] == "WORKFLOW_NOT_RESUMABLE"
+    assert "TERMINAL_SUCCESS" in response.json()["detail"]["detail"]
 
 
 # ============================ operational =============================================

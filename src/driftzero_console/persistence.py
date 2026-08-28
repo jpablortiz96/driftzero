@@ -36,6 +36,13 @@ class DurableSink(Protocol):
     def record_proof(self, proof: ChangeProof) -> None:
         """Persist a Change Proof write-once, unchanged."""
 
+    def record_session(self, workflow_id: str, session: object) -> None:
+        """Persist the session-level state a resumed workflow needs to finish.
+
+        The aggregate alone is not enough: the proof context is assembled from the
+        impact resolution, remediation evidence and delivery ref that live beside it.
+        """
+
 
 class NullSink:
     """The default: record nothing, durably guarantee nothing, and say so.
@@ -54,4 +61,7 @@ class NullSink:
         return None
 
     def record_proof(self, proof: ChangeProof) -> None:
+        return None
+
+    def record_session(self, workflow_id: str, session: object) -> None:
         return None

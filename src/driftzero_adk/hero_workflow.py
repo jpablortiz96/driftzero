@@ -45,6 +45,14 @@ WORKFLOW_AGENT_NAME = "driftzero_hero_workflow"
 
 AWAIT_FIELD_EVIDENCE_CALL_ID = "await-field-evidence"
 FIELD_EVIDENCE_READY_KEY = "field_evidence_ready"
+
+INVOCATION_KEY = "driftzero_invocation_id"
+"""Where the resumable invocation identity is persisted.
+
+It lives in the ADK session state rather than in this object, because the process
+holding this object is exactly what a restart destroys. A fresh instance reads the
+identity back out of the durable session and continues the SAME invocation instead of
+starting a second one for the same logical workflow."""
 """Session-state flag the resume sets. Presence means "evidence arrived", nothing more."""
 
 USER_ID = "driftzero-pilot"
@@ -190,9 +198,32 @@ class HeroWorkflowRun:
 
     service: Any
     log: StepLog = field(default_factory=StepLog)
+    session_service: Any = None
+    """Injected. ``None`` keeps the in-memory service, which is the LOCAL_PILOT path.
+    A ``FirestoreSessionService`` makes the invocation survive the process."""
     _runner: Any = None
     _sessions: Any = None
-    _session_id: str = "hero-workflow"
+    _session_id: str | None = None
+
+    @property
+    def session_id(self) -> str:
+        """One ADK session per workflow.
+
+        This used to be the constant ``"hero-workflow"``. With a per-instance in-memory
+        session service that was invisible; against a shared durable store every
+        workflow would have collided into a single session, and one workflow's events
+        would have become another's history.
+        """
+        if self._session_id is None:
+            workflow = getattr(getattr(self.service, "_session", None), "workflow", None)
+            self._session_id = (
+                getattr(workflow, "workflow_id", None) or ADK_APP_NAME
+            )
+        return self._session_id
+
+    @property
+    def durable(self) -> bool:
+        return self.session_service is not None
 
     async def _ensure_runner(self) -> None:
         if self._runner is not None:
@@ -207,12 +238,15 @@ class HeroWorkflowRun:
             # The contract specifies ResumabilityConfig for the step-8 boundary.
             resumability_config=ResumabilityConfig(is_resumable=True),
         )
-        self._sessions = InMemorySessionService()
+        self._sessions = self.session_service or InMemorySessionService()
         self._runner = Runner(app=app, session_service=self._sessions)
+        # create_session on the durable service returns the STORED session when one
+        # exists, so a fresh process rebuilds the runner over the existing history
+        # rather than starting a blank one.
         await self._sessions.create_session(
-            app_name=ADK_APP_NAME, user_id=USER_ID, session_id=self._session_id
+            app_name=ADK_APP_NAME, user_id=USER_ID, session_id=self.session_id
         )
-        self.log.session_id = self._session_id
+        self.log.session_id = self.session_id
 
     async def start(self) -> StepLog:
         """Run steps 1–7 and pause at step 8."""
@@ -221,14 +255,49 @@ class HeroWorkflowRun:
         await self._ensure_runner()
         async for event in self._runner.run_async(
             user_id=USER_ID,
-            session_id=self._session_id,
+            session_id=self.session_id,
             new_message=types.Content(
                 role="user", parts=[types.Part.from_text(text="deploy change")]
             ),
         ):
             self.log.event_count += 1
             self.log.invocation_id = event.invocation_id or self.log.invocation_id
+        await self._persist_invocation()
         return self.log
+
+    async def _persist_invocation(self) -> None:
+        """Record the resumable invocation identity in the durable session state."""
+        if not self.durable or not self.log.invocation_id:
+            return
+        session = await self._sessions.get_session(
+            app_name=ADK_APP_NAME, user_id=USER_ID, session_id=self.session_id
+        )
+        if session is None:  # pragma: no cover - the session was just created
+            return
+        session.state[INVOCATION_KEY] = self.log.invocation_id
+        # set() through the service so the write goes through one code path.
+        self._sessions.persist_state(session)
+
+    async def recover(self) -> str | None:
+        """Rebuild this run over the stored session, returning the invocation it owns.
+
+        This is the operation a fresh Cloud Run instance performs. It does not replay
+        steps 1-7 and does not create a second invocation: it reattaches to the one
+        already recorded, so a later ``resume`` continues the same logical execution.
+        """
+        if not self.durable:
+            return None
+        await self._ensure_runner()
+        session = await self._sessions.get_session(
+            app_name=ADK_APP_NAME, user_id=USER_ID, session_id=self.session_id
+        )
+        if session is None:
+            return None
+        invocation = (session.state or {}).get(INVOCATION_KEY)
+        if invocation:
+            self.log.invocation_id = str(invocation)
+            self.log.event_count = len(session.events)
+        return self.log.invocation_id or None
 
     async def resume(self) -> StepLog:
         """Resume the *same* invocation once field evidence exists.
@@ -238,10 +307,15 @@ class HeroWorkflowRun:
         from google.genai import types
 
         if self._runner is None or not self.log.invocation_id:
-            raise RuntimeError("the workflow has not been started, so it cannot resume")
+            # A durable run can recover the invocation it does not yet hold in memory.
+            recovered = await self.recover() if self.durable else None
+            if not recovered:
+                raise RuntimeError(
+                    "the workflow has not been started, so it cannot resume"
+                )
         async for _event in self._runner.run_async(
             user_id=USER_ID,
-            session_id=self._session_id,
+            session_id=self.session_id,
             invocation_id=self.log.invocation_id,
             state_delta={FIELD_EVIDENCE_READY_KEY: True},
             new_message=types.Content(

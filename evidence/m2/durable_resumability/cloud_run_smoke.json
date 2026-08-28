@@ -1,0 +1,10 @@
+{
+  "evidence_class": "REAL_GOOGLE_CLOUD",
+  "live_model_calls": 0,
+  "model_note": "the deployed service has no field provider configured, so no Gemma call",
+  "observed": "a NEW revision read (DURABLE_STORE) and resumed a workflow it never created",
+  "previous_behaviour": "409 WORKFLOW_NOT_RESUMABLE_HERE",
+  "revision": "driftzero-api-00003-2sb",
+  "service_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+  "verify_status_on_resumed_workflow": 200
+}

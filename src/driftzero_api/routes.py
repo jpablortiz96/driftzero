@@ -47,7 +47,12 @@ from driftzero_api.models import (
     VerificationResponse,
     WorkflowStatus,
 )
-from driftzero_api.runtime import ApiRuntime, WorkflowNotFound
+from driftzero_api.runtime import (
+    ApiRuntime,
+    NotResumable,
+    ResumeHeldElsewhere,
+    WorkflowNotFound,
+)
 from driftzero_console.workflows import FORBIDDEN_FIXTURE_KEYS, FixtureRejected
 
 router = APIRouter()
@@ -292,22 +297,29 @@ def _not_found(workflow_id: str) -> HTTPException:
 def _live_or_404(runtime: ApiRuntime, workflow_id: str) -> Any:
     """A workflow that can still be driven, or an honest refusal.
 
-    A workflow present only in durable storage is readable but not drivable from here.
-    Resuming a persisted run is T097; letting this route rebuild one would start a
-    second execution of the same logical change.
+    Since T097 a workflow held only in durable storage is *resumed* rather than refused:
+    the same logical execution is reattached under an exclusive lease. The refusals that
+    remain are the ones that should remain — a terminal workflow, a workflow parked at a
+    human-review gate, an unreadable stored record, and a workflow another instance is
+    already resuming.
     """
     try:
-        return runtime.live_service(workflow_id)
+        return runtime.resume(workflow_id)
+    except NotResumable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "WORKFLOW_NOT_RESUMABLE", "detail": exc.reason},
+        ) from exc
+    except ResumeHeldElsewhere as exc:
+        # Another instance owns the resume. Retrying later is correct; executing here
+        # anyway would run the same workflow twice.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "RESUME_IN_PROGRESS_ELSEWHERE",
+                "detail": exc.detail,
+                "holder": exc.holder,
+            },
+        ) from exc
     except WorkflowNotFound as exc:
-        if runtime._durable_record(workflow_id) is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": "WORKFLOW_NOT_RESUMABLE_HERE",
-                    "detail": (
-                        f"workflow {workflow_id} exists in durable storage but is not "
-                        "loaded in this process. Resuming a persisted run is T097."
-                    ),
-                },
-            ) from exc
         raise _not_found(workflow_id) from exc

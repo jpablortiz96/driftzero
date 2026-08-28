@@ -18,6 +18,8 @@ from driftzero.models.workflow import Workflow
 from driftzero_cloud.firestore import FirestorePersistence
 from driftzero_console.persistence import DurableSink, NullSink
 
+RESUME_SNAPSHOTS = "resume_snapshots"
+
 
 class FirestoreSink:
     """A :class:`DurableSink` backed by Firestore.
@@ -49,6 +51,14 @@ class FirestoreSink:
 
     def record_proof(self, proof: ChangeProof) -> None:
         self._persistence.proofs.record(proof)
+
+    def record_session(self, workflow_id: str, session: object) -> None:
+        from driftzero_cloud.resume_snapshot import encode_snapshot  # noqa: PLC0415
+        from driftzero_cloud.serialization import safe_identifier  # noqa: PLC0415
+
+        self._persistence.client.collection(RESUME_SNAPSHOTS).document(
+            safe_identifier(workflow_id, kind="workflow_id")
+        ).set(encode_snapshot(session))
 
 
 def build_sink(

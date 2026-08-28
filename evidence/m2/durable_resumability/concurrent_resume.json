@@ -1,0 +1,7 @@
+{
+  "expiry": "an expired lease may be taken over; the displaced holder is recorded",
+  "lease_ttl_seconds": 120,
+  "mechanism": "Firestore create() precondition on resume_leases/{workflow_id}",
+  "not": "an in-process lock \u2014 two Cloud Run instances are two processes",
+  "outcome": "REFUSED: held by instance-1"
+}

@@ -204,11 +204,11 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 - [x] T094 [M2] Implement the FastAPI routes from contracts/agents.md § API Contract in `src/driftzero_api/routes.py`: `POST /api/v1/changes`, `GET /workflows/{id}`, `POST /workflows/{id}/verify` (multipart, carries `submission_id`), `GET /workflows/{id}/proof`, `GET /workflows/{id}/evidence` (depends T081, T092)
 - [x] T095 [M2] Implement the Pub/Sub push handler for approved change ingestion in `src/driftzero_api/pubsub.py` with `change_id` idempotency at the boundary (depends T029, T094)
 - [x] T096 [M2] Create the `Dockerfile` and deployment configuration for the single `driftzero-api` Cloud Run service — `--service-account=driftzero-run-sa@…`, `--max-instances=2 --min-instances=0` (quickstart MS-13) (depends T094)
-- [ ] T097 [M2] Implement pause/resume with ADK `ResumabilityConfig` backed by Firestore as the authoritative store in `src/driftzero/agents/orchestrator.py`; evidence arrival triggers a distinct invocation, not an in-process block (depends T092, T095)
-- [ ] T098 [M2] Implement observability in `src/driftzero/observability.py`: OpenTelemetry export to Cloud Trace, structured Cloud Logging, correlation IDs bound to `workflow_id` and `action_id`, retry/timeout attempts observable (quickstart MS-17) (depends T070, T096)
-- [ ] T099 [M2] Restart/recovery integration test in `tests/integration/test_restart_recovery.py`: kill the process mid-step, resume, assert zero duplicate logical actions and correct reconciliation classification (depends T097)
-- [ ] T100 [M2] Duplicate-event and duplicate-evidence integration test in `tests/integration/test_cloud_idempotency.py` against real Firestore/Pub/Sub (depends T095, T099)
-- [ ] T101 [M2] **M2 EXIT GATE** — restart/recovery and duplicate-event evidence recorded from **real Google Cloud execution** into `evidence/runs/hero_run_001/restart_recovery.json` and `idempotency_log.json` (depends T099, T100)
+- [x] T097 [M2] Implement pause/resume with ADK `ResumabilityConfig` backed by Firestore as the authoritative store in `src/driftzero_adk/hero_workflow.py`; evidence arrival triggers a distinct invocation, not an in-process block (depends T092, T095)
+- [x] T098 [M2] Implement observability in `src/driftzero/observability.py` (pure correlation IDs, structured records, retry/timeout attempts observable) with the OpenTelemetry Cloud Trace and Cloud Logging export in `src/driftzero_cloud/telemetry.py`: correlation IDs bound to `workflow_id` and `action_id` (quickstart MS-17) (depends T070, T096)
+- [x] T099 [M2] Restart/recovery integration test in `tests/integration/test_restart_recovery.py`: kill the process mid-step, resume, assert zero duplicate logical actions and correct reconciliation classification (depends T097)
+- [x] T100 [M2] Duplicate-event and duplicate-evidence integration test in `tests/integration/test_cloud_idempotency.py` against real Firestore/Pub/Sub (depends T095, T099)
+- [x] T101 [M2] **M2 EXIT GATE** — restart/recovery and duplicate-event evidence recorded from **real Google Cloud execution** into `evidence/runs/hero_run_001/restart_recovery.json` and `idempotency_log.json` (depends T099, T100)
 
 **Checkpoint**: The workflow survives real cloud execution and process death. Core is stable.
 

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from driftzero.config import DriftZeroConfig
+from driftzero.models.workflow import STATE_CATEGORY, StateCategory, WorkflowState
 from driftzero.truth_engine.idempotency import (
     ChangeEventDecision,
     ChangeEventOutcome,
@@ -37,6 +38,38 @@ from driftzero_console.workflows import (
 CHANGE_KEY_PREFIX = "change"
 """Namespace for the durable ``change_id`` claim, so an approved-change key can never
 collide with an action or delivery key in the same collection."""
+
+
+WORKFLOW_INPUTS = "workflow_inputs"
+INPUT_SCHEMA_VERSION = 1
+
+
+class NotResumable(RuntimeError):
+    """This workflow exists and is durable, but must not be resumed.
+
+    Distinct from :class:`WorkflowNotFound` on purpose. "I have no record of this" and
+    "this finished, or needs a human" are different answers, and collapsing them would
+    hide a terminal workflow behind a 404.
+    """
+
+    def __init__(self, workflow_id: str, reason: str) -> None:
+        super().__init__(f"workflow {workflow_id} is not resumable: {reason}")
+        self.workflow_id = workflow_id
+        self.reason = reason
+
+
+class ResumeHeldElsewhere(RuntimeError):
+    """Another instance holds the resume lease for this workflow.
+
+    Surfaced as the API's own type so the HTTP layer needs no cloud import to handle it,
+    and so the transport never has to know that leases live in Firestore.
+    """
+
+    def __init__(self, workflow_id: str, holder: str, detail: str) -> None:
+        super().__init__(detail)
+        self.workflow_id = workflow_id
+        self.holder = holder
+        self.detail = detail
 
 
 class WorkflowNotFound(LookupError):
@@ -63,8 +96,20 @@ class ApiRuntime:
     this module never imports a Google SDK, keeping it importable with no cloud extra
     installed."""
     registry: WorkflowRegistry = field(default_factory=WorkflowRegistry)
-    workflow_namespace: str = "wf-api"
+    workflow_namespace: str = ""
+    """Per-runtime workflow id prefix, unique by construction.
+
+    It used to be the constant ``"wf-api"`` combined with a per-process counter, which
+    made the first workflow of every process ``wf-api-001-001``. With one process that
+    was invisible. Across Cloud Run instances — whose counters each start at 1 — two
+    unrelated changes were issued the SAME workflow id, and in a shared durable store
+    that means one document for two logical workflows."""
+    lease_client: Any = None
+    """A ``ResumeLeases`` when durable. Built lazily from the Firestore client."""
+    instance_id: str = ""
+    """Identifies this process in a lease. Cloud Run's revision when deployed."""
     _sequence: int = 0
+    _leases_held: dict[str, Any] = field(default_factory=dict)
     _known_changes: dict[str, str] = field(default_factory=dict)
     """In-process ``change_id`` -> ``workflow_id``. A cache in front of the durable
     claim, never the authority: it is empty after a restart and the durable store is
@@ -72,9 +117,32 @@ class ApiRuntime:
 
     # ------------------------------------------------------------------ properties
 
+    def __post_init__(self) -> None:
+        import os
+        import uuid
+
+        # A revision name is shared by every instance serving it, so it identifies the
+        # deployment rather than the process. The random suffix is what makes a lease
+        # holder and a workflow namespace distinguishable between two live instances.
+        process = uuid.uuid4().hex[:8]
+        if not self.instance_id:
+            revision = os.environ.get("K_REVISION")
+            self.instance_id = f"{revision}-{process}" if revision else f"local-{process}"
+        if not self.workflow_namespace:
+            self.workflow_namespace = f"wf-{process}"
+
     @property
     def durable(self) -> bool:
         return bool(self.sink.durable and self.persistence is not None)
+
+    @property
+    def leases(self) -> Any:
+        """Durable resume leases. An in-process lock could not span two instances."""
+        if self.lease_client is None:
+            from driftzero_cloud.leases import ResumeLeases  # noqa: PLC0415
+
+            self.lease_client = ResumeLeases(self.persistence.client)
+        return self.lease_client
 
     def readiness(self) -> dict[str, Any]:
         """What this process is actually configured for. Never aspirational.
@@ -189,6 +257,7 @@ class ApiRuntime:
         # Persist immediately: a workflow that exists only in this process is exactly
         # the T081 limitation durable persistence was added to close.
         self.sink.record_workflow(service._session.workflow, [])
+        self._record_input(workflow_id, payload)
         self._claim(dataset.change_id, workflow_id)
         return {
             "workflow_id": workflow_id,
@@ -196,6 +265,164 @@ class ApiRuntime:
             "duplicate_of": None,
             "outcome": str(ChangeEventOutcome.NEW_LOGICAL_CHANGE),
         }
+
+    def _record_input(self, workflow_id: str, payload: dict[str, Any]) -> None:
+        """Store the accepted source change beside the workflow.
+
+        Resuming in a fresh instance means rebuilding the application service, and the
+        service is built from the source change. Without the original payload a new
+        instance could only guess at it, and a guessed input is a different workflow.
+        """
+        if not self.durable:
+            return
+        from driftzero_cloud.serialization import safe_identifier  # noqa: PLC0415
+
+        self.persistence.client.collection(WORKFLOW_INPUTS).document(
+            safe_identifier(workflow_id, kind="workflow_id")
+        ).set(
+            {
+                "schema_version": INPUT_SCHEMA_VERSION,
+                "kind": "workflow_input",
+                "workflow_id": workflow_id,
+                "payload": payload,
+            }
+        )
+
+    def _load_input(self, workflow_id: str) -> dict[str, Any] | None:
+        if not self.durable:
+            return None
+        from driftzero_cloud.serialization import safe_identifier  # noqa: PLC0415
+
+        snapshot = (
+            self.persistence.client.collection(WORKFLOW_INPUTS)
+            .document(safe_identifier(workflow_id, kind="workflow_id"))
+            .get()
+        )
+        if not snapshot.exists:
+            return None
+        document = snapshot.to_dict() or {}
+        version = document.get("schema_version")
+        if version != INPUT_SCHEMA_VERSION:
+            raise NotResumable(
+                workflow_id,
+                f"stored input schema_version {version!r} is not readable by this build "
+                f"(expects {INPUT_SCHEMA_VERSION})",
+            )
+        return document.get("payload")
+
+    def resume_eligibility(self, workflow_id: str) -> dict[str, Any]:
+        """Whether this workflow may be resumed, and why not when it may not.
+
+        The categories come from the frozen M0 ``STATE_CATEGORY`` map rather than a
+        second list maintained here — a duplicate list is how two parts of a system
+        start disagreeing about which states are terminal.
+        """
+        record = self._durable_record(workflow_id)
+        if record is None:
+            raise WorkflowNotFound(workflow_id)
+
+        state = record.workflow.state
+        category = STATE_CATEGORY[state]
+        if category is StateCategory.TERMINAL_SUCCESS:
+            return {"eligible": False, "reason": "TERMINAL_SUCCESS", "state": str(state)}
+        if category is StateCategory.TERMINAL_NON_SUCCESS:
+            return {
+                "eligible": False, "reason": "TERMINAL_NON_SUCCESS", "state": str(state)
+            }
+        if category is StateCategory.BLOCKING_GATE:
+            return {
+                "eligible": False,
+                "reason": "BLOCKING_GATE_REQUIRES_HUMAN_REVIEW",
+                "state": str(state),
+            }
+        return {"eligible": True, "reason": None, "state": str(state), "category": str(category)}
+
+    def resume(self, workflow_id: str, *, owner: str | None = None) -> HeroConsoleService:
+        """Reattach to a persisted workflow so it can be driven again.
+
+        Returns the live service if this process already holds it. Otherwise rebuilds it
+        from durable state under an exclusive lease, so two Cloud Run instances cannot
+        both resume the same workflow.
+        """
+        existing = self.registry._services.get(workflow_id)
+        if existing is not None:
+            return existing
+        if not self.durable:
+            raise WorkflowNotFound(workflow_id)
+
+        eligibility = self.resume_eligibility(workflow_id)
+        if not eligibility["eligible"]:
+            raise NotResumable(
+                workflow_id,
+                f"state {eligibility['state']} is {eligibility['reason']}",
+            )
+
+        payload = self._load_input(workflow_id)
+        if payload is None:
+            raise NotResumable(
+                workflow_id, "no stored source change; the workflow cannot be rebuilt"
+            )
+
+        from driftzero_cloud.leases import LeaseDenied  # noqa: PLC0415
+
+        try:
+            lease = self.leases.acquire(workflow_id, owner or self.instance_id)
+        except LeaseDenied as exc:
+            raise ResumeHeldElsewhere(workflow_id, exc.holder, str(exc)) from exc
+        try:
+            service = self._rehydrate(workflow_id, payload)
+        except Exception:
+            self.leases.release(lease)
+            raise
+        self._leases_held[workflow_id] = lease
+        return service
+
+    def _rehydrate(self, workflow_id: str, payload: dict[str, Any]) -> HeroConsoleService:
+        """Rebuild the service and overlay the persisted authoritative state.
+
+        The service is constructed from the same source change, then its workflow,
+        chronology and action ledger are replaced by what durable storage holds. Steps
+        already executed are therefore *not* re-executed: the ledger says they happened,
+        and the reconciliation rules that consume it are unchanged.
+        """
+        record = self._durable_record(workflow_id)
+        dataset = dataset_from_fixture(payload, directory=self.fixtures_dir)
+        service = HeroConsoleService(
+            dataset=dataset, workflow_namespace=workflow_id, persistence=self.sink
+        )
+        session = service._session
+        session.workflow = record.workflow
+        session.state_history = [
+            WorkflowState(state) for state in record.state_history
+        ]
+        # ActionLedger is frozen M0 and exposes no restore seam. The stored record IS
+        # the authoritative one, so it is reinstated verbatim; replaying it through
+        # plan()/mark_*() would mint fresh timestamps and produce a different record.
+        # This reads an M0 private without modifying a single line of M0.
+        for action in self.persistence.ledger_for(workflow_id).all_records():
+            session.ledger._records[action.action_id] = action
+
+        from driftzero_cloud.composition import RESUME_SNAPSHOTS  # noqa: PLC0415
+        from driftzero_cloud.resume_snapshot import apply_snapshot  # noqa: PLC0415
+        from driftzero_cloud.serialization import safe_identifier  # noqa: PLC0415
+
+        snapshot = (
+            self.persistence.client.collection(RESUME_SNAPSHOTS)
+            .document(safe_identifier(workflow_id, kind="workflow_id"))
+            .get()
+        )
+        if snapshot.exists:
+            # Without this the workflow recovers but can never assemble a proof
+            # context, which would be a resumability that stops one step short.
+            apply_snapshot(session, snapshot.to_dict() or {})
+
+        self.registry._services[workflow_id] = service
+        return service
+
+    def release(self, workflow_id: str) -> bool:
+        """Give up the resume lease this process holds, if any."""
+        lease = self._leases_held.pop(workflow_id, None)
+        return self.leases.release(lease) if lease is not None else False
 
     def live_service(self, workflow_id: str) -> HeroConsoleService:
         """The service still able to be driven, or refuse.

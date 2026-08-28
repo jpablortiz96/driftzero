@@ -682,6 +682,7 @@ class HeroConsoleService:
         )
         for action in session.ledger.all_records():
             self._persistence.record_action(action)
+        self._persistence.record_session(session.workflow.workflow_id, session)
 
     def _record(self, session: _Session, event: str, detail: str) -> None:
         session.events.append(

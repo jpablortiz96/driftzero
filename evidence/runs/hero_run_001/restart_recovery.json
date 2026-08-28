@@ -1,0 +1,72 @@
+{
+  "evidence_classes": {
+    "HISTORICAL_LIVE_MODEL": "evidence/final_live_pilot_2026_08_26/ and evidence/pilot_live_change_intel_2026_08_26/ \u2014 referenced, not re-run",
+    "OFFLINE_DETERMINISTIC": "the three-runtime restart scenario below",
+    "REAL_GOOGLE_CLOUD": "the deployed architecture and durable state below"
+  },
+  "offline_restart_scenario": {
+    "action_ids": [
+      "act-deliver_delta-f51e2085975a9b33017dd6ff881d3695",
+      "act-remediate_artifact-c97f9af6c7baa8f38239152fa93691e2"
+    ],
+    "actions_by_type": {
+      "DELIVER_DELTA": 1,
+      "REMEDIATE_ARTIFACT": 1
+    },
+    "concurrent_resume": "REFUSED: held by instance-1",
+    "evidence_class": "OFFLINE_DETERMINISTIC",
+    "fail_blocked_proof": true,
+    "final_state": "PROOF_COMPLETE",
+    "pass_generated_proof": true,
+    "paused_state": "AWAITING_FIELD_VERIFICATION",
+    "processes": 3,
+    "proof_content_hash": "c392d288e4c153ffbd2cda8a295151b9b17bc237bbbc186f9285df76678b6596",
+    "proof_documents": 1,
+    "proof_id": "act-generate_proof-4d07e3caf0bdc53efe39b9fd348e0767",
+    "proof_revalidates": true,
+    "provider_calls": 2,
+    "resumed_process_redispatched_delivery": 0,
+    "resumed_process_redispatched_remediation": 0,
+    "verification_chronology": [
+      "FAIL",
+      "PASS"
+    ],
+    "workflow_id": "wf-dbbc2e4e-001-001"
+  },
+  "produced_by": "scripts/m2_exit_gate.py",
+  "real_cloud_resume": {
+    "evidence_class": "REAL_GOOGLE_CLOUD",
+    "note": "a new Cloud Run revision read and resumed a workflow it never created; the API no longer returns WORKFLOW_NOT_RESUMABLE_HERE for an eligible workflow. Recorded from the live service.",
+    "readiness": {
+      "deployment": "CLOUD_RUN",
+      "durable": true,
+      "evidence_bucket": "driftzero-evidence-driftzero-runtime-2026",
+      "missing_settings": [],
+      "persistence_backend": "firestore",
+      "pilot_limitations": [
+        "the source-procedure corpus and artifact catalog are controlled pilot fixtures shipped with the image, not a live source registry; a production runtime would read them from Cloud Storage and Firestore",
+        "a workflow recovered from durable storage can be read but not resumed in a new instance; resuming a persisted run is T097"
+      ],
+      "production_ready": false,
+      "project": "driftzero-runtime-2026",
+      "ready": true,
+      "revision": "driftzero-api-00003-2sb",
+      "runtime_mode": "CLOUD_PILOT"
+    },
+    "revision_serving": "driftzero-api-00003-2sb",
+    "service_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app"
+  },
+  "reconciliation": {
+    "actions_by_type": {
+      "DELIVER_DELTA": 1,
+      "REMEDIATE_ARTIFACT": 1
+    },
+    "resumed_process_redispatch": {
+      "delivery": 0,
+      "remediation": 0
+    },
+    "zero_duplicate_logical_actions": true
+  },
+  "task": "T101",
+  "timestamp": "2026-08-28T14:35:41+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "adk_imports_in_purity_boundary": [],
+  "blocking_gate_not_auto_resumed": [
+    "REVIEW_REQUIRED"
+  ],
+  "google_imports_in_purity_boundary": [],
+  "legacy_project_mutations": 0,
+  "resume_sets_no_verdict": true,
+  "service_account_keys": 0,
+  "session_adapter_location": "src/driftzero_adk/ (outside src/driftzero/)",
+  "terminal_states_not_resumable": [
+    "PROOF_COMPLETE",
+    "SUPERSEDED",
+    "FAILED"
+  ],
+  "unauthenticated_cloud_run": false
+}

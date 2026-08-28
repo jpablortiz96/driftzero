@@ -1,0 +1,28 @@
+{
+  "action_ids": [
+    "act-deliver_delta-60b90a36a5510fb2844b87ff734e5c7f",
+    "act-remediate_artifact-b078a0390d9912d547cb70524179a821"
+  ],
+  "actions_by_type": {
+    "DELIVER_DELTA": 1,
+    "REMEDIATE_ARTIFACT": 1
+  },
+  "concurrent_resume": "REFUSED: held by instance-1",
+  "fail_blocked_proof": true,
+  "final_state": "PROOF_COMPLETE",
+  "pass_generated_proof": true,
+  "paused_state": "AWAITING_FIELD_VERIFICATION",
+  "processes": 3,
+  "proof_content_hash": "6c6d3e5905d9056697fe99a5d5c19e0f5312f30bcaf119d7397717000c7b93e6",
+  "proof_documents": 1,
+  "proof_id": "act-generate_proof-86e295ac8d8f528312f4a5ec2d9afcbc",
+  "proof_revalidates": true,
+  "provider_calls": 2,
+  "resumed_process_redispatched_delivery": 0,
+  "resumed_process_redispatched_remediation": 0,
+  "verification_chronology": [
+    "FAIL",
+    "PASS"
+  ],
+  "workflow_id": "wf-c89583d5-001-001"
+}

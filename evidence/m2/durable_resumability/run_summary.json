@@ -1,0 +1,17 @@
+{
+  "batch": "M2_FINAL",
+  "chronology": [
+    "FAIL",
+    "PASS"
+  ],
+  "cloud_resume_observed": true,
+  "concurrent_resume": "REFUSED: held by instance-1",
+  "final_state": "PROOF_COMPLETE",
+  "live_model_calls": 0,
+  "redispatch_on_resume": {
+    "delivery": 0,
+    "remediation": 0
+  },
+  "tasks": "T097, T098, T099, T100, T101",
+  "tests": "64 passed, 1 warning in 5.49s"
+}

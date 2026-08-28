@@ -27,6 +27,12 @@ api = [
     "uvicorn[standard]>=0.29",
     "python-multipart>=0.0.9",
 ]
+# T098 observability export. Separate from `cloud` because a process can persist
+# durably without tracing, and tracing must never be a hard requirement to serve.
+telemetry = [
+    "opentelemetry-sdk>=1.42",
+    "opentelemetry-exporter-gcp-trace>=1.15",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

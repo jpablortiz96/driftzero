@@ -85,6 +85,10 @@ src/
 │   │   ├── static/
 │   │   └── templates/
 │   └── cli.py                  # CLI for testing/demo
+├── src/driftzero_adk/          # Google ADK composition — OUTSIDE the M0 purity boundary
+│   ├── hero_workflow.py        # SequentialAgent + resumable invocation (T080, T097)
+│   ├── firestore_session.py    # durable ADK SessionService over Firestore (T097)
+│   └── change_intel_runtime.py # semantic client
 ├── src/driftzero_api/          # Production HTTP surface — OUTSIDE the M0 purity boundary
 │   ├── __init__.py
 │   ├── models.py               # typed request/response contracts

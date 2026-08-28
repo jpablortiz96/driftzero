@@ -1,0 +1,26 @@
+{
+  "adk_version": "2.7.1",
+  "collections": [
+    "adk_sessions/{app}__{user}__{session}",
+    "adk_sessions/{...}/events/{event_id}",
+    "resume_leases/{workflow_id}",
+    "resume_snapshots/{workflow_id}",
+    "workflow_inputs/{workflow_id}"
+  ],
+  "implemented": "src/driftzero_adk/firestore_session.py (BaseSessionService subclass)",
+  "invocation_identity": "persisted in ADK session state under driftzero_invocation_id",
+  "schema_versions": {
+    "adk_session": 1,
+    "resume_snapshot": 1,
+    "workflow_input": 1
+  },
+  "serialization": "pydantic model_dump(mode='json') + explicit dataclass codec; no pickle",
+  "session_id": "one per workflow (was the constant 'hero-workflow' \u2014 a collision risk)",
+  "shipped_services_evaluated": {
+    "DatabaseSessionService": "rejected \u2014 needs a SQL URL, i.e. Cloud SQL fixed cost",
+    "InMemorySessionService": "rejected \u2014 dies with the process, which is the limitation",
+    "VertexAiSessionService": "rejected \u2014 targets Agent Engine, not this Cloud Run deploy"
+  },
+  "state_delta_semantics": "super().append_event() applies it; not reimplemented",
+  "unknown_version": "fails closed"
+}
