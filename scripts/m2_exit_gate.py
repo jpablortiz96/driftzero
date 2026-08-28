@@ -577,7 +577,10 @@ def write_evidence(
         "cloud": cloud,
         "test_suite": suite,
         "m2_status": "CLOSED" if ledger.verdict == "PASS" else "OPEN",
-        "open_m2_tasks": ["T085 — promotional credit balance, Console-only verification"],
+        "open_m2_tasks": [],
+        "t085_closed_by": (
+            "operator Console observation of the promotional credit; MS-3 is Console-only"
+        ),
         "t085_blocks_this_gate": False,
         "live_model_calls": 0,
         "tokens_recorded": False,

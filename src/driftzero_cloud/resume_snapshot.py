@@ -127,6 +127,10 @@ def _project(session: Any) -> dict[str, Any]:
             remediation.model_dump(mode="json") if remediation is not None else None
         ),
         "delivery_receipt_ref": session.delivery_receipt_ref,
+        # The worker-facing delta. Without it a recovered workflow could be verified but
+        # not explained — the frontline surface would have nothing to show.
+        "delta": session.delta.model_dump(mode="json") if session.delta else None,
+        "delivery": session.delivery,
         "rejected_result_refs": list(session.rejected_result_refs),
         "verification_events": [
             event.model_dump(mode="json") for event in session.verification_events
@@ -169,6 +173,13 @@ def apply_snapshot(session: Any, document: dict[str, Any]) -> None:
         _REMEDIATION.validate_python(remediation) if remediation else None
     )
     session.delivery_receipt_ref = document.get("delivery_receipt_ref")
+
+    delta = document.get("delta")
+    if delta:
+        from driftzero.agents.enablement import DeltaInstruction  # noqa: PLC0415
+
+        session.delta = DeltaInstruction.model_validate(delta)
+    session.delivery = document.get("delivery")
     session.rejected_result_refs = list(document.get("rejected_result_refs") or [])
     session.verification_events = [
         VerificationEvent.model_validate(event)

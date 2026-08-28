@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from driftzero_api import pubsub, routes
+from driftzero_api import pubsub, routes, web
 from driftzero_api.runtime import ApiRuntime, build_runtime
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +43,8 @@ def create_app(runtime: ApiRuntime | None = None) -> FastAPI:
     )
     app.include_router(routes.router)
     app.include_router(pubsub.router)
+    # The M6 product surface. Behind the same IAM boundary as everything else.
+    app.include_router(web.router)
     return app
 
 

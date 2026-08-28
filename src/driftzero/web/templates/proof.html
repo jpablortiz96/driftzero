@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070a10" />
+  <title>Change Proof — DRIFTZERO</title>
+  <link rel="stylesheet" href="/web/static/driftzero.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="head">
+      <span class="brand">DRIFT<span>ZERO</span></span>
+      <span class="chip" id="proof-state">&mdash;</span>
+    </header>
+
+    <div class="error hidden" id="error" role="alert">
+      <strong id="error-title">Something went wrong</strong>
+      <span id="error-detail"></span>
+    </div>
+
+    <h1 id="headline">Change Proof</h1>
+    <p class="lede" id="subhead">Loading&hellip;</p>
+
+    <div class="status waiting" id="status" role="status" aria-live="polite">
+      <span class="mark" id="status-mark" aria-hidden="true">&#9679;</span>
+      <span>
+        <span class="word" id="status-word">Loading</span>
+        <span class="detail" id="status-detail"></span>
+      </span>
+    </div>
+
+    <!-- The plain-language account comes first. The JSON is available below it, never
+         in place of it. -->
+    <section class="card" aria-labelledby="summary-heading">
+      <h2 id="summary-heading">What this proves</h2>
+      <dl class="facts" id="facts"></dl>
+    </section>
+
+    <div class="actions">
+      <a class="action" id="download" href="#" download>Download proof</a>
+      <button class="action secondary" type="button" id="verify-integrity">
+        Verify integrity
+      </button>
+    </div>
+
+    <div class="status hidden" id="integrity" role="status" aria-live="polite">
+      <span class="mark" id="integrity-mark" aria-hidden="true">&#9679;</span>
+      <span>
+        <span class="word" id="integrity-word"></span>
+        <span class="detail" id="integrity-detail"></span>
+      </span>
+    </div>
+
+    <details id="inspector">
+      <summary>Audit detail</summary>
+      <div class="body">
+        <h2>Completion conditions</h2>
+        <ul class="conditions" id="conditions">
+          <li><span class="detail">&mdash;</span></li>
+        </ul>
+
+        <h2>Verification chronology</h2>
+        <ol class="timeline" id="timeline">
+          <li><span class="detail">&mdash;</span></li>
+        </ol>
+
+        <h2>Evidence manifest</h2>
+        <dl class="facts" id="manifest"></dl>
+
+        <h2>Canonical JSON</h2>
+        <pre class="json" id="canonical">&mdash;</pre>
+      </div>
+    </details>
+
+    <!-- Exact wording. This is a content hash and nothing more, and the page says so
+         rather than letting the word "proof" imply a signature. -->
+    <p class="note" id="hash-note">
+      <strong>Proof content hash</strong> is a SHA-256 over the DRIFTZERO canonical
+      proof JSON, excluding its own <code>content_hash</code> field. It establishes
+      content identity and detects alteration. It is not a digital signature, not an
+      attestation, not a trusted timestamp, and not a ledger entry.
+    </p>
+    <p class="note">
+      The downloaded file contains <code>content_hash</code>, so the SHA-256 of the whole
+      file is expected to differ from it. Verifying the proof means re-canonicalising the
+      document without that field.
+    </p>
+
+    <div class="actions">
+      <a class="action secondary" id="go-workflow" href="#">Change status</a>
+    </div>
+  </main>
+
+  <script src="/web/static/proof.js"></script>
+  <script>
+    DriftZeroProof.initProof();
+  </script>
+</body>
+</html>

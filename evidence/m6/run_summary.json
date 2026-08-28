@@ -1,0 +1,16 @@
+{
+  "batch": "M6_PRODUCT",
+  "controls_without_an_accessible_name": 0,
+  "final_state": "PROOF_COMPLETE",
+  "live_model_calls": 0,
+  "max_horizontal_overflow_px": 0,
+  "screenshots": 7,
+  "smallest_touch_target_px": 58,
+  "tasks": "T127, T128, T129, T130",
+  "tests": "55 passed, 2 warnings in 4.32s",
+  "timestamp": "2026-08-28T19:30:22+00:00",
+  "verification_results": [
+    "FAIL",
+    "PASS"
+  ]
+}

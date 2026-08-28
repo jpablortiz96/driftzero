@@ -1,0 +1,41 @@
+{
+  "alert_regions": 1,
+  "controls_without_an_accessible_name": 0,
+  "document_language": "en",
+  "file_input_reachable": true,
+  "heading_structure": [
+    "H1",
+    "H2",
+    "H2"
+  ],
+  "horizontal_overflow_px": {
+    "desktop.png": 0,
+    "proof_desktop.png": 0,
+    "proof_view.png": 0,
+    "worker_failed.png": 0,
+    "worker_mobile.png": 0,
+    "worker_tablet.png": 0,
+    "worker_verified.png": 0
+  },
+  "keyboard_focus_order": [
+    "input#photo",
+    "a#back",
+    "a#go-proof",
+    "body",
+    "input#photo",
+    "a#back"
+  ],
+  "live_regions": 1,
+  "not_a_claim": "These are the minimum interaction requirements the spec sets, checked on the rendered page. They are not a WCAG conformance claim and not a device-support claim.",
+  "smallest_touch_target_px": 58,
+  "standard": "spec \u00a7 Frontline Surface Minimums (S1 boundary)",
+  "status_communicated_as_text": {
+    "desktop.png": "Deployed and verified",
+    "proof_desktop.png": "Verified",
+    "proof_view.png": "Verified",
+    "worker_failed.png": "Not done yet",
+    "worker_mobile.png": "Waiting for verification",
+    "worker_tablet.png": "Waiting for verification",
+    "worker_verified.png": "Verified"
+  }
+}

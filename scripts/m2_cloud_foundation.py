@@ -26,6 +26,33 @@ EVIDENCE_DIR = REPO_ROOT / "evidence" / "m2" / "cloud_foundation"
 PROJECT = "driftzero-runtime-2026"
 LEGACY_PROJECT = "driftzero-agentic-2026"
 REGION = "us-central1"
+MANUAL_CREDIT_OBSERVATION = {
+    "provenance": "OPERATOR_REPORTED_CONSOLE_OBSERVATION",
+    "source": "Cloud Console -> Billing -> Credits",
+    "credit_name": "Marketing - All things agentic hackathon",
+    "status": "AVAILABLE",
+    "remaining": "COP 480,881.43",
+    "original": "COP 482,231.00",
+    "remaining_percentage_displayed": "100%",
+    "expiry_displayed": "90 days",
+    "expiry_is_absolute_date": False,
+    "expiry_note": (
+        "The Console presents this credit's validity as a duration — '90 days' — not "
+        "as a calendar date. No absolute expiration date has been derived, because the "
+        "credit's start date was not observed and computing one would be a fabrication."
+    ),
+    "machine_captured": False,
+    "why_not_machine_captured": (
+        "Cloud Billing exposes no API or gcloud surface for promotional credit balance, "
+        "so this fact cannot be captured the way every other value in this bundle was."
+    ),
+}
+"""What the operator saw in the Console, recorded verbatim.
+
+Kept separate from everything else in this bundle: every other value here came from
+live gcloud output, and a reader must be able to tell the two apart at a glance.
+"""
+
 BILLING_ACCOUNT = "017DAD-B6637E-E072D9"
 BUCKET = f"driftzero-evidence-{PROJECT}"
 TOPIC = "driftzero-approved-changes"
@@ -138,6 +165,10 @@ def capture_billing() -> dict[str, Any]:
                 "Cloud Billing exposes no API or gcloud surface for promotional credit "
                 "balance. quickstart MS-3 verifies it in the Console only."
             ),
+            # Operator-reported, not machine-captured. Recorded verbatim as the Console
+            # presented it, and deliberately kept in its own block so no reader can
+            # mistake it for something this script observed.
+            "manual_console_verification": MANUAL_CREDIT_OBSERVATION,
         },
     }
 
@@ -385,9 +416,14 @@ def evaluate(bundle: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "billing_enabled": bool(billing["project_billing"].get("billingEnabled")),
             "budget_created": budget_ok,
             "budget_thresholds": thresholds,
-            "credits_verified": False,
-            "complete": False,
-            "open_because": "MS-3 credit balance is Console-only and unverifiable here",
+            "credits_verified": True,
+            "credits_verified_by": "OPERATOR_CONSOLE_OBSERVATION",
+            "complete": True,
+            "ms3_satisfied_because": (
+                "quickstart MS-3 asks the Console to show a non-zero balance and an "
+                "expiry. Both were observed. It does not require an absolute calendar "
+                "date, and none was derived."
+            ),
         },
         "T086": {
             "required_enabled": len(services["required_present"]),

@@ -335,7 +335,7 @@ def write_evidence(
         "accelerators_provisioned": 0,
         "persistent_endpoints": 0,
         "total_live_inferences_this_batch": context["total_live_inferences"],
-        "open_tasks": ["T085 — promotional credit expiry date not yet provided"],
+        "open_tasks": [],
         "t085_blocks_this_gate": False,
     }
     architecture = {

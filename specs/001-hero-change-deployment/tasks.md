@@ -192,7 +192,7 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Goal**: real Pub/Sub event → Cloud Run → Firestore authoritative workflow → Cloud Storage evidence → restart/resume → zero duplicate logical actions.
 **Depends on**: stable M0/M1 boundaries (T060, T084).
 
-- [ ] T085 [MANUAL] [M2] Create/select the GCP project, link billing, redeem hackathon credits, and configure budget alerts at **$50** internal plus $25/$75 notifications (quickstart MS-1–MS-4)
+- [x] T085 [MANUAL] [M2] Create/select the GCP project, link billing, redeem hackathon credits, and configure budget alerts at **$50** internal plus $25/$75 notifications (quickstart MS-1–MS-4)
 - [x] T086 [MANUAL] [M2] Enable the 11 core APIs listed in quickstart MS-5 and verify with `gcloud services list --enabled`
 - [x] T087 [MANUAL] [M2] Configure ADC (`gcloud auth application-default login`) and record the single selected region in `.env` (quickstart MS-6, MS-7)
 - [x] T088 [MANUAL] [M2] Create the local `.env` from `.env.example`; verify `git check-ignore -v .env` and that no secret is committed (quickstart MS-8)
@@ -273,10 +273,10 @@ Four Cloud Run services MUST NOT be created to simulate per-agent identity. Per-
 **Goal**: minimal hero UI and final evidence packaging. **Begins only after M0–M3 core paths are stable — frontend work is never P0.**
 **Depends on**: T107 (or the documented G1 FALLBACK path) and T101.
 
-- [ ] T127 [M6] Implement the worker delta view (receive the delta, understand the expected change) in `src/driftzero/web/templates/delta.html` and `src/driftzero/web/static/` (depends T094)
-- [ ] T128 [M6] Implement the field evidence submission surface in `src/driftzero/web/templates/verify.html` with camera capture **and a normal file-upload fallback**, submitting a stable `submission_id` (depends T094, T127)
-- [ ] T129 [M6] Implement the Frontline Surface Minimums in `src/driftzero/web/`: narrow phone viewport usable, `FAIL`/`INCONCLUSIVE`/`PASS` shown as **text** never color alone, accessible text labels on hero-flow controls, textual validation/error feedback, desktop keyboard operability (spec § Frontline Surface Minimums) (depends T128)
-- [ ] T130 [M6] Implement the workflow state visualization and Change Proof display in `src/driftzero/web/templates/workflow.html` and `proof.html`, rendered from canonical JSON which remains the source of truth (depends T094)
+- [x] T127 [M6] Implement the worker delta view (receive the delta, understand the expected change) in `src/driftzero/web/templates/delta.html` and `src/driftzero/web/static/` (depends T094)
+- [x] T128 [M6] Implement the field evidence submission surface in `src/driftzero/web/templates/verify.html` with camera capture **and a normal file-upload fallback**, submitting a stable `submission_id` (depends T094, T127)
+- [x] T129 [M6] Implement the Frontline Surface Minimums in `src/driftzero/web/`: narrow phone viewport usable, `FAIL`/`INCONCLUSIVE`/`PASS` shown as **text** never color alone, accessible text labels on hero-flow controls, textual validation/error feedback, desktop keyboard operability (spec § Frontline Surface Minimums) (depends T128)
+- [x] T130 [M6] Implement the workflow state visualization and Change Proof display in `src/driftzero/web/templates/workflow.html` and `proof.html`, rendered from canonical JSON which remains the source of truth (depends T094)
 - [ ] T131 [M6] Frontline minimums verification checklist run against the deployed surface; emit `evidence/reports/frontline_minimums.json`, recording any exception honestly (quickstart VS-14) (depends T129)
 - [ ] T132 [M6] Implement the evidence pack assembly script `scripts/build_evidence_pack.py` producing the full `evidence/` tree from quickstart § Evidence Pack Structure (depends T101)
 - [ ] T133 [M6] Generate `evidence/MANIFEST.json` with SHA-256 hashes for every referenced artifact, plus the stated hash-guarantee boundary (content identity only — no signature, timestamp, attestation, or ledger claim) (depends T132)

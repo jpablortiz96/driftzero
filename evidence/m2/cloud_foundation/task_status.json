@@ -1,15 +1,18 @@
 {
   "T085": {
     "billing_enabled": true,
+    "budget_amount": "COP 400,000",
     "budget_created": true,
+    "budget_threshold_note": "T085 requires alerts at $50 internal plus $25/$75. The billing account is denominated in COP, so the budget is set at the COP equivalent and the 25%/50%/75% rules land on those three points.",
     "budget_thresholds": [
       0.25,
       0.5,
       0.75
     ],
-    "complete": false,
-    "credits_verified": false,
-    "open_because": "MS-3 credit balance is Console-only and unverifiable here",
+    "complete": true,
+    "credits_verified": true,
+    "credits_verified_by": "OPERATOR_CONSOLE_OBSERVATION",
+    "ms3_satisfied_because": "quickstart MS-3 asks the Console to show a non-zero balance and an expiry. Both were observed. It does not require an absolute calendar date, and none was derived.",
     "project_active": true
   },
   "T086": {

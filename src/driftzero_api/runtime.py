@@ -440,23 +440,41 @@ class ApiRuntime:
         """Current state, from the live runtime if present, else durable storage."""
         service = self.registry._services.get(workflow_id)
         if service is not None:
-            workflow = service._session.workflow
+            session = service._session
             return _status_of(
-                workflow,
-                state_history=[str(s) for s in service._session.state_history],
+                session.workflow,
+                state_history=[str(s) for s in session.state_history],
                 source="LIVE_RUNTIME",
                 durable=self.durable,
+                session=session,
             )
 
         record = self._durable_record(workflow_id)
         if record is None:
             raise WorkflowNotFound(workflow_id)
+        # A recovered workflow can be read without being resumed, so the delta comes
+        # from the durable snapshot rather than from a session this process does not
+        # hold. Absent is reported as absent, never invented.
         return _status_of(
             record.workflow,
             state_history=list(record.state_history),
             source="DURABLE_STORE",
             durable=True,
+            snapshot=self._resume_snapshot(workflow_id),
         )
+
+    def _resume_snapshot(self, workflow_id: str) -> dict[str, Any] | None:
+        if not self.durable:
+            return None
+        from driftzero_cloud.composition import RESUME_SNAPSHOTS  # noqa: PLC0415
+        from driftzero_cloud.serialization import safe_identifier  # noqa: PLC0415
+
+        snapshot = (
+            self.persistence.client.collection(RESUME_SNAPSHOTS)
+            .document(safe_identifier(workflow_id, kind="workflow_id"))
+            .get()
+        )
+        return (snapshot.to_dict() or {}) if snapshot.exists else None
 
     def _durable_record(self, workflow_id: str) -> Any | None:
         if not self.durable:
@@ -565,9 +583,32 @@ class _ChangeIdProbe:
 
 
 def _status_of(
-    workflow: Any, *, state_history: list[str], source: str, durable: bool
+    workflow: Any,
+    *,
+    state_history: list[str],
+    source: str,
+    durable: bool,
+    session: Any = None,
+    snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Project the authoritative record for the API.
+
+    The delta is read from the live session when this process holds one, and from the
+    durable snapshot when it does not. Both are projections of what the Truth Engine
+    composed; neither is a second explanation generated for display.
+    """
+    delta = None
+    delivery: Any = None
+    if session is not None:
+        delta = session.delta.model_dump(mode="json") if session.delta else None
+        delivery = session.delivery
+    elif snapshot is not None:
+        delta = snapshot.get("delta")
+        delivery = snapshot.get("delivery")
+
     return {
+        "delta": delta,
+        "delivery_established": bool(delivery and delivery.get("delivery_established")),
         "workflow_id": workflow.workflow_id,
         "change_id": workflow.change_id,
         "state": str(workflow.state),

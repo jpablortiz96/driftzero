@@ -1,0 +1,81 @@
+{
+  "backend_state": {
+    "delivery_established": true,
+    "delta_present": true,
+    "final_state": "PROOF_COMPLETE",
+    "proof_id": "act-generate_proof-50fab07a57ecefaf810dcea0e89deaa7",
+    "verification_results": [
+      "FAIL",
+      "PASS"
+    ]
+  },
+  "evidence_class": "OFFLINE_DETERMINISTIC_PRESENTATION",
+  "fail_then_pass": {
+    "fail_blocked_proof": true,
+    "pass_generated_proof": true
+  },
+  "live_model_calls": 0,
+  "note": "The presentation is bound to real backend state produced by the real application seam. The two models are deterministic substitutes; the live model is evidenced by T105/T106, not re-spent here.",
+  "provider_calls": 2,
+  "screenshots": [
+    {
+      "bytes": 34870,
+      "file": "worker_mobile.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Waiting for verification",
+      "url": "/web/delta?workflow=wf-m6-001-001",
+      "viewport": "375x812"
+    },
+    {
+      "bytes": 38269,
+      "file": "worker_tablet.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Waiting for verification",
+      "url": "/web/delta?workflow=wf-m6-001-001",
+      "viewport": "768x1024"
+    },
+    {
+      "bytes": 41264,
+      "file": "worker_failed.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Not done yet",
+      "url": "/web/verify?workflow=wf-m6-001-001",
+      "viewport": "375x812"
+    },
+    {
+      "bytes": 41621,
+      "file": "worker_verified.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Verified",
+      "url": "/web/verify?workflow=wf-m6-001-001",
+      "viewport": "375x812"
+    },
+    {
+      "bytes": 72156,
+      "file": "proof_view.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Verified",
+      "url": "/web/proof?workflow=wf-m6-001-001",
+      "viewport": "375x812"
+    },
+    {
+      "bytes": 82956,
+      "file": "desktop.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Deployed and verified",
+      "url": "/web/workflow?workflow=wf-m6-001-001",
+      "viewport": "1440x900"
+    },
+    {
+      "bytes": 81490,
+      "file": "proof_desktop.png",
+      "horizontal_overflow_px": 0,
+      "status_word_rendered": "Verified",
+      "url": "/web/proof?workflow=wf-m6-001-001",
+      "viewport": "1440x900"
+    }
+  ],
+  "task": "M6 (T127-T130)",
+  "timestamp": "2026-08-28T19:30:22+00:00",
+  "workflow_id": "wf-m6-001-001"
+}

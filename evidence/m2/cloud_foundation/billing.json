@@ -43,6 +43,20 @@
     }
   ],
   "credits": {
+    "manual_console_verification": {
+      "credit_name": "Marketing - All things agentic hackathon",
+      "expiry_displayed": "90 days",
+      "expiry_is_absolute_date": false,
+      "expiry_note": "The Console presents this credit's validity as a duration \u2014 '90 days' \u2014 not as a calendar date. No absolute expiration date has been derived, because the credit's start date was not observed and computing one would be a fabrication.",
+      "machine_captured": false,
+      "original": "COP 482,231.00",
+      "provenance": "OPERATOR_REPORTED_CONSOLE_OBSERVATION",
+      "remaining": "COP 480,881.43",
+      "remaining_percentage_displayed": "100%",
+      "source": "Cloud Console -> Billing -> Credits",
+      "status": "AVAILABLE",
+      "why_not_machine_captured": "Cloud Billing exposes no API or gcloud surface for promotional credit balance, so this fact cannot be captured the way every other value in this bundle was."
+    },
     "reason": "Cloud Billing exposes no API or gcloud surface for promotional credit balance. quickstart MS-3 verifies it in the Console only.",
     "verifiable_from_cli": false
   },

@@ -69,6 +69,16 @@ class WorkflowStatus(BaseModel):
     verification_results: list[str] = Field(default_factory=list)
     proof_id: str | None = None
     state_history: list[str] = Field(default_factory=list)
+    delta: dict[str, Any] | None = Field(
+        default=None,
+        description="The authoritative DeltaInstruction the frontline surface renders. "
+        "A projection of what the Truth Engine composed — never a second explanation.",
+    )
+    delivery_established: bool = Field(
+        default=False,
+        description="True only once Crossing 3 validated a resolvable delivery receipt. "
+        "The worker surface opens on this, not on composition.",
+    )
     source: str = Field(
         description="Where this status was read from: LIVE_RUNTIME or DURABLE_STORE."
     )

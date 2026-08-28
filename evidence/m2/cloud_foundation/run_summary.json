@@ -1,6 +1,7 @@
 {
   "batch": "M2_BATCH_A",
   "complete": [
+    "T085",
     "T086",
     "T087",
     "T088",
@@ -10,13 +11,14 @@
   "gpu_endpoints_created": 0,
   "legacy_project_mutations": 0,
   "live_model_calls": 0,
-  "note": "Captured from live gcloud output against driftzero-runtime-2026. No Gemini or Gemma inference was invoked. SHA256SUMS.txt hashes these evidence files only.",
+  "note": "Captured from live gcloud output against driftzero-runtime-2026. No Gemini or Gemma inference was invoked. SHA256SUMS.txt hashes these evidence files only. T085's credit balance is the one value in this bundle that is operator-reported rather than machine-captured; Cloud Billing exposes no API for it.",
   "open": [
-    "T085",
     "T089"
   ],
+  "open_note": "This is Batch A's point-in-time record. T089 was still open when it was written and closed later in the deployment batch (evidence/m2/cloud_run_deployment/). Only the T085 credit line was revised here, when the operator verified the credit in the Console.",
   "project": "driftzero-runtime-2026",
   "region": "us-central1",
+  "t085_closed_by": "operator Console observation of the promotional credit",
   "tasks": "T085-T091",
   "timestamp": "2026-08-27T20:17:57+00:00"
 }

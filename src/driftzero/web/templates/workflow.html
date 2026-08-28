@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070a10" />
+  <title>Change status — DRIFTZERO</title>
+  <link rel="stylesheet" href="/web/static/driftzero.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="head">
+      <span class="brand">DRIFT<span>ZERO</span></span>
+      <span class="chip" id="runtime-mode">&mdash;</span>
+    </header>
+
+    <div class="error hidden" id="error" role="alert">
+      <strong id="error-title">Something went wrong</strong>
+      <span id="error-detail"></span>
+    </div>
+
+    <h1 id="headline">Change status</h1>
+    <p class="lede" id="subhead">Loading&hellip;</p>
+
+    <div class="status waiting" id="status" role="status" aria-live="polite">
+      <span class="mark" id="status-mark" aria-hidden="true">&#9679;</span>
+      <span>
+        <span class="word" id="status-word">Loading</span>
+        <span class="detail" id="status-detail"></span>
+      </span>
+    </div>
+
+    <section class="card" aria-labelledby="what-happened">
+      <h2 id="what-happened">What happened</h2>
+      <dl class="facts" id="facts"></dl>
+    </section>
+
+    <section class="card" aria-labelledby="verification-history">
+      <h2 id="verification-history">Verification history</h2>
+      <ol class="timeline" id="timeline">
+        <li><span class="detail">No verification attempts yet.</span></li>
+      </ol>
+      <p class="note">
+        Every attempt is kept, including the ones that failed. A change that took two
+        tries is a different fact from one that passed first time.
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="state-history">
+      <h2 id="state-history">State chronology</h2>
+      <ol class="timeline" id="states">
+        <li><span class="detail">&mdash;</span></li>
+      </ol>
+    </section>
+
+    <div class="actions">
+      <a class="action hidden" id="go-proof" href="#">View Change Proof</a>
+      <a class="action secondary" id="go-delta" href="#">Worker view</a>
+    </div>
+  </main>
+
+  <script src="/web/static/proof.js"></script>
+  <script>
+    DriftZeroProof.initWorkflow();
+  </script>
+</body>
+</html>
