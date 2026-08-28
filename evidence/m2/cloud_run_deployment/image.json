@@ -1,0 +1,15 @@
+{
+  "images": [
+    {
+      "digest": "sha256:04ba881497c5734d69676a342c97541470f12c3040f41a2cf217ef7e36311b64",
+      "size_bytes": null,
+      "size_mb": null,
+      "tags": [
+        "m2"
+      ],
+      "upload_time": "2026-08-27T22:23:21.998735Z"
+    }
+  ],
+  "immutable_reference": "deployed by digest, not by the mutable :m2 tag",
+  "repository": "us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero"
+}

@@ -1,0 +1,14 @@
+{
+  "allAuthenticatedUsers_present": false,
+  "allUsers_present": false,
+  "gemma_sa_has_run_invoker": false,
+  "push_sa_has_run_invoker": true,
+  "push_sa_project_level_roles": [],
+  "scope_note": "run.invoker is bound on the SERVICE resource, not project-wide. The push identity holds no project-level role at all.",
+  "service_bindings": [
+    {
+      "member": "serviceAccount:driftzero-push-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "role": "roles/run.invoker"
+    }
+  ]
+}

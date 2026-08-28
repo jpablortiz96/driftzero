@@ -1,0 +1,21 @@
+{
+  "authenticated_health": 200,
+  "batch": "M2_DEPLOYMENT",
+  "dead_letter_attempts": 5,
+  "image_digest": "sha256:04ba881497c5734d69676a342c97541470f12c3040f41a2cf217ef7e36311b64",
+  "invalid_message_created_workflow": false,
+  "legacy_project_mutations": 0,
+  "live_model_calls": 0,
+  "private": true,
+  "production_ready": false,
+  "push_authenticated": true,
+  "revision": "driftzero-api-00001-6nr",
+  "runtime_mode": "CLOUD_PILOT",
+  "service_account": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+  "service_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+  "tasks": "T096, T089",
+  "timestamp": "2026-08-27T22:34:09+00:00",
+  "tokens_recorded": false,
+  "unauthenticated_refused": true,
+  "workflows_written_by_cloud_run": 3
+}

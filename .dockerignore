@@ -1,0 +1,52 @@
+# Nothing in this list belongs in a production image. Several would be actively
+# dangerous there: a local .env, ADC, or a service-account key baked into a layer is a
+# credential that ships with every deploy and cannot be rotated.
+
+.env
+.env.*
+!.env.example
+**/application_default_credentials.json
+**/service_account*.json
+**/*credentials*.json
+**/*.pem
+**/*.key
+
+.git
+.gitignore
+.gitattributes
+.github
+
+# Evidence is the audit record, not a runtime asset. It is also large.
+evidence/
+
+# Tests, caches and tooling
+tests/
+scripts/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Specs and docs are for humans reading the repository.
+specs/
+docs/
+*.md
+
+# Multimodal fixtures are ~8.8 MB of field-evidence images used as *test input*. The
+# server never reads them: a verify request carries its image in the request body. Only
+# the top-level fixtures/*.json — the controlled pilot source procedures and artifact
+# catalog — are read at runtime, and .dockerignore keeps just those.
+fixtures/multimodal/
+
+# Local editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

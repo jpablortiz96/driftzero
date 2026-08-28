@@ -1,0 +1,37 @@
+{
+  "authenticated_health": {
+    "body": {
+      "service": "driftzero-api",
+      "status": "ok"
+    },
+    "status": 200
+  },
+  "authenticated_ready": {
+    "body": {
+      "deployment": "CLOUD_RUN",
+      "durable": true,
+      "evidence_bucket": "driftzero-evidence-driftzero-runtime-2026",
+      "missing_settings": [],
+      "persistence_backend": "firestore",
+      "pilot_limitations": [
+        "the source-procedure corpus and artifact catalog are controlled pilot fixtures shipped with the image, not a live source registry; a production runtime would read them from Cloud Storage and Firestore",
+        "a workflow recovered from durable storage can be read but not resumed in a new instance; resuming a persisted run is T097"
+      ],
+      "production_ready": false,
+      "project": "driftzero-runtime-2026",
+      "ready": true,
+      "revision": "driftzero-api-00001-6nr",
+      "runtime_mode": "CLOUD_PILOT"
+    },
+    "status": 200
+  },
+  "authorization_header_recorded": false,
+  "boundary": "Cloud Run IAM is the authentication boundary. /health and /ready sit behind the same policy as every other route; the service is private.",
+  "token_recorded": false,
+  "unauthenticated": {
+    "/api/v1/workflows/probe": 403,
+    "/health": 403,
+    "/ready": 403
+  },
+  "unauthenticated_all_refused": true
+}

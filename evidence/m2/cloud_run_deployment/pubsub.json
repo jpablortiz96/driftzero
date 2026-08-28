@@ -1,0 +1,26 @@
+{
+  "dead_letter": {
+    "dlq_retention": "604800s",
+    "inspection_subscription": "driftzero-approved-changes-dlq-sub",
+    "max_delivery_attempts": 5,
+    "topic": "driftzero-approved-changes-dlq"
+  },
+  "dead_letter_iam": {
+    "broad_editor_granted": false,
+    "pubsub_agent_on_dlq_topic": [
+      "roles/pubsub.publisher"
+    ],
+    "pubsub_agent_on_source_subscription": [
+      "roles/pubsub.subscriber"
+    ]
+  },
+  "push_subscription": {
+    "ack_deadline_seconds": 60,
+    "authenticated": true,
+    "name": "driftzero-approved-changes-push",
+    "oidc_audience": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+    "oidc_service_account": "driftzero-push-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "push_endpoint": "https://driftzero-api-eepb64ze2q-uc.a.run.app/api/v1/pubsub/push"
+  },
+  "source_topic": "driftzero-approved-changes"
+}

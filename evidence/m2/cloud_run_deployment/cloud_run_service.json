@@ -1,0 +1,35 @@
+{
+  "concurrency": 80,
+  "env": {
+    "DRIFTZERO_EVIDENCE_BUCKET": "driftzero-evidence-driftzero-runtime-2026",
+    "DRIFTZERO_FIRESTORE_DATABASE": "(default)",
+    "DRIFTZERO_GCP_PROJECT": "driftzero-runtime-2026",
+    "DRIFTZERO_GCP_REGION": "us-central1",
+    "DRIFTZERO_PERSISTENCE": "firestore"
+  },
+  "env_from_secret": false,
+  "image": "us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-api@sha256:04ba881497c5734d69676a342c97541470f12c3040f41a2cf217ef7e36311b64",
+  "image_digest": "sha256:04ba881497c5734d69676a342c97541470f12c3040f41a2cf217ef7e36311b64",
+  "ingress": "all",
+  "labels": {
+    "app": "driftzero",
+    "cloud.googleapis.com/location": "us-central1",
+    "environment": "hackathon",
+    "managed-by": "driftzero"
+  },
+  "max_instances": "2",
+  "min_instances": "0",
+  "min_instances_note": "Cloud Run omits the minScale annotation when it is 0; absent means scale-to-zero, which is what --min-instances=0 requested.",
+  "project": "driftzero-runtime-2026",
+  "ready": "True",
+  "region": "us-central1",
+  "resources": {
+    "cpu": "1",
+    "memory": "512Mi"
+  },
+  "revision": "driftzero-api-00001-6nr",
+  "service": "driftzero-api",
+  "service_account": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+  "timeout_seconds": 300,
+  "url": "https://driftzero-api-eepb64ze2q-uc.a.run.app"
+}

@@ -1,0 +1,19 @@
+{
+  "artifact_registry": "one STANDARD docker repository; billed per GiB stored",
+  "cloud_run": {
+    "billing": "per request and per CPU/GiB-second; scale-to-zero when idle",
+    "max_instances": "2",
+    "min_instances": "0",
+    "resources": {
+      "cpu": "1",
+      "memory": "512Mi"
+    }
+  },
+  "fixed_cost_resources": "none beyond stored image bytes",
+  "no_cloud_sql": true,
+  "no_gpu": true,
+  "no_load_balancer": true,
+  "no_nat": true,
+  "no_vm": true,
+  "pubsub": "driftzero-approved-changes, driftzero-approved-changes-push, driftzero-approved-changes-dlq, driftzero-approved-changes-dlq-sub \u2014 free tier at this volume"
+}

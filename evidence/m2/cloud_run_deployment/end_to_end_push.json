@@ -1,0 +1,63 @@
+{
+  "firestore_now": {
+    "idempotency_claims": [
+      "change-push-58ccdf0d9d",
+      "change-smoke-b619925b46",
+      "change-smoke-ebbf23a558"
+    ],
+    "workflow_count": 3,
+    "workflows": {
+      "wf-api-001-001": {
+        "change_id": "smoke-b619925b46",
+        "state": "CHANGE_RECEIVED"
+      },
+      "wf-api-002-001": {
+        "change_id": "smoke-ebbf23a558",
+        "state": "CHANGE_RECEIVED"
+      },
+      "wf-api-003-001": {
+        "change_id": "push-58ccdf0d9d",
+        "state": "CHANGE_RECEIVED"
+      }
+    }
+  },
+  "http_smoke": {
+    "change_ids": [
+      "smoke-b619925b46",
+      "smoke-ebbf23a558"
+    ],
+    "note": "created through the authenticated HTTP route before the push smoke"
+  },
+  "invalid_message": {
+    "change_id": "dlq-probe-permanently-invalid",
+    "dead_letter_observed": true,
+    "dead_letter_subscription": "driftzero-approved-changes-dlq-sub",
+    "delivery_attempts_before_dead_letter": 5,
+    "dlq_payload_inspectable": true,
+    "durable_claim_present": false,
+    "handler_response": "400 AUTHORITATIVE_FIELD_REFUSED",
+    "matches_configured_max_delivery_attempts": true,
+    "published_message_id": "21381734537231670",
+    "why_invalid": "carried verification_result=PASS \u2014 a conclusion the handler refuses",
+    "workflows_created": []
+  },
+  "live_model_calls": 0,
+  "model_call_note": "the ingest path (accept_change) derives the source change and constructs the workflow deterministically; no semantic or field model is invoked until analyze_change, which this smoke never calls",
+  "observed_during": "M2 deployment batch, against the live deployed service",
+  "transport": "real Pub/Sub authenticated push -> Cloud Run -> Firestore",
+  "valid_message": {
+    "change_id": "push-58ccdf0d9d",
+    "durable_claim_present": true,
+    "idempotent": true,
+    "note": "the identical change published twice \u2014 at-least-once delivery simulated",
+    "published_message_ids": [
+      "21381865543926265",
+      "21381897538007459"
+    ],
+    "publishes": 2,
+    "workflow_count": 1,
+    "workflows_created": [
+      "wf-api-003-001"
+    ]
+  }
+}

@@ -20,7 +20,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from driftzero_api.app import create_app
-from driftzero_api.pubsub import PUSH_PATH, TRUST_BOUNDARY, EnvelopeRejected, decode_envelope
+from driftzero_api.pubsub import (
+    DEAD_LETTER_TOPIC,
+    PUSH_PATH,
+    TRUST_BOUNDARY,
+    EnvelopeRejected,
+    decode_envelope,
+)
 from driftzero_api.runtime import ApiRuntime
 from driftzero_cloud.composition import FirestoreSink
 from driftzero_cloud.firestore import FirestorePersistence
@@ -298,21 +304,22 @@ def test_a_duplicate_is_acked(client: TestClient) -> None:
     assert client.post(PUSH_PATH, json=envelope(hero_payload())).status_code == 200
 
 
-def test_a_permanently_invalid_message_is_acked_with_an_explicit_rejection(
+def test_a_permanently_invalid_message_is_refused_so_it_can_be_dead_lettered(
     client: TestClient,
 ) -> None:
-    """Pub/Sub retries every non-2xx and no dead-letter topic exists yet.
+    """T089 attached a dead-letter topic, so refusing is now the right answer.
 
-    Acking stops an infinite redelivery loop for a message that can never succeed. The
-    rejection is explicit in the body rather than silently swallowed, and the note says
-    when this should change.
+    400 is not an immediate dead-letter: Pub/Sub treats every non-2xx as a failed
+    delivery and redelivers until ``max_delivery_attempts`` is exhausted, and only then
+    forwards to the DLQ. Acking instead would discard the message silently.
     """
     response = client.post(PUSH_PATH, json={"message": {"data": "###"}})
-    assert response.status_code == 200
+    assert response.status_code == 400
     body = response.json()
     assert body["accepted"] is False
     assert body["rejected"] is True
-    assert body["retryable"] is False
+    assert body["retryable"] is False, "this payload can never succeed"
+    assert body["dead_letter_topic"] == DEAD_LETTER_TOPIC
     assert "dead-letter" in body["note"]
 
 
@@ -345,13 +352,32 @@ def test_a_transient_failure_is_never_reported_as_success() -> None:
     assert "TRANSIENT_FAILURE" in body
 
 
-def test_malformed_body_json_is_acked_not_retried(client: TestClient) -> None:
+def test_malformed_body_json_is_refused(client: TestClient) -> None:
     response = client.post(
         PUSH_PATH, content=b"{not json", headers={"content-type": "application/json"}
     )
-    assert response.status_code == 200
+    assert response.status_code == 400
     assert response.json()["error"] == "MALFORMED_JSON"
     assert response.json()["retryable"] is False
+
+
+def test_the_three_outcomes_map_to_three_distinct_statuses(client: TestClient) -> None:
+    """Accepted, permanently invalid and transient must never share a status code."""
+    accepted = client.post(PUSH_PATH, json=envelope(hero_payload()))
+    invalid = client.post(PUSH_PATH, json={"message": {"data": "###"}})
+
+    class ExplodingRuntime(ApiRuntime):
+        def accept_change(self, payload: dict[str, Any]) -> dict[str, Any]:
+            raise ConnectionError("firestore unavailable")
+
+    transient = TestClient(create_app(ExplodingRuntime(fixtures_dir=FIXTURES))).post(
+        PUSH_PATH, json=envelope(hero_payload())
+    )
+    assert (accepted.status_code, invalid.status_code, transient.status_code) == (
+        200,
+        400,
+        503,
+    )
 
 
 # ============================ authentication boundary =================================

@@ -77,16 +77,47 @@ class ApiRuntime:
         return bool(self.sink.durable and self.persistence is not None)
 
     def readiness(self) -> dict[str, Any]:
-        """What this process is actually configured for. Never aspirational."""
+        """What this process is actually configured for. Never aspirational.
+
+        Deployment is read from the Cloud Run runtime contract (``K_SERVICE``,
+        ``K_REVISION``), which only Cloud Run sets. It is deliberately not inferred from
+        configuration: an environment variable saying ``firestore`` proves persistence
+        is configured, not that anything was ever deployed.
+        """
+        import os  # noqa: PLC0415
+
         persistence = self.config.persistence
+        service = os.environ.get("K_SERVICE")
+        deployed = bool(service)
+        durable = self.durable
+
+        limitations: list[str] = []
+        if self.fixtures_dir is not None:
+            limitations.append(
+                "the source-procedure corpus and artifact catalog are controlled pilot "
+                "fixtures shipped with the image, not a live source registry; a "
+                "production runtime would read them from Cloud Storage and Firestore"
+            )
+        if deployed:
+            limitations.append(
+                "a workflow recovered from durable storage can be read but not resumed "
+                "in a new instance; resuming a persisted run is T097"
+            )
+
         return {
             "ready": True,
             "persistence_backend": persistence.backend,
-            "durable": self.durable,
+            "durable": durable,
             "evidence_bucket": persistence.evidence_bucket or None,
             "project": persistence.project or None,
             "missing_settings": list(persistence.missing_settings()),
-            "deployment": "NOT_DEPLOYED",
+            "deployment": "CLOUD_RUN" if deployed else "NOT_DEPLOYED",
+            "revision": os.environ.get("K_REVISION"),
+            "runtime_mode": "CLOUD_PILOT" if (deployed and durable) else "LOCAL_PILOT",
+            # A deployment is not production readiness, and this must never drift into
+            # claiming otherwise because the infrastructure got more real.
+            "production_ready": False,
+            "pilot_limitations": limitations,
         }
 
     # ------------------------------------------------------------------ idempotency

@@ -1,0 +1,30 @@
+{
+  "distinct_change_ids": true,
+  "idempotency_claims": [
+    "change-push-58ccdf0d9d",
+    "change-smoke-b619925b46",
+    "change-smoke-ebbf23a558"
+  ],
+  "invalid_message_created_workflow": false,
+  "workflows": [
+    {
+      "change_id": "smoke-b619925b46",
+      "revision": 1,
+      "state": "CHANGE_RECEIVED",
+      "workflow_id": "wf-api-001-001"
+    },
+    {
+      "change_id": "smoke-ebbf23a558",
+      "revision": 1,
+      "state": "CHANGE_RECEIVED",
+      "workflow_id": "wf-api-002-001"
+    },
+    {
+      "change_id": "push-58ccdf0d9d",
+      "revision": 1,
+      "state": "CHANGE_RECEIVED",
+      "workflow_id": "wf-api-003-001"
+    }
+  ],
+  "written_by": "the deployed Cloud Run service, via the T092 Firestore adapter"
+}

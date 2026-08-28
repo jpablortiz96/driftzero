@@ -1,0 +1,11 @@
+{
+  "build_id": "708cee56-4d97-4b2b-b2f4-8db6e7fe08b1",
+  "builder": "Cloud Build",
+  "create_time": "2026-08-27T22:22:17.954249280Z",
+  "images": [
+    "us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-api:m2"
+  ],
+  "registry": "us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero",
+  "source": "local repository, filtered by .dockerignore",
+  "status": "SUCCESS"
+}

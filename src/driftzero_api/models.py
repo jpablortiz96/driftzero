@@ -142,8 +142,25 @@ class Readiness(BaseModel):
     missing_settings: list[str] = Field(default_factory=list)
     deployment: str = Field(
         default="NOT_DEPLOYED",
-        description="Deployment is T096. This process makes no claim to be running on "
-        "Cloud Run.",
+        description="CLOUD_RUN only when the Cloud Run runtime contract is actually "
+        "present in the environment; never inferred from configuration alone.",
+    )
+    revision: str | None = Field(
+        default=None, description="The Cloud Run revision serving this process."
+    )
+    runtime_mode: str = Field(
+        default="LOCAL_PILOT",
+        description="CLOUD_PILOT once durable persistence and a real deployment both "
+        "exist. Still a pilot: the source-procedure corpus and artifact catalog are "
+        "controlled fixtures shipped with the image, not a live source registry.",
+    )
+    production_ready: bool = Field(
+        default=False,
+        description="Deliberately false. A deployment is not production readiness.",
+    )
+    pilot_limitations: list[str] = Field(
+        default_factory=list,
+        description="What is still pilot-shaped about this runtime, stated plainly.",
     )
 
 

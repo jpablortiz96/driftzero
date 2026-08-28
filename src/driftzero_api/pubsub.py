@@ -34,6 +34,10 @@ from driftzero_console.workflows import FORBIDDEN_FIXTURE_KEYS, FixtureRejected
 
 router = APIRouter()
 
+DEAD_LETTER_TOPIC = "driftzero-approved-changes-dlq"
+"""Where a permanently invalid message lands once Pub/Sub exhausts its delivery budget.
+Named here so the refusal response can say where the message went."""
+
 PUSH_PATH = "/api/v1/pubsub/push"
 """The endpoint a push subscription will target. T089 creates that subscription once
 T096 has produced a Cloud Run URL; nothing here guesses one."""
@@ -134,16 +138,19 @@ async def push(request: Request) -> Response:
     Status mapping, and why each one:
 
     * **200** — accepted, or a duplicate resolved to its existing workflow. Acked.
-    * **200 with ``rejected``** — permanently invalid (bad base64, bad JSON, missing
-      ``change_id``, a refused authoritative field). Pub/Sub retries *any* non-2xx, and
-      no dead-letter topic is configured yet, so returning 4xx here would redeliver a
-      message that can never succeed until it expires. The rejection is explicit in the
-      body and in the logs rather than silently swallowed. **Revisit when T089 creates
-      the subscription**: with a dead-letter topic attached, 400 becomes the better
-      answer and this branch should change with it.
+    * **400** — permanently invalid (bad base64, bad JSON, missing ``change_id``, a
+      refused authoritative field). Not acked. Pub/Sub treats *any* non-2xx as a failed
+      delivery and retries, so a 400 is **not** dead-lettered immediately: the message
+      is redelivered until ``max_delivery_attempts`` is reached, at which point the
+      dead-letter policy forwards it to :data:`DEAD_LETTER_TOPIC` for inspection. That
+      bounded retry is the cost of not silently discarding a malformed event, and it is
+      why the attempt budget is set to the minimum Pub/Sub supports.
     * **503** — a transient failure (durable storage unavailable). Not acked, so
       Pub/Sub retries. Never 200: reporting success for a write that did not happen is
       how a change silently disappears.
+
+    Before T089 attached a dead-letter topic this branch returned 200, because a 4xx
+    would have redelivered forever with nowhere to land. That is no longer true.
     """
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:  # pragma: no cover - a misconfigured app
@@ -193,7 +200,13 @@ async def push(request: Request) -> Response:
 
 
 def _rejected(reason: str, detail: str = "") -> Response:
-    """Ack a permanently invalid message, recording why rather than hiding it."""
+    """Refuse a permanently invalid message so the dead-letter policy can capture it.
+
+    ``retryable`` is False because *this* payload can never succeed. Pub/Sub will still
+    redeliver it — every non-2xx is a failed delivery to Pub/Sub — until the attempt
+    budget is exhausted and the message is forwarded to the dead-letter topic. The flag
+    describes the message, not the transport.
+    """
     return Response(
         content=json.dumps(
             {
@@ -202,12 +215,13 @@ def _rejected(reason: str, detail: str = "") -> Response:
                 "retryable": False,
                 "error": reason,
                 "detail": detail,
+                "dead_letter_topic": DEAD_LETTER_TOPIC,
                 "note": (
-                    "acknowledged to stop endless redelivery of a permanently invalid "
-                    "message; no dead-letter topic is configured yet (T089)"
+                    "permanently invalid; refused so Pub/Sub's dead-letter policy "
+                    "forwards it after max_delivery_attempts rather than discarding it"
                 ),
             }
         ),
         media_type="application/json",
-        status_code=status.HTTP_200_OK,
+        status_code=status.HTTP_400_BAD_REQUEST,
     )
