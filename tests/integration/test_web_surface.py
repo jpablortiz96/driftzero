@@ -113,6 +113,40 @@ def test_the_surface_adds_no_python_to_the_purity_boundary() -> None:
     assert list(WEB.rglob("*.py")) == []
 
 
+def test_the_surface_assets_are_declared_as_package_data() -> None:
+    """Setuptools ships only *.py by default.
+
+    Without this declaration the wheel installs cleanly and every /web route 500s in
+    the container — which is exactly what the first M6 deployment did. The data is
+    attached to the parent package because driftzero/web/ deliberately holds no
+    __init__.py.
+    """
+    import tomllib
+
+    config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    data = config["tool"]["setuptools"]["package-data"]
+    assert "driftzero" in data, "the surface assets are not declared as package data"
+    patterns = data["driftzero"]
+    assert "web/templates/*.html" in patterns
+    assert "web/static/*" in patterns
+
+
+def test_every_shipped_asset_matches_a_declared_pattern() -> None:
+    """A new asset in a directory nobody declared would ship locally and 500 deployed."""
+    import fnmatch
+    import tomllib
+
+    config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    patterns = config["tool"]["setuptools"]["package-data"]["driftzero"]
+    for path in sorted(WEB.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(WEB.parent).as_posix()
+        assert any(fnmatch.fnmatch(relative, pattern) for pattern in patterns), (
+            f"{relative} would not be packaged into the wheel"
+        )
+
+
 def test_every_page_is_served(client: TestClient) -> None:
     for name in PAGES:
         response = client.get(f"/web/{name}")

@@ -1,0 +1,149 @@
+{
+  "checklist": "spec.md \u00a7 Frontline Surface Minimums (S1 boundary); quickstart VS-14",
+  "credentials_recorded": false,
+  "criteria": [
+    {
+      "evidence": [
+        "evidence/m6/worker_mobile.png",
+        "evidence/m6/worker_failed.png",
+        "evidence/m6/accessibility.json"
+      ],
+      "id": "FSM-1",
+      "measurement": {
+        "max_horizontal_overflow_px": 0,
+        "narrowest_viewport_tested_px": 375,
+        "pages_declaring_a_mobile_viewport": 4,
+        "pages_tested": 4
+      },
+      "notes": "375px is an engineering target used during implementation, not a device-support guarantee (plan.md \u00a7 Engineering Targets \u2014 Non-Binding). Zero horizontal overflow means the worker never scrolls sideways.",
+      "requirement": "the core workflow is usable on a narrow mobile viewport suitable for a modern phone",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "evidence/m6/worker_failed.png",
+        "evidence/m6/worker_verified.png",
+        "src/driftzero/web/static/worker.js"
+      ],
+      "id": "FSM-2",
+      "measurement": {
+        "status_also_carries_a_non_colour_mark": true,
+        "status_words_rendered_in_screenshots": {
+          "desktop.png": "Deployed and verified",
+          "proof_desktop.png": "Verified",
+          "proof_view.png": "Verified",
+          "worker_failed.png": "Not done yet",
+          "worker_mobile.png": "Waiting for verification",
+          "worker_tablet.png": "Waiting for verification",
+          "worker_verified.png": "Verified"
+        },
+        "verdicts_with_a_text_label": {
+          "FAIL": true,
+          "INCONCLUSIVE": true,
+          "PASS": true
+        }
+      },
+      "notes": "Each state sets a word, a mark and a colour, in that order. The word is what a screen reader announces and what survives a greyscale screen.",
+      "requirement": "verification status is never communicated by colour alone \u2014 textual FAIL / INCONCLUSIVE / PASS labels are required",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "evidence/m6/accessibility.json",
+        "evidence/m6/worker_failed.png"
+      ],
+      "id": "FSM-3",
+      "measurement": {
+        "controls_without_an_accessible_name": 0,
+        "photo_input_has_a_label": true,
+        "preview_image_has_alt_text": true
+      },
+      "notes": "Measured on the rendered document, not inferred from the markup.",
+      "requirement": "interactive controls required for the hero flow carry accessible text labels",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "src/driftzero/web/templates/verify.html",
+        "evidence/m6/worker_failed.png"
+      ],
+      "id": "FSM-4",
+      "measurement": {
+        "camera_capture_hint_present": true,
+        "file_input_present": true,
+        "file_input_reachable": true,
+        "input_remains_in_the_accessibility_tree": true
+      },
+      "notes": "One input serves both paths: capture='environment' opens the rear camera on a phone and is an ordinary file picker everywhere else, so the fallback cannot rot as a separate code path.",
+      "requirement": "field evidence submission supports a normal file-upload fallback when direct camera capture is unavailable",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "src/driftzero/web/static/worker.js",
+        "tests/integration/test_web_surface.py"
+      ],
+      "id": "FSM-5",
+      "measurement": {
+        "distinguishes_network_failure_from_refusal": true,
+        "live_regions_measured": 1,
+        "pages_tested": 4,
+        "pages_with_an_alert_region": 4
+      },
+      "notes": "Errors are announced through role=alert, and the copy distinguishes a network that never answered from a server that refused.",
+      "requirement": "critical validation and error feedback is readable as text",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "evidence/m6/accessibility.json",
+        "src/driftzero/web/static/driftzero.css"
+      ],
+      "id": "FSM-6",
+      "measurement": {
+        "focus_order_observed": [
+          "input#photo",
+          "a#back",
+          "a#go-proof",
+          "body",
+          "input#photo",
+          "a#back"
+        ],
+        "focusable_controls_reached": 5,
+        "smallest_touch_target_px": 58,
+        "visible_focus_indicator": true
+      },
+      "notes": "Native <a> and <button> elements throughout, so keyboard operability is inherited rather than re-implemented with key handlers.",
+      "requirement": "core controls remain keyboard-operable on desktop where applicable",
+      "status": "PASS"
+    }
+  ],
+  "criteria_passed": 6,
+  "criteria_total": 6,
+  "exceptions": [],
+  "generated_at": "2026-08-28T21:28:28+00:00",
+  "rendered_measurements_from": "evidence/m6/accessibility.json (M6 capture)",
+  "result": "PASS",
+  "scope_disclaimer": "A minimum-interaction check, not a WCAG conformance audit and not a device-support claim. Comprehensive design-system work, a native mobile application and formal accessibility certification are Non-Goals Class A in spec.md.",
+  "surface_under_test": {
+    "access_note": "The surface sits behind the same Cloud Run IAM boundary as the API. An unauthenticated request is refused, so this checklist ran as an authenticated operator.",
+    "assets_served": {
+      "driftzero.css": 200,
+      "worker.js": 200
+    },
+    "kind": "DEPLOYED",
+    "pages_served": {
+      "delta": 200,
+      "proof": 200,
+      "verify": 200,
+      "workflow": 200
+    },
+    "project": "driftzero-runtime-2026",
+    "region": "us-central1",
+    "revision": "driftzero-api-00005-gl5",
+    "service": "driftzero-api",
+    "unauthenticated_access": 403,
+    "url": "https://driftzero-api-eepb64ze2q-uc.a.run.app"
+  },
+  "task": "T131"
+}

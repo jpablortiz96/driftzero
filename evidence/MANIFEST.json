@@ -1,0 +1,457 @@
+{
+  "absent_slot_policy": "quickstart \u00a7 Evidence Pack Structure describes the full intended tree. Slots with no real artifact are listed above with the reason rather than populated with a placeholder.",
+  "absent_slots": [
+    {
+      "path": "evidence/security/",
+      "reason": "Security behaviour is proven by executable tests rather than static captures: prompt injection, tool poisoning, ChangeSet rejection, delivery assertion rejection and observation rejection are asserted in tests/integration/test_agent_output_validation.py and tests/integration/test_field_verification.py. No standalone JSON captures were produced, so none are claimed."
+    },
+    {
+      "path": "evidence/geap_access_gate.json",
+      "reason": "GEAP components are TRACK_ENHANCEMENT and gated on account access (plan.md). The M4 phase that would produce this record was not run, so no per-component ACCESS_CHECK result exists."
+    },
+    {
+      "path": "evidence/cost_model.json",
+      "reason": "Owned by T136, which reconciles ACTUAL COST OBSERVED from billing against the ESTIMATED model. T136 has not been executed."
+    },
+    {
+      "path": "evidence/replays/",
+      "reason": "No replay bundles were produced. Reproduction is by running the recorded gates, which is documented in JUDGES_START_HERE.md."
+    },
+    {
+      "path": "evidence/raw/",
+      "reason": "Raw inputs live at their source paths rather than being duplicated: the source change is fixtures/hero_change.json and the field images are fixtures/multimodal/. Copying them would create a second set of bytes to keep in sync."
+    }
+  ],
+  "artifact_count": 25,
+  "artifacts": [
+    {
+      "claim": "The Gemma serving route is Vertex AI MaaS, ON_DEMAND, with no accelerator and no endpoint provisioned.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "architecture",
+      "judge_relevance": "Start here for what runs where, and why no GPU exists.",
+      "path": "evidence/m3/architecture/serving_route.json",
+      "present": true,
+      "sha256": "fe8365452fd28abb90f38498819a0a7488a3df6070db589e8af6ced859df8b2c",
+      "size_bytes": 1636,
+      "task": "T102"
+    },
+    {
+      "claim": "A private Cloud Run service runs the API under a least-privilege service account, scale-to-zero, max 2 instances.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "cloud_run_deployment",
+      "judge_relevance": "Proof there is a real deployed backend, not a local demo.",
+      "path": "evidence/m2/cloud_run_deployment/cloud_run_service.json",
+      "present": true,
+      "sha256": "0e3c80c02b1c96333959a2ccd3e889b0d0aadbb06208579ea4f3f2117fa2054e",
+      "size_bytes": 1352,
+      "task": "T096"
+    },
+    {
+      "claim": "Unauthenticated invocation is refused on every route; an authenticated operator succeeds. allUsers is absent.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "cloud_run_authentication",
+      "judge_relevance": "The service is genuinely private.",
+      "path": "evidence/m2/cloud_run_deployment/authentication.json",
+      "present": true,
+      "sha256": "6f86e5038b2d687c2318c84548f48f078803d3bb5b7fad8f3f203e9e46230a7f",
+      "size_bytes": 1324,
+      "task": "T096"
+    },
+    {
+      "claim": "Approved changes arrive by authenticated Pub/Sub push (OIDC) with a dead-letter policy bounded at 5 delivery attempts.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "pubsub_authenticated_push",
+      "judge_relevance": "The workflow starts from a real external event.",
+      "path": "evidence/m2/cloud_run_deployment/pubsub.json",
+      "present": true,
+      "sha256": "caa979b8feebae3639c5302c5cd89bf1a93780483dadf093bdc6494ae7588d87",
+      "size_bytes": 863,
+      "task": "T089"
+    },
+    {
+      "claim": "One change published twice produced exactly one workflow; a permanently invalid message was refused and dead-lettered after exactly 5 attempts.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "end_to_end_push",
+      "judge_relevance": "At-least-once delivery is genuinely safe here.",
+      "path": "evidence/m2/cloud_run_deployment/end_to_end_push.json",
+      "present": true,
+      "sha256": "eff94e6c34eb3f77df2d85eea042562228e0fe186e41a79296c912f4f6577377",
+      "size_bytes": 2114,
+      "task": "T089"
+    },
+    {
+      "claim": "A workflow survives process death and resumes the same logical execution, with no duplicated remediation or delivery.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "durable_restart_recovery",
+      "judge_relevance": "The system is restart-safe, not merely long-running.",
+      "path": "evidence/runs/hero_run_001/restart_recovery.json",
+      "present": true,
+      "sha256": "55f884c07a9be5023de34706da8b2765efd1fe2160b3f6ff3c36fb5e4bdabce6",
+      "size_bytes": 2862,
+      "task": "T101"
+    },
+    {
+      "claim": "Duplicate events and duplicate evidence are refused by real Firestore and Cloud Storage preconditions.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "cloud_idempotency",
+      "judge_relevance": "Nothing is executed twice.",
+      "path": "evidence/runs/hero_run_001/idempotency_log.json",
+      "present": true,
+      "sha256": "d907faab91a35038f231c6a47aeee7a6db0e28233055478223e075e57d927f92",
+      "size_bytes": 1718,
+      "task": "T101"
+    },
+    {
+      "claim": "Three separate processes carry one workflow from pause through FAIL to PASS and PROOF_COMPLETE, sharing only Firestore.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "durable_resumability",
+      "judge_relevance": "Resumption is real, not a replay from step one.",
+      "path": "evidence/m2/durable_resumability/restart_scenario.json",
+      "present": true,
+      "sha256": "2014712744968c1dc0bffa3195a57bfb5b4a7d86b097ca6353f558a118953264",
+      "size_bytes": 875,
+      "task": "T097"
+    },
+    {
+      "claim": "Change Intelligence ran on live Gemini and proposed candidate artifacts; the Truth Engine qualified exactly one.",
+      "contains_credentials": false,
+      "evidence_class": "HISTORICAL_LIVE_MODEL",
+      "id": "gemini_change_intelligence",
+      "judge_relevance": "Where Gemini is actually used.",
+      "path": "evidence/pilot_live_change_intel_2026_08_26/change_intelligence.json",
+      "present": true,
+      "sha256": "684373422d452df5d1dcdc2399c95acda74855cc433c4d95cee0c8d3a27f8ff2",
+      "size_bytes": 1431,
+      "task": "T080"
+    },
+    {
+      "claim": "The Gemma serving route was selected empirically and recorded GO after 9 qualifying MaaS inferences.",
+      "contains_credentials": false,
+      "evidence_class": "HISTORICAL_LIVE_MODEL",
+      "id": "gemma_feasibility",
+      "judge_relevance": "Why Gemma runs on MaaS rather than a self-deployed GPU.",
+      "path": "evidence/g1_gemma_feasibility.json",
+      "present": true,
+      "sha256": "6e15450586f96f1295dbca9cc7f7868a58ee711e62386f9aa657a85845632840",
+      "size_bytes": 27319,
+      "task": "T067"
+    },
+    {
+      "claim": "The production adapter returned an in-domain observation for every real fixture, 3/3 matching the expected position.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "id": "multimodal_evaluation",
+      "judge_relevance": "Where Gemma is actually used, through production code.",
+      "path": "evidence/reports/multimodal_eval.json",
+      "present": true,
+      "sha256": "c4d3daf5da9062a68875d03685a1769b0fe37d5de40132a0090835cd1ad3b28f",
+      "size_bytes": 2478,
+      "task": "T105"
+    },
+    {
+      "claim": "Real photographs of a real box: a LEFT photo produced FAIL, a TOP_RIGHT photo produced PASS, 7/7 conditions, PROOF_COMPLETE.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "id": "real_camera_hero_run",
+      "judge_relevance": "The hero scenario, end to end, with real physical evidence.",
+      "path": "evidence/runs/hero_run_001/real_camera_hero_run.json",
+      "present": true,
+      "sha256": "c86cd8999d267c64d7059e00cca685ec241bc471b215305706fb05230be7e13a",
+      "size_bytes": 4032,
+      "task": "T106"
+    },
+    {
+      "claim": "Three camera-captured fixtures with expected observations, hashes, and the MIME type sniffed from their actual bytes.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_PHYSICAL_EVIDENCE",
+      "id": "physical_fixtures",
+      "judge_relevance": "What was photographed, and how it is distinguished from generated images.",
+      "path": "fixtures/multimodal/manifest.json",
+      "present": true,
+      "sha256": "577457da7b777b31afb2d0679144fc04503d2d1ad27c625ca868703932d6b98c",
+      "size_bytes": 2449,
+      "task": "T104"
+    },
+    {
+      "claim": "A complete Change Proof produced by the frozen generator once all seven completion conditions held.",
+      "contains_credentials": false,
+      "evidence_class": "HISTORICAL_LIVE_MODEL",
+      "id": "change_proof",
+      "judge_relevance": "The artifact the whole system exists to produce.",
+      "path": "evidence/final_live_pilot_2026_08_26/change_proof_DZ-001.json",
+      "present": true,
+      "sha256": "75925f5ecb14d1cfcd1eeee0c3e8f17a8e7d274131e2eb4bc4118a2b91a80af1",
+      "size_bytes": 2065,
+      "task": "T078"
+    },
+    {
+      "claim": "The frontline worker sees only the delta: what changed, from what, to what, and one action.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "worker_surface_mobile",
+      "judge_relevance": "What the person doing the work actually sees.",
+      "path": "evidence/m6/worker_mobile.png",
+      "present": true,
+      "sha256": "1cbb055b14767da6d78f35b0c95fbf8eb3a39efefe0bf009f9ee37a30e441136",
+      "size_bytes": 34870,
+      "task": "T127"
+    },
+    {
+      "claim": "A failed verification is shown as recoverable, in words, with a clear retry.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "worker_surface_failed",
+      "judge_relevance": "Failure is a step, not a dead end.",
+      "path": "evidence/m6/worker_failed.png",
+      "present": true,
+      "sha256": "f96b9d504c4f7da944e543ee3fb3b8971112416e4c9eabf7ea2af96c103f11db",
+      "size_bytes": 41264,
+      "task": "T128"
+    },
+    {
+      "claim": "The Change Proof is explained in plain language before any JSON, with exact hash wording and no overclaim.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "proof_surface",
+      "judge_relevance": "How the proof is presented to a human.",
+      "path": "evidence/m6/proof_view.png",
+      "present": true,
+      "sha256": "762b0d090ad12abc1a22e245d1cc90b091ab5d2903fb3fd1fbcffe46bf07c79e",
+      "size_bytes": 72156,
+      "task": "T130"
+    },
+    {
+      "claim": "All six Frontline Surface Minimums pass against the deployed surface. Not a WCAG conformance claim.",
+      "contains_credentials": false,
+      "evidence_class": "DERIVED",
+      "id": "frontline_minimums",
+      "judge_relevance": "The interaction floor the spec sets, checked.",
+      "path": "evidence/reports/frontline_minimums.json",
+      "present": true,
+      "sha256": "6529b62f462bf03d675db631be4c0e81a37a5ff1090042ccc6d09d2edfdfe08f",
+      "size_bytes": 5754,
+      "task": "T131"
+    },
+    {
+      "claim": "The local end-to-end workflow passes with the Truth Engine authoritative at every crossing.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "m1_exit_gate",
+      "judge_relevance": "The deterministic core, reproducible offline.",
+      "path": "evidence/runs/hero_run_local/manifest.json",
+      "present": true,
+      "sha256": "a5d09871ee778741cc436d242bfc4f1245919d56a882957e9011766d9327dc0a",
+      "size_bytes": 16690,
+      "task": "T084"
+    },
+    {
+      "claim": "M2 closed on 37 checks spanning the real cloud architecture.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "m2_exit_gate",
+      "judge_relevance": "Cloud milestone result.",
+      "path": "evidence/m2/exit_gate/manifest.json",
+      "present": true,
+      "sha256": "3d04ed12bb9931aba958915417c3450696d96664c9c12b3d89561829f21285f2",
+      "size_bytes": 10103,
+      "task": "T101"
+    },
+    {
+      "claim": "M3 closed on 34 checks; Gemma is authorised as a live-demo dependency; zero accelerators provisioned.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_MAAS_EXECUTION",
+      "id": "m3_exit_gate",
+      "judge_relevance": "Model milestone result.",
+      "path": "evidence/m3/exit_gate/manifest.json",
+      "present": true,
+      "sha256": "548f2ea860697f6afb217a5698afe141aa0d4e7ea1f4d8ead9114b366704354d",
+      "size_bytes": 9020,
+      "task": "T107"
+    },
+    {
+      "claim": "Every evidence item carries a classification and an ordered lineage chain.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "data_lineage",
+      "judge_relevance": "What is synthetic and what is derived.",
+      "path": "evidence/reports/data_lineage.json",
+      "present": true,
+      "sha256": "7de94109f9b6b0cd1ffc1dfe1a2b31b9546674ded488f027cc735947f7304b5d",
+      "size_bytes": 781,
+      "task": "T040"
+    },
+    {
+      "claim": "Project, billing, APIs, Firestore, Pub/Sub, Cloud Storage and two least-privilege service accounts, captured from live gcloud output.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "cloud_foundation",
+      "judge_relevance": "The cloud foundation, verified rather than asserted.",
+      "path": "evidence/m2/cloud_foundation/task_status.json",
+      "present": true,
+      "sha256": "c251f615e0f44e545784f92d558ebe8cea1a94dc79778ea3117e21c5b452f978",
+      "size_bytes": 2117,
+      "task": "T085-T091"
+    },
+    {
+      "claim": "What this pilot does not do, stated plainly.",
+      "contains_credentials": false,
+      "evidence_class": "DERIVED",
+      "id": "limitations",
+      "judge_relevance": "Read this before believing anything else here.",
+      "path": "evidence/LIMITATIONS.md",
+      "present": true,
+      "sha256": "ece0c65846849de858ceb92801b69ed0613909b05c557bbfb2387edc0e18d2d6",
+      "size_bytes": 9616,
+      "task": "T135"
+    },
+    {
+      "claim": "The entry point: what DRIFTZERO is, what is real, what to inspect.",
+      "contains_credentials": false,
+      "evidence_class": "DERIVED",
+      "id": "judges_start_here",
+      "judge_relevance": "Start here.",
+      "path": "evidence/JUDGES_START_HERE.md",
+      "present": true,
+      "sha256": "8379f818378947f428d97117cee13bd1d77e3820f86bc730f6506cf5d4a7ef1a",
+      "size_bytes": 8022,
+      "task": "T134"
+    }
+  ],
+  "bundle_verification": [
+    {
+      "bundle": "evidence/final_live_pilot_2026_08_26",
+      "files": 3,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/api_pubsub",
+      "files": 11,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/cloud_foundation",
+      "files": 14,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/cloud_run_deployment",
+      "files": 14,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/durable_resumability",
+      "files": 8,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/durable_state",
+      "files": 10,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m2/exit_gate",
+      "files": 2,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m3/architecture",
+      "files": 1,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m3/exit_gate",
+      "files": 2,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/m6",
+      "files": 12,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/pilot_live_2026_08_25",
+      "files": 3,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/pilot_live_change_intel_2026_08_26",
+      "files": 2,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/runs/hero_run_001",
+      "files": 3,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
+      "bundle": "evidence/runs/hero_run_local",
+      "files": 2,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    }
+  ],
+  "bundles_total": 14,
+  "bundles_verified": 14,
+  "evidence_classes": {
+    "DERIVED": "Computed from other evidence in this pack rather than observed directly \u2014 an index, a gate result, or a checklist over recorded measurements.",
+    "HISTORICAL_LIVE_MODEL": "A live-model run recorded earlier and referenced, never re-executed. Kept byte-identical so a later batch cannot quietly restate it.",
+    "OFFLINE_DETERMINISTIC": "Deterministic, reproducible and free. The Truth Engine, crossings and proof generator are production code; only the models are substituted.",
+    "REAL_GOOGLE_CLOUD": "Observed against live Google Cloud resources in driftzero-runtime-2026 \u2014 Cloud Run, Firestore, Cloud Storage, Pub/Sub. Not a mock and not a fixture.",
+    "REAL_MAAS_EXECUTION": "Produced by real inference on Vertex AI MaaS, google/gemma-4-26b-a4b-it-maas, serverless ON_DEMAND. Each record carries the input hash and token usage.",
+    "REAL_PHYSICAL_EVIDENCE": "Photographs of a real box with a printed label, taken with a camera. Nothing generated, rendered or composited occupies these paths."
+  },
+  "generated_at": "2026-08-28T21:33:06+00:00",
+  "hash_guarantee": {
+    "algorithm": "SHA-256",
+    "covers": "complete file bytes of each listed artifact",
+    "does_not_establish": [
+      "a digital signature",
+      "a trusted timestamp",
+      "an attestation",
+      "a ledger or blockchain entry",
+      "non-repudiation"
+    ],
+    "establishes": "content identity and alteration detection only",
+    "not_the_same_as_change_proof_content_hash": "ChangeProof.content_hash is a SHA-256 over the proof's canonical JSON EXCLUDING its own content_hash field. The hashes in this manifest are over whole files. The SHA-256 of a proof FILE is therefore expected to differ from the content_hash recorded inside it."
+  },
+  "production_ready": false,
+  "project": "driftzero-runtime-2026",
+  "runtime_mode": "CLOUD_PILOT",
+  "schema": "driftzero.evidence.manifest.v1",
+  "task": "T133"
+}

@@ -53,6 +53,14 @@ live = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The M6 product surface is HTML/CSS/JS, and setuptools ships only *.py by default.
+# Without this the wheel installs cleanly and every /web route 500s in the container —
+# which is exactly what happened, and what deploying before checking would have hidden.
+# Attached to the parent package on purpose: driftzero/web/ holds no __init__.py, and
+# adding one only to satisfy packaging would put Python inside the purity boundary.
+[tool.setuptools.package-data]
+"driftzero" = ["web/templates/*.html", "web/static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
