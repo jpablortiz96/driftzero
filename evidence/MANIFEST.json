@@ -2,14 +2,6 @@
   "absent_slot_policy": "quickstart \u00a7 Evidence Pack Structure describes the full intended tree. Slots with no real artifact are listed above with the reason rather than populated with a placeholder.",
   "absent_slots": [
     {
-      "path": "evidence/security/",
-      "reason": "Security behaviour is proven by executable tests rather than static captures: prompt injection, tool poisoning, ChangeSet rejection, delivery assertion rejection and observation rejection are asserted in tests/integration/test_agent_output_validation.py and tests/integration/test_field_verification.py. No standalone JSON captures were produced, so none are claimed."
-    },
-    {
-      "path": "evidence/geap_access_gate.json",
-      "reason": "GEAP components are TRACK_ENHANCEMENT and gated on account access (plan.md). The M4 phase that would produce this record was not run, so no per-component ACCESS_CHECK result exists."
-    },
-    {
       "path": "evidence/cost_model.json",
       "reason": "Owned by T136, which reconciles ACTUAL COST OBSERVED from billing against the ESTIMATED model. T136 has not been executed."
     },
@@ -22,7 +14,7 @@
       "reason": "Raw inputs live at their source paths rather than being duplicated: the source change is fixtures/hero_change.json and the field images are fixtures/multimodal/. Copying them would create a second set of bytes to keep in sync."
     }
   ],
-  "artifact_count": 25,
+  "artifact_count": 27,
   "artifacts": [
     {
       "claim": "The Gemma serving route is Vertex AI MaaS, ON_DEMAND, with no accelerator and no endpoint provisioned.",
@@ -301,6 +293,30 @@
       "task": "T085-T091"
     },
     {
+      "claim": "Each of the six Gemini Enterprise Agent Platform components was access-checked against the real account and recorded DEFERRED with its reason and the fallback actually in force. None is simulated.",
+      "contains_credentials": false,
+      "evidence_class": "REAL_GOOGLE_CLOUD",
+      "id": "geap_access_gate",
+      "judge_relevance": "What was attempted, what is not available here, and why.",
+      "path": "evidence/geap_access_gate.json",
+      "present": true,
+      "sha256": "cd13a1ec7be4273d1eba9197d2dce694f06fc2ed595cfc58f6c603ab20894645",
+      "size_bytes": 8012,
+      "task": "T108, T122"
+    },
+    {
+      "claim": "Against a model that fully obeys an injected directive, the structural boundary holds: no tool to call, and no schema field able to carry a verdict, a state or an authorization.",
+      "contains_credentials": false,
+      "evidence_class": "OFFLINE_DETERMINISTIC",
+      "id": "prompt_injection",
+      "judge_relevance": "Why prompt injection cannot reach authority here.",
+      "path": "evidence/security/prompt_injection_blocked.json",
+      "present": true,
+      "sha256": "e5f8db22f2d65fbfbe538452327716e926e0d871bef49ed7140652cf5aba07ec",
+      "size_bytes": 1717,
+      "task": "T120"
+    },
+    {
       "claim": "What this pilot does not do, stated plainly.",
       "contains_credentials": false,
       "evidence_class": "DERIVED",
@@ -308,8 +324,8 @@
       "judge_relevance": "Read this before believing anything else here.",
       "path": "evidence/LIMITATIONS.md",
       "present": true,
-      "sha256": "ece0c65846849de858ceb92801b69ed0613909b05c557bbfb2387edc0e18d2d6",
-      "size_bytes": 9616,
+      "sha256": "b4cf1ea232e14a05d5a5286da7d24820b25a5f0008298c82c273d9530b54ec84",
+      "size_bytes": 11043,
       "task": "T135"
     },
     {
@@ -320,8 +336,8 @@
       "judge_relevance": "Start here.",
       "path": "evidence/JUDGES_START_HERE.md",
       "present": true,
-      "sha256": "8379f818378947f428d97117cee13bd1d77e3820f86bc730f6506cf5d4a7ef1a",
-      "size_bytes": 8022,
+      "sha256": "03ce493484bc8a33dd6f1e4d3b9e570ee18da4dc738c182e78d85089ba48605d",
+      "size_bytes": 8292,
       "task": "T134"
     }
   ],
@@ -435,7 +451,7 @@
     "REAL_MAAS_EXECUTION": "Produced by real inference on Vertex AI MaaS, google/gemma-4-26b-a4b-it-maas, serverless ON_DEMAND. Each record carries the input hash and token usage.",
     "REAL_PHYSICAL_EVIDENCE": "Photographs of a real box with a printed label, taken with a camera. Nothing generated, rendered or composited occupies these paths."
   },
-  "generated_at": "2026-08-28T21:33:06+00:00",
+  "generated_at": "2026-08-30T16:52:03+00:00",
   "hash_guarantee": {
     "algorithm": "SHA-256",
     "covers": "complete file bytes of each listed artifact",

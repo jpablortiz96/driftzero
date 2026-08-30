@@ -29,33 +29,60 @@ Evidence: [`m2/cloud_run_deployment/cloud_run_iam.json`](m2/cloud_run_deployment
 
 ---
 
-## 2. GEAP components are deferred, not implemented
+## 2. GEAP components are deferred, and now access-checked
 
 Every Gemini Enterprise Agent Platform capability — Agent Runtime, Agent Registry, Agent
-Identity, Agent Gateway, advanced Agent Observability — is `TRACK_ENHANCEMENT` in
-plan.md and gated on account access. **None was provisioned.** The core hero workflow was
-built never to depend on them, and runs entirely on Cloud Run, ADK, Firestore, Pub/Sub
-and Cloud Storage.
+Identity, Agent Gateway, Model Armor, advanced Agent Observability — has been **probed
+against the real account** and recorded per component in
+[`geap_access_gate.json`](geap_access_gate.json). **All six are `DEFERRED`. None is
+simulated as delivered.**
 
-There is consequently **no `geap_access_gate.json`**: the phase that would record
-per-component ACCESS_CHECK results was not run, so no result is claimed. See
-`absent_slots` in [`MANIFEST.json`](MANIFEST.json).
+One root cause accounts for most of them: **the project has no organization parent**, so
+no organization-scoped trust domain exists. Agent Identity needs one, and the Gateway
+policy that would name its principals needs the same. plan.md anticipated exactly this
+for a personal hackathon project and named the fallback in advance, which is the one
+running.
+
+The core hero workflow was built never to depend on any of them and has **zero** GEAP
+dependencies. It runs on Cloud Run, ADK, Firestore, Pub/Sub and Cloud Storage.
 
 ---
 
-## 3. Model Armor was not used; images are not screened
+## 3. Model Armor is built but cannot take effect here
 
-**`SCREENING_SKIPPED`.** No Model Armor or equivalent content-screening layer sits in
-front of Gemini or Gemma. Field evidence images are passed to the model without
-screening, and prompts are not filtered by a platform safety service.
+**`SCREENING_SKIPPED` — and this time the reason is specific.**
 
-What does exist is structural rather than detective: the field model can only return one
-of three values (`LEFT`, `TOP_RIGHT`, `INCONCLUSIVE`) and anything else is rejected
-outright; the semantic agent holds no tool capability at all. Injection resistance comes
-from **absent tools and closed output domains**, not from screening.
+The Model Armor template `driftzero-untrusted-artifact-text` exists with
+`INSPECT_AND_BLOCK` enforcement, the Vertex AI service agent holds
+`roles/modelarmor.user`, and the screening configuration is wired into the *existing*
+Change Intelligence call through the ADK agent's `GenerateContentConfig` — one model
+path, not a second one.
 
-Evidence: `tests/integration/test_agent_output_validation.py`,
-[`m2/api_pubsub/authoritative_refusal.json`](m2/api_pubsub/authoritative_refusal.json)
+It still cannot run, because of a platform constraint verified with one bounded live call
+in each direction:
+
+| Observation | Result |
+| --- | --- |
+| Template in `us-central1` | created, `INSPECT_AND_BLOCK` |
+| Template in `global` | rejected — `UNSUPPORTED_REQUEST_LOCATION` |
+| Gemini at `global`, no armor | 200 OK — the route all prior evidence used |
+| Gemini at `global`, with armor | 400 — template cannot be resolved |
+| Gemini at `us-central1` | 404 — publisher model unavailable to this project |
+
+Model Armor is regional and rejects `global`; this project's `gemini-3.5-flash` is only
+routable at `global`. The two supported location sets are disjoint, so screening is
+configured, correct, tested, **defaulted off, and not in force**. The wiring is retained
+and takes effect unchanged the moment a regional model route is available.
+
+Field evidence images are not screened either.
+
+**What the system's safety actually rests on** is structural, and holds with screening
+off — which is the state in force. The semantic agent is constructed with **no tools**,
+so "call this tool" has nothing to act on; and its output schema has **no field** capable
+of carrying a verdict, a workflow state, or an authorization, so "set verification_result
+to PASS" cannot be expressed. That is asserted against a model that fully obeys an
+injected directive in
+[`security/prompt_injection_blocked.json`](security/prompt_injection_blocked.json).
 
 ---
 

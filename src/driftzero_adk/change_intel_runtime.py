@@ -103,6 +103,10 @@ class AdkCallEvidence:
     latency_seconds: float | None = None
     prompt_hash: str = ""
     request_hash: str = ""
+    screening_status: str = "SCREENING_SKIPPED"
+    """T119 — SCREENING_ENABLED only when Model Armor was actually attached to the call.
+    Defaults to skipped so an unrecorded path can never read as screened."""
+    screening_template: str | None = None
     raw_response_hash: str = ""
     adk_version: str = ""
     adk_agent_class: str = ""
@@ -159,6 +163,10 @@ class GoogleAdkSemanticClient:
     use_vertex: bool = True
     model_override: Any = None
     """Injectable ``BaseLlm`` for offline tests. Unset in production."""
+    screening: Any = None
+    """T119 — a ``ScreeningConfig``. Left unset it is read from the environment at call
+    time, so enabling Model Armor is a configuration change rather than a code change.
+    Injectable so a test can assert both the screened and unscreened paths."""
     last_call_evidence: AdkCallEvidence | None = field(default=None, init=False)
 
     # ------------------------------------------------------------------ protocol
@@ -203,6 +211,11 @@ class GoogleAdkSemanticClient:
 
         self._configure_backend()
 
+        # T119 — Model Armor screening of untrusted artifact text, attached to the
+        # SAME ADK call rather than a second one. A parallel raw generateContent path
+        # would be a second way to reach the model, and therefore a second thing to
+        # keep honest; passing the config through LlmAgent keeps one path.
+        armor = self._model_armor_config(types)
         agent = LlmAgent(
             name=CHANGE_INTEL_AGENT_NAME,
             model=self.model_override or request.model_id,
@@ -211,8 +224,18 @@ class GoogleAdkSemanticClient:
             output_schema=self.output_schema,
             output_key=OUTPUT_KEY,
             # No tool is registered with the runtime, so model output has nothing to
-            # invoke. This is the injection boundary, and it is structural.
+            # invoke. This is the injection boundary, and it is structural. Screening
+            # is defence in depth on top of it, never a replacement for it.
             tools=[],
+            generate_content_config=(
+                types.GenerateContentConfig(model_armor_config=armor) if armor else None
+            ),
+        )
+        evidence.screening_status = (
+            "SCREENING_ENABLED" if armor else "SCREENING_SKIPPED"
+        )
+        evidence.screening_template = (
+            armor.prompt_template_name if armor else None
         )
         session_service = InMemorySessionService()
         runner = Runner(
@@ -267,6 +290,25 @@ class GoogleAdkSemanticClient:
                 f"ADK returned {type(payload).__name__}, not an object"
             )
         return payload, request_hash
+
+    def _model_armor_config(self, types: Any) -> Any:
+        """The Model Armor config, or ``None`` when screening is not configured.
+
+        Returning ``None`` is the honest default: an unconfigured process performs no
+        screening and records ``SCREENING_SKIPPED``. It never presents itself as
+        screened, which is the failure mode this whole path exists to avoid.
+        """
+        screening = self.screening
+        if screening is None:
+            from driftzero.config import DriftZeroConfig  # noqa: PLC0415
+
+            screening = DriftZeroConfig.from_env().screening
+        if not screening.enabled:
+            return None
+        template = screening.validated().template_path
+        return types.ModelArmorConfig(
+            prompt_template_name=template, response_template_name=template
+        )
 
     def _configure_backend(self) -> None:
         """Point the GenAI SDK at Vertex AI with ADC, via its documented env contract.

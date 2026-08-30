@@ -29,6 +29,7 @@ Every artifact below already existed before this pack was assembled. Nothing her
 - [`evidence/runs/hero_run_001/idempotency_log.json`](runs/hero_run_001/idempotency_log.json) — Duplicate events and duplicate evidence are refused by real Firestore and Cloud Storage preconditions.
 - [`evidence/m2/exit_gate/manifest.json`](m2/exit_gate/manifest.json) — M2 closed on 37 checks spanning the real cloud architecture.
 - [`evidence/m2/cloud_foundation/task_status.json`](m2/cloud_foundation/task_status.json) — Project, billing, APIs, Firestore, Pub/Sub, Cloud Storage and two least-privilege service accounts, captured from live gcloud output.
+- [`evidence/geap_access_gate.json`](geap_access_gate.json) — Each of the six Gemini Enterprise Agent Platform components was access-checked against the real account and recorded DEFERRED with its reason and the fallback actually in force. None is simulated.
 
 ### REAL_MAAS_EXECUTION
 
@@ -54,6 +55,7 @@ Every artifact below already existed before this pack was assembled. Nothing her
 - [`evidence/m6/proof_view.png`](m6/proof_view.png) — The Change Proof is explained in plain language before any JSON, with exact hash wording and no overclaim.
 - [`evidence/runs/hero_run_local/manifest.json`](runs/hero_run_local/manifest.json) — The local end-to-end workflow passes with the Truth Engine authoritative at every crossing.
 - [`evidence/reports/data_lineage.json`](reports/data_lineage.json) — Every evidence item carries a classification and an ordered lineage chain.
+- [`evidence/security/prompt_injection_blocked.json`](security/prompt_injection_blocked.json) — Against a model that fully obeys an injected directive, the structural boundary holds: no tool to call, and no schema field able to carry a verdict, a state or an authorization.
 
 ### DERIVED
 
@@ -71,8 +73,6 @@ cd evidence/<bundle> && sha256sum -c SHA256SUMS.txt
 
 ## What is deliberately absent
 
-- `evidence/security/` — Security behaviour is proven by executable tests rather than static captures: prompt injection, tool poisoning, ChangeSet rejection, delivery assertion rejection and observation rejection are asserted in tests/integration/test_agent_output_validation.py and tests/integration/test_field_verification.py. No standalone JSON captures were produced, so none are claimed.
-- `evidence/geap_access_gate.json` — GEAP components are TRACK_ENHANCEMENT and gated on account access (plan.md). The M4 phase that would produce this record was not run, so no per-component ACCESS_CHECK result exists.
 - `evidence/cost_model.json` — Owned by T136, which reconciles ACTUAL COST OBSERVED from billing against the ESTIMATED model. T136 has not been executed.
 - `evidence/replays/` — No replay bundles were produced. Reproduction is by running the recorded gates, which is documented in JUDGES_START_HERE.md.
 - `evidence/raw/` — Raw inputs live at their source paths rather than being duplicated: the source change is fixtures/hero_change.json and the field images are fixtures/multimodal/. Copying them would create a second set of bytes to keep in sync.

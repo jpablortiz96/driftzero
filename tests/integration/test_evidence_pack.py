@@ -176,13 +176,51 @@ def test_every_recorded_bundle_still_verifies(manifest: dict[str, Any]) -> None:
 def test_absent_slots_are_declared_rather_than_faked(manifest: dict[str, Any]) -> None:
     """quickstart names a fuller tree than exists. The gaps are named, not filled."""
     declared = {slot["path"] for slot in manifest["absent_slots"]}
+    # cost_model.json is owned by a task that has not been executed, so it stays absent.
     assert "evidence/cost_model.json" in declared
-    assert "evidence/geap_access_gate.json" in declared
+    # geap_access_gate.json used to be declared absent. The access checks were since
+    # run against the real account, so it is now an indexed artifact instead.
+    assert "evidence/geap_access_gate.json" not in declared
+    assert (REPO_ROOT / "evidence" / "geap_access_gate.json").is_file()
     for slot in manifest["absent_slots"]:
         assert len(slot["reason"]) > 40, slot["path"]
         assert not (REPO_ROOT / slot["path"]).exists(), (
             f"{slot['path']} is declared absent but exists"
         )
+
+
+def test_the_geap_gate_defers_rather_than_simulating(manifest: dict[str, Any]) -> None:
+    """plan.md: a component failing its access check is DEFERRED, never faked."""
+    gate = json.loads(
+        (REPO_ROOT / "evidence" / "geap_access_gate.json").read_text(encoding="utf-8")
+    )
+    assert gate["components_total"] == 6
+    assert gate["nothing_simulated"] is True
+    assert gate["core_workflow_geap_dependencies"] == 0
+    for component in gate["components"]:
+        assert component["result"] in {"DEFERRED", "DELIVERED"}
+        assert component["reason"], component["component"]
+        assert component["fallback_taken"], component["component"]
+        assert component["core_workflow_depends_on_it"] is False
+
+
+def test_model_armor_is_not_claimed_to_be_in_force(manifest: dict[str, Any]) -> None:
+    """It is built and wired, and it cannot take effect. Both must be recorded."""
+    gate = json.loads(
+        (REPO_ROOT / "evidence" / "geap_access_gate.json").read_text(encoding="utf-8")
+    )
+    armor = next(c for c in gate["components"] if c["component"] == "Model Armor")
+    assert armor["result"] == "DEFERRED"
+    assert armor["template_created"] is True
+    assert armor["wiring_implemented"] is True
+    assert armor["screening_in_force"] is False
+    assert "UNSUPPORTED_REQUEST_LOCATION" in json.dumps(armor)
+
+    from driftzero.config import DriftZeroConfig
+
+    assert DriftZeroConfig.from_env({}).screening.as_disclosure()["status"] == (
+        "SCREENING_SKIPPED"
+    )
 
 
 def test_the_manifest_states_the_hash_boundary(manifest: dict[str, Any]) -> None:

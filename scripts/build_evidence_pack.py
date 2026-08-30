@@ -285,6 +285,26 @@ ENTRIES: list[dict[str, Any]] = [
         "judge_relevance": "The cloud foundation, verified rather than asserted.",
     },
     {
+        "id": "geap_access_gate",
+        "path": "evidence/geap_access_gate.json",
+        "task": "T108, T122",
+        "evidence_class": REAL_CLOUD,
+        "claim": "Each of the six Gemini Enterprise Agent Platform components was "
+                 "access-checked against the real account and recorded DEFERRED with "
+                 "its reason and the fallback actually in force. None is simulated.",
+        "judge_relevance": "What was attempted, what is not available here, and why.",
+    },
+    {
+        "id": "prompt_injection",
+        "path": "evidence/security/prompt_injection_blocked.json",
+        "task": "T120",
+        "evidence_class": OFFLINE,
+        "claim": "Against a model that fully obeys an injected directive, the "
+                 "structural boundary holds: no tool to call, and no schema field able "
+                 "to carry a verdict, a state or an authorization.",
+        "judge_relevance": "Why prompt injection cannot reach authority here.",
+    },
+    {
         "id": "limitations",
         "path": "evidence/LIMITATIONS.md",
         "task": "T135",
@@ -305,25 +325,6 @@ ENTRIES: list[dict[str, Any]] = [
 # Structural slots quickstart names that have no real artifact behind them. Recorded
 # rather than fabricated — an empty directory would imply evidence that does not exist.
 ABSENT_SLOTS = [
-    {
-        "path": "evidence/security/",
-        "reason": (
-            "Security behaviour is proven by executable tests rather than static "
-            "captures: prompt injection, tool poisoning, ChangeSet rejection, delivery "
-            "assertion rejection and observation rejection are asserted in "
-            "tests/integration/test_agent_output_validation.py and "
-            "tests/integration/test_field_verification.py. No standalone JSON captures "
-            "were produced, so none are claimed."
-        ),
-    },
-    {
-        "path": "evidence/geap_access_gate.json",
-        "reason": (
-            "GEAP components are TRACK_ENHANCEMENT and gated on account access "
-            "(plan.md). The M4 phase that would produce this record was not run, so no "
-            "per-component ACCESS_CHECK result exists."
-        ),
-    },
     {
         "path": "evidence/cost_model.json",
         "reason": (

@@ -287,6 +287,80 @@ PERSISTENCE_FIRESTORE = "firestore"
 DEFAULT_FIRESTORE_DATABASE = "(default)"
 
 
+DEFAULT_SCREENING = "disabled"
+"""Model Armor screening is opt-in. An unconfigured process performs no screening and,
+critically, never claims to have performed any."""
+
+SCREENING_DISABLED = "disabled"
+SCREENING_MODEL_ARMOR = "model_armor"
+
+DEFAULT_ARMOR_TEMPLATE = "driftzero-untrusted-artifact-text"
+
+DEFAULT_ARMOR_LOCATION = "us-central1"
+"""Model Armor templates are regional. The semantic model may be routed globally, but
+the template has to name the region it was actually created in."""
+
+
+@dataclass(frozen=True)
+class ScreeningConfig:
+    """T118/T119 — Model Armor screening of untrusted artifact text.
+
+    Configuration only; this module imports no Google SDK. The adapter in
+    ``driftzero_adk`` turns these values into a ``ModelArmorConfig`` on the existing
+    ADK call. Nothing here screens anything.
+
+    The honesty rule this exists to enforce: a process that is not configured for
+    screening must report ``SCREENING_SKIPPED`` and must never present itself as
+    screened. Silence and success are different outcomes.
+    """
+
+    provider: str = DEFAULT_SCREENING
+    project: str = ""
+    location: str = DEFAULT_ARMOR_LOCATION
+    template: str = DEFAULT_ARMOR_TEMPLATE
+
+    @property
+    def enabled(self) -> bool:
+        return self.provider == SCREENING_MODEL_ARMOR
+
+    @property
+    def template_path(self) -> str:
+        """The fully-qualified template name Vertex expects, or empty when unusable."""
+        if not self.enabled or not self.project.strip():
+            return ""
+        return (
+            f"projects/{self.project}/locations/{self.location}"
+            f"/templates/{self.template}"
+        )
+
+    def missing_settings(self) -> tuple[str, ...]:
+        if not self.enabled:
+            return ()
+        missing = []
+        if not self.project.strip():
+            missing.append(f"{ENV_PREFIX}GCP_PROJECT")
+        if not self.template.strip():
+            missing.append(f"{ENV_PREFIX}ARMOR_TEMPLATE")
+        return tuple(missing)
+
+    def validated(self) -> ScreeningConfig:
+        missing = self.missing_settings()
+        if missing:
+            raise ConfigurationError(
+                "Model Armor screening requires " + ", ".join(missing)
+            )
+        return self
+
+    def as_disclosure(self) -> dict[str, object]:
+        """What may honestly be said about screening. Never more than was configured."""
+        return {
+            "provider": self.provider,
+            "enabled": self.enabled,
+            "template": self.template_path or None,
+            "status": "SCREENING_ENABLED" if self.enabled else "SCREENING_SKIPPED",
+        }
+
+
 @dataclass(frozen=True)
 class PersistenceConfig:
     """T092/T093 — where durable state and evidence live.
@@ -358,6 +432,7 @@ class DriftZeroConfig:
     field_provider: FieldProviderConfig = FieldProviderConfig()
     semantic_provider: SemanticProviderConfig = SemanticProviderConfig()
     persistence: PersistenceConfig = PersistenceConfig()
+    screening: ScreeningConfig = ScreeningConfig()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DriftZeroConfig:
@@ -431,6 +506,12 @@ class DriftZeroConfig:
                     max_retries=_int("SEMANTIC_MAX_RETRIES", DEFAULT_SEMANTIC_MAX_RETRIES),
                     allow_structured_repair=False,
                 ),
+            ),
+            screening=ScreeningConfig(
+                provider=_text("SCREENING", DEFAULT_SCREENING),
+                project=_text("GCP_PROJECT", ""),
+                location=_text("ARMOR_LOCATION", DEFAULT_ARMOR_LOCATION),
+                template=_text("ARMOR_TEMPLATE", DEFAULT_ARMOR_TEMPLATE),
             ),
             persistence=PersistenceConfig(
                 backend=_text("PERSISTENCE", DEFAULT_PERSISTENCE),

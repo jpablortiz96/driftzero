@@ -1,0 +1,138 @@
+{
+  "components": [
+    {
+      "access_check": "deploy a trivial ADK agent and confirm a reasoningEngines/... resource",
+      "component": "Agent Runtime",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "evidence/m2/cloud_run_deployment/cloud_run_service.json",
+      "fallback_taken": "Cloud Run hosts the ADK orchestration (deployed, evidenced)",
+      "observed": {
+        "api": "aiplatform.googleapis.com",
+        "available_to_project": true,
+        "enabled": true,
+        "reasoning_engines_present": 0
+      },
+      "reason": "No reasoningEngines resource was provisioned. Agent Runtime is a managed execution surface DRIFTZERO does not need: the same ADK agents run on Cloud Run, which is deployed, private and restart-safe.",
+      "result": "DEFERRED",
+      "task": "T109"
+    },
+    {
+      "access_check": "confirm the project has an organization parent (org-scoped trust domain)",
+      "component": "Agent Identity",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "evidence/m2/cloud_run_deployment/cloud_run_iam.json",
+      "fallback_taken": "One least-privilege runtime service account per deployed service, plus an in-process authorization broker holding one capability per agent. This is application-level enforcement, not platform-enforced, and LIMITATIONS.md says so.",
+      "observed": {
+        "command": "gcloud projects describe driftzero-runtime-2026 --format='value(parent)'",
+        "organization_exists": false,
+        "organizations_visible": [],
+        "parent": null
+      },
+      "reason": "The project has no organization parent, so no organization-scoped trust domain exists and per-agent Agent Identity principals cannot be created. plan.md anticipated this for a personal hackathon project and named the fallback in advance.",
+      "result": "DEFERRED",
+      "task": "T110, T111"
+    },
+    {
+      "access_check": "enable agentregistry.googleapis.com and read back registered entries",
+      "component": "Agent Registry",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "evidence/m2/exit_gate/manifest.json",
+      "fallback_taken": "Agents are declared in code with a single frozen capability policy, which is the artifact a registry would describe.",
+      "observed": {
+        "api": "agentregistry.googleapis.com",
+        "available_to_project": true,
+        "enabled": false
+      },
+      "reason": "The API is listed as available but was not enabled and no agents were registered. A registry records agents; it does not change what they may do, and the authority boundary is enforced elsewhere.",
+      "result": "DEFERRED",
+      "task": "T112"
+    },
+    {
+      "access_check": "import the gateway, the authz extension and the authorization policy; prove ALLOW for Remediation and DENY for Frontline Enablement",
+      "component": "Agent Gateway",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "evidence/m2/exit_gate/manifest.json (check 31, capability matrix)",
+      "fallback_taken": "The ALLOW/DENY pair executes against the in-process deterministic authorization broker instead: the Remediation agent's mutation succeeds and the Frontline Enablement agent's identical attempt is DENIED. This is application-level enforcement and is never claimed as Gateway enforcement.",
+      "observed": {
+        "api": "networkservices.googleapis.com",
+        "available_to_project": true,
+        "enabled": false,
+        "organization_exists": false,
+        "requires_organization": true
+      },
+      "reason": "Gateway authorization keys on an agent's SPIFFE identity, which depends on the same organization-scoped trust domain Agent Identity needs. Without an organization there is no principal for a policy to name.",
+      "result": "DEFERRED",
+      "task": "T113-T117"
+    },
+    {
+      "access_check": "create the driftzero-untrusted-artifact-text template (INSPECT_AND_BLOCK) and grant roles/modelarmor.user to the Vertex AI service agent",
+      "blocking_observations": {
+        "gemini_at_global_with_armor": "400 INVALID_ARGUMENT, template not found",
+        "gemini_at_global_without_armor": "200 OK (the route M1/M3 evidence used)",
+        "gemini_at_us_central1": "404 NOT_FOUND, publisher model unavailable",
+        "template_in_global": "rejected: UNSUPPORTED_REQUEST_LOCATION",
+        "template_in_us_central1": "created, INSPECT_AND_BLOCK"
+      },
+      "component": "Model Armor",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "evidence/security/prompt_injection_blocked.json",
+      "fallback_taken": "Screening is opt-in and defaults to SCREENING_SKIPPED, which is the state actually in force. The structural boundary - no tool surface, no authority in the output schema - holds with screening off and is what the system's safety rests on. The wiring is retained, defaulted off, and takes effect unchanged the moment a regional model route is available.",
+      "observed": {
+        "api": "modelarmor.googleapis.com",
+        "available_to_project": true,
+        "enabled": true,
+        "enforcement_type": "INSPECT_AND_BLOCK",
+        "filters": [
+          "piAndJailbreakFilterSettings"
+        ],
+        "location": "us-central1",
+        "present": true,
+        "template": "driftzero-untrusted-artifact-text"
+      },
+      "reason": "Model Armor templates are regional and the API explicitly rejects the 'global' location (UNSUPPORTED_REQUEST_LOCATION). This project's gemini-3.5-flash is only routable at 'global' - a regional call returns 404 NOT_FOUND for the publisher model. The two supported location sets are disjoint here, so Vertex accepts the configuration but can never resolve the template. Verified with one bounded live call each way.",
+      "result": "DEFERRED",
+      "screening_in_force": false,
+      "task": "T118-T120",
+      "template_created": true,
+      "wiring_implemented": true
+    },
+    {
+      "access_check": "enable advanced agent/gateway span export into the evidence pack",
+      "component": "Agent Observability (advanced)",
+      "core_workflow_depends_on_it": false,
+      "fallback_evidence": "src/driftzero/observability.py, src/driftzero_cloud/telemetry.py",
+      "fallback_taken": "OpenTelemetry to Cloud Trace plus structured Cloud Logging from Cloud Run, with correlation IDs bound to workflow_id and action_id and every retry attempt individually observable.",
+      "observed": {
+        "agent_runtime_available": false,
+        "api": "cloudtrace.googleapis.com",
+        "available_to_project": true,
+        "depends_on": "Agent Runtime (T109)",
+        "enabled": true
+      },
+      "reason": "Platform-level agent and gateway telemetry requires the Agent Runtime and Gateway surfaces, both DEFERRED above. There are no platform spans to export.",
+      "result": "DEFERRED",
+      "task": "T121"
+    }
+  ],
+  "components_total": 6,
+  "core_workflow_geap_dependencies": 0,
+  "core_workflow_note": "No FR-001-FR-011 or SC-001-SC-015 depends on any component above. The core hero workflow runs on Cloud Run, ADK, Firestore, Pub/Sub and Cloud Storage, all of which are deployed and evidenced.",
+  "deferred": [
+    "Agent Runtime",
+    "Agent Identity",
+    "Agent Registry",
+    "Agent Gateway",
+    "Model Armor",
+    "Agent Observability (advanced)"
+  ],
+  "delivered": [],
+  "gate_rule": "Every component stays TRACK_ENHANCEMENT until proven accessible in the actual account. A component failing its access check is DEFERRED, never simulated as delivered.",
+  "generated_at": "2026-08-30T16:50:14+00:00",
+  "nothing_simulated": true,
+  "project": "driftzero-runtime-2026",
+  "project_number": "1086395542194",
+  "region": "us-central1",
+  "root_cause_for_most_deferrals": "The project has no organization parent, so no organization-scoped trust domain exists. Agent Identity, and the Gateway policy that names its principals, both depend on one.",
+  "schema": "driftzero.geap.availability_gate.v1",
+  "task": "T108, T122"
+}

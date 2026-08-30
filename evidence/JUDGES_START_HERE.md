@@ -113,6 +113,8 @@ Current runtime mode is **`CLOUD_PILOT`**, and the service reports
 | [`m3/architecture/serving_route.json`](m3/architecture/serving_route.json) | How Gemma is served, and why nothing was provisioned |
 | [`m2/cloud_run_deployment/`](m2/cloud_run_deployment/) | The deployed service, its IAM, and the authenticated Pub/Sub path |
 | [`runs/hero_run_001/restart_recovery.json`](runs/hero_run_001/restart_recovery.json) | Process death and resumption |
+| [`geap_access_gate.json`](geap_access_gate.json) | Every enterprise-platform component, access-checked against the real account |
+| [`security/prompt_injection_blocked.json`](security/prompt_injection_blocked.json) | Why an injected directive cannot reach authority |
 | [`MANIFEST.json`](MANIFEST.json) | Every artifact, hashed and classified |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | What this does not do |
 
