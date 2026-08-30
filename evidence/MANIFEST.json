@@ -240,7 +240,7 @@
       "judge_relevance": "The deterministic core, reproducible offline.",
       "path": "evidence/runs/hero_run_local/manifest.json",
       "present": true,
-      "sha256": "a5d09871ee778741cc436d242bfc4f1245919d56a882957e9011766d9327dc0a",
+      "sha256": "01b2f18476f84d1c0fafcb5c50627af04fa6ca72116cde406b1a57fc7339b937",
       "size_bytes": 16690,
       "task": "T084"
     },
@@ -336,8 +336,8 @@
       "judge_relevance": "Start here.",
       "path": "evidence/JUDGES_START_HERE.md",
       "present": true,
-      "sha256": "03ce493484bc8a33dd6f1e4d3b9e570ee18da4dc738c182e78d85089ba48605d",
-      "size_bytes": 8292,
+      "sha256": "0400e06475e3f1ab372eb4f2806525d0d7c36c570affafc84ce1f85fe34904ef",
+      "size_bytes": 8358,
       "task": "T134"
     }
   ],
@@ -451,7 +451,7 @@
     "REAL_MAAS_EXECUTION": "Produced by real inference on Vertex AI MaaS, google/gemma-4-26b-a4b-it-maas, serverless ON_DEMAND. Each record carries the input hash and token usage.",
     "REAL_PHYSICAL_EVIDENCE": "Photographs of a real box with a printed label, taken with a camera. Nothing generated, rendered or composited occupies these paths."
   },
-  "generated_at": "2026-08-30T16:52:03+00:00",
+  "generated_at": "2026-08-30T18:13:35+00:00",
   "hash_guarantee": {
     "algorithm": "SHA-256",
     "covers": "complete file bytes of each listed artifact",

@@ -53,7 +53,10 @@ Kept separate from everything else in this bundle: every other value here came f
 live gcloud output, and a reader must be able to tell the two apart at a glance.
 """
 
-BILLING_ACCOUNT = "017DAD-B6637E-E072D9"
+# An account identifier rather than a secret, but it does not belong in a public
+# repository. Read it from the environment; the billing probes below are the only
+# callers, and they are skipped when it is unset.
+BILLING_ACCOUNT = os.environ.get("DZ_BILLING", "")
 BUCKET = f"driftzero-evidence-{PROJECT}"
 TOPIC = "driftzero-approved-changes"
 RUN_SA = f"driftzero-run-sa@{PROJECT}.iam.gserviceaccount.com"

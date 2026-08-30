@@ -79,7 +79,7 @@ makes it trustworthy.
 | **Gemma 4** (Vertex AI MaaS, serverless on-demand) | Field Verification — observing the label from a photograph |
 | **Cloud Run** | The API and agents, private, scale-to-zero |
 | **Firestore** | Authoritative durable state, action ledger, proofs, idempotency |
-| **Cloud Storage** | Immutable evidence objects |
+| **Cloud Storage** | Write-once evidence objects — verified live; the deployed pilot persists through Firestore |
 | **Pub/Sub** | Authenticated push ingestion of approved changes, with dead-letter |
 | **Cloud Logging / Trace** | Structured logs and traces correlated by workflow |
 

@@ -11,7 +11,9 @@ set -euo pipefail
 DZ_PROJECT="driftzero-runtime-2026"
 DZ_LEGACY="driftzero-agentic-2026"
 DZ_REGION="us-central1"          # quickstart MS-7: the single selected region
-DZ_BILLING="017DAD-B6637E-E072D9"
+# The billing account is an account identifier, not a secret, but it has no place in
+# a public repository. Supply it from the environment when a guard actually needs it.
+DZ_BILLING="${DZ_BILLING:-}"
 
 dz_guard() {
   local core quota
