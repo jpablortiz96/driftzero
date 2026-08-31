@@ -1,0 +1,53 @@
+# The driftzero-web Cloud Run image — the public judge surface.
+#
+# Deliberately a separate image from Dockerfile (driftzero-api). This one is the only
+# DRIFTZERO container exposed to the internet, so it installs the `public` extra alone:
+# no Firestore adapter, no Cloud Storage adapter, no ADK, no model client. If a public
+# process cannot import a data-plane client, a bug in it cannot reach the data plane.
+#
+# It carries no credential. Its identity is the driftzero-web-sa service account Cloud
+# Run attaches at runtime, which holds run.invoker on driftzero-api and nothing else.
+
+FROM python:3.13-slim AS build
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /build
+
+COPY pyproject.toml ./
+COPY src/ ./src/
+
+RUN python -m pip install --upgrade pip \
+ && python -m pip wheel --wheel-dir /wheels ".[public]"
+
+
+FROM python:3.13-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN groupadd --system driftzero \
+ && useradd --system --gid driftzero --home-dir /app --no-create-home driftzero
+
+WORKDIR /app
+
+COPY --from=build /wheels /wheels
+
+# Install by name from the built wheels, exactly as the API image does. The static
+# assets and the two evidence JSON documents ride inside the wheel via the
+# [tool.setuptools.package-data] entry for driftzero_public — the API image learned the
+# hard way that setuptools ships only *.py without it.
+RUN python -m pip install --no-index --find-links=/wheels "driftzero[public]" \
+ && rm -rf /wheels
+
+ENV PORT=8080
+
+USER driftzero
+EXPOSE 8080
+
+# Shell form: ${PORT} comes from Cloud Run at start time and needs a shell to expand.
+CMD exec uvicorn driftzero_public.app:app --host 0.0.0.0 --port ${PORT}

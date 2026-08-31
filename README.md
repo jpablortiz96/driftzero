@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Cloud_Run-private-34A853" alt="Cloud Run">
   <img src="https://img.shields.io/badge/Firestore-durable_state-FBBC04" alt="Firestore">
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/tests-1903_passing-2ea44f" alt="1903 tests passing">
+  <img src="https://img.shields.io/badge/tests-1939_passing-2ea44f" alt="1939 tests passing">
 </p>
 
 ---
@@ -462,7 +462,7 @@ Artifacts are classified, not vaguely called "real": `REAL_GOOGLE_CLOUD`,
 
 ## Tests
 
-**1,903 passing, 52 skipped.** The skips are declared, not silent — they are scenarios
+**1,939 passing, 52 skipped.** The skips are declared, not silent — they are scenarios
 executed and frozen at an earlier milestone.
 
 | Suite | Covers |
@@ -560,17 +560,40 @@ reproduces the core system on its own.
 
 ## Demo
 
+🌐 **Live judge-facing experience: https://driftzero-web-eepb64ze2q-uc.a.run.app**
+
+No Google account, no `gcloud`, no identity token, no setup. Open it.
+
 **Video:** *placeholder — link added once the demo video is published.*
 
-**Hosted project:** the backend runs as a **private** Cloud Run service. Cloud Run IAM is
-the authentication boundary, and every route including health returns `403` to an
-unauthenticated caller. That is a deliberate architectural property, not an oversight:
-making the service public to simplify a demo would dissolve exactly the property the rest
-of the system depends on.
+**How the hosted demo is built.** Two Cloud Run services, and the split is the point:
 
-The **demo video is therefore the primary judge-facing demonstration**, unless explicit
-`roles/run.invoker` access is granted to a judge's Google account on request. No bearer
-tokens appear in this repository, in the evidence, or in the video.
+```
+PUBLIC INTERNET  →  driftzero-web   (public, read-only)
+                         │  Google-signed service-to-service ID token
+                         ▼
+                    driftzero-api   (private, IAM-gated)  →  Firestore
+```
+
+The public surface is **read-only and evidence-backed**. It renders the recorded hero run
+— the real photographs, the real FAIL→PASS chronology, the real Gemma inferences and the
+verified Change Proof — and reads exactly one allow-listed path (`/health`) from the
+private backend, server-side, using the identity Cloud Run attaches to it. It exposes no
+route that creates a workflow, uploads evidence, invokes a model or publishes an event;
+those were never wired in rather than merely blocked.
+
+**The operational backend remains IAM-protected.** Every route on `driftzero-api`,
+including health, returns `403` to an unauthenticated caller — verified after this
+release, not before it. The browser never receives a backend token. Making the backend
+public to simplify a demo would dissolve exactly the property the rest of the system
+depends on.
+
+The **live operational FAIL→PASS flow is demonstrated in the video**, or against the
+private API with explicit `roles/run.invoker` access granted to a judge's Google account
+on request. No bearer tokens appear in this repository, in the evidence, or in the video.
+
+→ Boundary proof, observed against live Cloud Run and live IAM:
+[`evidence/public_surface/boundary_gate.json`](evidence/public_surface/boundary_gate.json)
 
 <p align="center">
   <img src="docs/assets/driftzero-change-proof.png" alt="DRIFTZERO Change Proof view showing 7 of 7 completion conditions and PROOF_COMPLETE" width="46%">

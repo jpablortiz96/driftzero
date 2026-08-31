@@ -1,0 +1,91 @@
+{
+  "backend_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+  "checks": [
+    {
+      "check": 1,
+      "name": "public frontend answers an unauthenticated request",
+      "observed": "GET https://driftzero-web-eepb64ze2q-uc.a.run.app/ -> 200",
+      "result": "PASS"
+    },
+    {
+      "check": 2,
+      "name": "private backend refuses an unauthenticated request",
+      "observed": "GET https://driftzero-api-eepb64ze2q-uc.a.run.app/health -> 403 (expected 403)",
+      "result": "PASS"
+    },
+    {
+      "check": 3,
+      "name": "an authorised identity still reaches the backend",
+      "observed": "authenticated GET https://driftzero-api-eepb64ze2q-uc.a.run.app/health -> 200",
+      "result": "PASS"
+    },
+    {
+      "check": 4,
+      "name": "allUsers is absent from the private backend",
+      "observed": "driftzero-api members: ['serviceAccount:driftzero-push-sa@driftzero-runtime-2026.iam.gserviceaccount.com', 'serviceAccount:driftzero-web-sa@driftzero-runtime-2026.iam.gserviceaccount.com']",
+      "result": "PASS"
+    },
+    {
+      "check": 5,
+      "name": "allUsers is present only on the public frontend",
+      "observed": "driftzero-web members: ['allUsers']",
+      "result": "PASS"
+    },
+    {
+      "check": 6,
+      "name": "driftzero-web-sa holds run.invoker on the API resource and nothing project-wide",
+      "observed": "resource binding: True; project-level roles: none",
+      "result": "PASS"
+    },
+    {
+      "check": 7,
+      "name": "no user-managed service-account keys exist",
+      "observed": "accounts with user-managed keys: none",
+      "result": "PASS"
+    },
+    {
+      "check": 8,
+      "name": "the public page ships no credential-shaped material",
+      "observed": "markers found: none",
+      "result": "PASS"
+    },
+    {
+      "check": 9,
+      "name": "no public model-invoking route",
+      "observed": "GET https://driftzero-web-eepb64ze2q-uc.a.run.app/api/v1/changes -> 404 (expected 404)",
+      "result": "PASS"
+    },
+    {
+      "check": 10,
+      "name": "no public verification-upload route",
+      "observed": "GET https://driftzero-web-eepb64ze2q-uc.a.run.app/api/v1/workflows/wf-1/verify -> 404 (expected 404)",
+      "result": "PASS"
+    },
+    {
+      "check": 11,
+      "name": "no public Pub/Sub ingestion route",
+      "observed": "GET https://driftzero-web-eepb64ze2q-uc.a.run.app/pubsub/push -> 404 (expected 404)",
+      "result": "PASS"
+    },
+    {
+      "check": 12,
+      "name": "the frontend runs as driftzero-web-sa",
+      "observed": "runtime identity: driftzero-web-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+      "result": "PASS"
+    },
+    {
+      "check": 13,
+      "name": "the backend is still serving its existing revision",
+      "observed": "driftzero-api revision: driftzero-api-00005-gl5",
+      "result": "PASS"
+    }
+  ],
+  "evidence_class": "REAL_GOOGLE_CLOUD",
+  "gate_id": "PUBLIC_SURFACE_BOUNDARY",
+  "note": "Observed against live Cloud Run and live IAM. No identity token is recorded here; only the status codes it produced.",
+  "passed": 13,
+  "public_url": "https://driftzero-web-eepb64ze2q-uc.a.run.app",
+  "timestamp": "2026-08-31T15:53:31+00:00",
+  "total": 13,
+  "verdict": "PASS"
+}

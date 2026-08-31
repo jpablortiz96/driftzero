@@ -27,6 +27,15 @@ api = [
     "uvicorn[standard]>=0.29",
     "python-multipart>=0.0.9",
 ]
+# The public judge surface (src/driftzero_public/). Separate from `api` because the
+# public service must NOT install the Firestore/Storage adapters or anything else that
+# could reach a data plane directly: it talks only to the private API, over HTTP, with
+# the service identity Cloud Run attaches to it.
+public = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "httpx>=0.27",
+]
 # T098 observability export. Separate from `cloud` because a process can persist
 # durably without tracing, and tracing must never be a hard requirement to serve.
 telemetry = [
@@ -60,6 +69,7 @@ where = ["src"]
 # adding one only to satisfy packaging would put Python inside the purity boundary.
 [tool.setuptools.package-data]
 "driftzero" = ["web/templates/*.html", "web/static/*"]
+"driftzero_public" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

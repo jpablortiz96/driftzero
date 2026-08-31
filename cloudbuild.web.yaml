@@ -1,0 +1,19 @@
+# Build the public judge surface from Dockerfile.web.
+#
+# A dedicated config because `gcloud builds submit --tag` always uses ./Dockerfile,
+# which builds the private API image. Building the public service from the API
+# Dockerfile would ship the Firestore and Storage adapters into the one container that
+# faces the internet — exactly what Dockerfile.web exists to prevent.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.web
+      - -t
+      - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v2
+      - .
+images:
+  - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v2
+options:
+  logging: CLOUD_LOGGING_ONLY

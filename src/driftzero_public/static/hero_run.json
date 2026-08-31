@@ -1,0 +1,125 @@
+{
+  "after_left": {
+    "blockers": [
+      "Latest authoritative verification is PASS",
+      "Current state compatible with completion"
+    ],
+    "latest_verification": "FAIL",
+    "proof_generated": false,
+    "state": "VERIFICATION_FAILED"
+  },
+  "after_top_right": {
+    "conditions_satisfied": 7,
+    "conditions_total": 7,
+    "latest_verification": "PASS",
+    "proof_generated": true,
+    "state": "PROOF_COMPLETE"
+  },
+  "authority": {
+    "crossing_4_mandatory": true,
+    "model_returned": [
+      "LEFT",
+      "TOP_RIGHT"
+    ],
+    "model_set_proof": false,
+    "model_set_verdict": false,
+    "model_set_workflow_state": false,
+    "verdict_source": "DRIFTZERO TRUTH ENGINE deterministic comparator"
+  },
+  "change_id": "t106-c4045a28ce",
+  "durability": {
+    "backend": "firestore",
+    "database": "(default)",
+    "delivery_dispatch": 1,
+    "ledger_actions": {
+      "act-deliver_delta-273473664ece928b90e02f76800ebc1d": "COMPLETED",
+      "act-remediate_artifact-591db1cc4176d3792519b0ca434d8a39": "COMPLETED"
+    },
+    "project": "driftzero-runtime-2026",
+    "remediation_dispatch": 1
+  },
+  "evidence_class": "REAL_MAAS_EXECUTION",
+  "fixtures": {
+    "left": {
+      "actual_mime_type": "image/heic",
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "declared_extension": ".jpg",
+      "path": "fixtures/multimodal/label_left_01.jpg",
+      "sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3"
+    },
+    "top_right": {
+      "actual_mime_type": "image/heic",
+      "capture_method": "PHYSICAL_CAMERA_CAPTURE",
+      "declared_extension": ".jpg",
+      "path": "fixtures/multimodal/label_top_right_01.jpg",
+      "sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96"
+    }
+  },
+  "inference_count": 2,
+  "inferences": [
+    {
+      "actual_mime_type": "image/heic",
+      "completion_tokens": 2,
+      "declared_mime_by_extension": "image/jpeg",
+      "finish_reason": "stop",
+      "image_sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+      "latency_seconds": 5.918,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "prompt_tokens": 341,
+      "provider": "vertex_ai_maas",
+      "raw_output": "LEFT",
+      "request_hash": "23513ddcc806302d3a229d790e32b9f678343c646fb9649ad8f38ce54a14a8af",
+      "sequence": 1
+    },
+    {
+      "actual_mime_type": "image/heic",
+      "completion_tokens": 4,
+      "declared_mime_by_extension": "image/jpeg",
+      "finish_reason": "stop",
+      "image_sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+      "latency_seconds": 5.272,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "prompt_tokens": 341,
+      "provider": "vertex_ai_maas",
+      "raw_output": "TOP_RIGHT",
+      "request_hash": "6135d56a982eaa6ca02fee26dcf54b026dc00388d477be63706b223bd04e11c7",
+      "sequence": 2
+    }
+  ],
+  "proof": {
+    "content_hash": "fcab4e10cfcbb6677e4371a6a11647c4c61d952ebeb63e0107921e036c502aa8",
+    "hash_preimage": "canonical-json-excluding-content_hash",
+    "proof_id": "act-generate_proof-04359260dea9266af4b7eb538487ea21",
+    "revalidates": true
+  },
+  "serving_route": {
+    "accelerator": null,
+    "model": "google/gemma-4-26b-a4b-it-maas",
+    "persistent_endpoint": null,
+    "project": "driftzero-runtime-2026",
+    "provider": "vertex_ai_maas",
+    "source": "evidence/g1_gemma_feasibility.json (G1 GO)",
+    "traffic_type": "ON_DEMAND"
+  },
+  "task": "T106",
+  "timestamp": "2026-08-28T15:06:04+00:00",
+  "verification_chronology": [
+    {
+      "event_id": "vev-session-001-001",
+      "expected": "TOP_RIGHT",
+      "observation": "LEFT",
+      "result": "FAIL",
+      "sequence": 1,
+      "submission_id": "fev-e6d1f8e6adc238c32f0421e81970bec2"
+    },
+    {
+      "event_id": "vev-session-001-002",
+      "expected": "TOP_RIGHT",
+      "observation": "TOP_RIGHT",
+      "result": "PASS",
+      "sequence": 2,
+      "submission_id": "fev-871e027d67194d043a70f5708dd25725"
+    }
+  ],
+  "workflow_id": "wf-8440b4a8-001-001"
+}
