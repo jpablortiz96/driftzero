@@ -11,9 +11,9 @@ steps:
       - -f
       - Dockerfile.web
       - -t
-      - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v5
+      - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v6
       - .
 images:
-  - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v5
+  - us-central1-docker.pkg.dev/driftzero-runtime-2026/driftzero/driftzero-web:v6
 options:
   logging: CLOUD_LOGGING_ONLY

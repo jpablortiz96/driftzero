@@ -370,3 +370,54 @@ details.upload input[type=file] { color: var(--muted); font-size: 14px; max-widt
   .delta-pair .arrow-x { transform: rotate(90deg); }
   .btn.big { width: 100%; text-align: center; }
 }
+
+/* Two ways to submit evidence, both visible. A retry a worker cannot find on a phone
+ * is a retry that does not exist, so neither path hides behind a disclosure control. */
+.or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0;
+  color: var(--dim);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  max-width: 560px;
+}
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.retry-upload {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  max-width: 560px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.file-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.retry-upload input[type=file] {
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 100%;
+  padding: 10px 0;
+}
+/* A tap target the size of a gloved thumb, on the control that matters most. */
+.retry-upload input[type=file]::file-selector-button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 11px 16px;
+  margin-right: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.retry-upload input[type=file]::file-selector-button:hover { border-color: var(--cyan); }
+
+@media (max-width: 560px) {
+  .retry-upload { padding: 15px 16px; }
+  .retry-upload .btn { width: 100%; text-align: center; }
+}

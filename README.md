@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Cloud_Run-private-34A853" alt="Cloud Run">
   <img src="https://img.shields.io/badge/Firestore-durable_state-FBBC04" alt="Firestore">
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/tests-1986_passing-2ea44f" alt="1986 tests passing">
+  <img src="https://img.shields.io/badge/tests-1999_passing-2ea44f" alt="1999 tests passing">
 </p>
 
 ---
@@ -462,7 +462,7 @@ Artifacts are classified, not vaguely called "real": `REAL_GOOGLE_CLOUD`,
 
 ## Tests
 
-**1,986 passing, 52 skipped.** The skips are declared, not silent — they are scenarios
+**1,999 passing, 52 skipped.** The skips are declared, not silent — they are scenarios
 executed and frozen at an earlier milestone.
 
 | Suite | Covers |

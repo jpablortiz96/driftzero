@@ -354,3 +354,111 @@ def test_the_proof_envelope_is_unwrapped_before_hashing() -> None:
     assert LivePilot._document(envelope) == document  # noqa: SLF001
     # A bare document (no envelope) must pass through unchanged.
     assert LivePilot._document(document) == document  # noqa: SLF001
+
+
+# ------------------------------------------------- the corrected-photo retry
+
+
+def test_a_failed_upload_offers_a_file_input_to_upload_a_corrected_photo() -> None:
+    """The defect this guards: an uploader could not submit a second photograph.
+
+    After a manual upload returned FAIL the page offered only the *server-owned* pilot
+    photograph, which silently swapped the evidence and left a visitor with their own
+    camera no way forward at all.
+    """
+    markup = live_views.verdict(
+        "FAIL", "LEFT", {}, "tok", proof_ready=False, submitted_by="upload"
+    )
+    assert 'type="file"' in markup, "no file input after a failed upload"
+    assert 'action="/live/upload"' in markup
+    assert 'enctype="multipart/form-data"' in markup
+    assert "Upload corrected photo" in markup
+
+
+def test_the_upload_retry_leads_when_the_evidence_was_uploaded() -> None:
+    markup = live_views.verdict(
+        "FAIL", "LEFT", {}, "tok", proof_ready=False, submitted_by="upload"
+    )
+    upload_at = markup.index('action="/live/upload"')
+    pilot_at = markup.index('action="/live/verify"')
+    assert upload_at < pilot_at, "the pilot photograph leads after a manual upload"
+    assert "btn primary big" in markup.split('action="/live/upload"')[1][:400]
+
+
+def test_the_pilot_retry_leads_when_a_pilot_photo_was_used() -> None:
+    """The canonical button path must not regress."""
+    markup = live_views.verdict(
+        "FAIL", "LEFT", {}, "tok", proof_ready=False, submitted_by="pilot"
+    )
+    assert "Verify corrected state" in markup
+    assert markup.index('action="/live/verify"') < markup.index('action="/live/upload"')
+
+
+@pytest.mark.parametrize("source", ["upload", "pilot"])
+@pytest.mark.parametrize("result", ["FAIL", "INCONCLUSIVE"])
+def test_both_retries_are_always_offered_after_a_non_passing_verdict(
+    source: str, result: str
+) -> None:
+    """Neither path may become a dead end, whichever way the evidence arrived."""
+    markup = live_views.verdict(
+        result, "LEFT", {}, "tok", proof_ready=False, submitted_by=source
+    )
+    assert 'action="/live/upload"' in markup
+    assert 'action="/live/verify"' in markup
+    assert 'type="file"' in markup
+
+
+def test_no_retry_is_hidden_behind_a_disclosure_control() -> None:
+    """A <details> wrapper on a phone is a control a hurried worker will not open."""
+    for source in ("upload", "pilot"):
+        markup = live_views.verdict(
+            "FAIL", "LEFT", {}, "tok", proof_ready=False, submitted_by=source
+        )
+        assert "<details" not in markup
+
+
+def test_the_delta_page_shows_the_upload_option_without_a_disclosure(
+    client: TestClient,
+) -> None:
+    """The first upload is a co-equal path, so the video flow can start with it."""
+    markup = live_views.delta({"delivery_established": True}, "tok", 1800)
+    assert "<details" not in markup
+    assert 'type="file"' in markup
+    assert 'action="/live/upload"' in markup
+
+
+def test_a_passing_verdict_offers_no_retry() -> None:
+    markup = live_views.verdict(
+        "PASS", "TOP_RIGHT", {}, "tok", proof_ready=True, submitted_by="upload"
+    )
+    assert 'type="file"' not in markup
+    assert "View Change Proof" in markup
+
+
+def test_the_retry_carries_the_same_capability_and_no_workflow_id() -> None:
+    """A retry must stay on the same workflow, and must not name one."""
+    markup = live_views.verdict(
+        "FAIL", "LEFT", {}, "cap-token-abc", proof_ready=False, submitted_by="upload"
+    )
+    assert markup.count('name="capability" value="cap-token-abc"') == 2
+    for forbidden in ("workflow_id", "verification_result", "expected", "observation"):
+        assert f'name="{forbidden}"' not in markup
+
+
+def test_the_retry_form_lets_the_server_choose_nothing_from_the_client() -> None:
+    """No hidden field may carry a verdict, an expectation or a model parameter."""
+    markup = live_views.verdict(
+        "FAIL", "LEFT", {}, "tok", proof_ready=False, submitted_by="upload"
+    )
+    hidden = re.findall(r'<input type="hidden" name="(\w+)"', markup)
+    assert set(hidden) <= {"capability", "photo"}, f"unexpected hidden fields: {hidden}"
+
+
+def test_both_routes_record_how_the_evidence_arrived() -> None:
+    """The signature must keep the two paths distinguishable."""
+    assert "submitted_by" in inspect.signature(live_views.verdict).parameters
+    import driftzero_public.app as app_module
+
+    source = inspect.getsource(app_module)
+    assert 'submitted_by="upload"' in source
+    assert 'submitted_by="pilot"' in source

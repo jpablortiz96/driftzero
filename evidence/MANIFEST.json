@@ -240,7 +240,7 @@
       "judge_relevance": "The deterministic core, reproducible offline.",
       "path": "evidence/runs/hero_run_local/manifest.json",
       "present": true,
-      "sha256": "b10b97fc3b11c006aabaf51fd34a11c42fab4b7906369f160584b932339ef09d",
+      "sha256": "1e8881f32e05231691da7dbccf4bcb653dd44673f5a5ab53b7abdb81413922a3",
       "size_bytes": 16690,
       "task": "T084"
     },
@@ -428,7 +428,7 @@
     },
     {
       "bundle": "evidence/public_live",
-      "files": 1,
+      "files": 2,
       "mismatches": [],
       "missing": [],
       "verified": true
@@ -458,7 +458,7 @@
     "REAL_MAAS_EXECUTION": "Produced by real inference on Vertex AI MaaS, google/gemma-4-26b-a4b-it-maas, serverless ON_DEMAND. Each record carries the input hash and token usage.",
     "REAL_PHYSICAL_EVIDENCE": "Photographs of a real box with a printed label, taken with a camera. Nothing generated, rendered or composited occupies these paths."
   },
-  "generated_at": "2026-08-31T20:01:12+00:00",
+  "generated_at": "2026-08-31T20:58:09+00:00",
   "hash_guarantee": {
     "algorithm": "SHA-256",
     "covers": "complete file bytes of each listed artifact",

@@ -174,20 +174,53 @@ def delta(status: dict[str, Any], token: str, seconds_left: int) -> str:
     <span class="hint">Runs a new live verification against a real pilot photograph.</span>
   </form>
 
-  <details class="upload">
-    <summary>Upload your own photograph instead</summary>
-    <form method="post" action="/live/upload" enctype="multipart/form-data">
-      <input type="hidden" name="capability" value="{e(token)}">
-      <input type="file" name="file" accept="image/*" required>
-      <button type="submit" class="btn">Submit my photo</button>
-      <span class="hint">Images only, up to 8 MB. The verdict is the Truth Engine's —
-      PASS, FAIL or INCONCLUSIVE.</span>
-    </form>
-  </details>
+  <div class="or">or</div>
+
+  <form method="post" action="/live/upload" enctype="multipart/form-data"
+        class="verify-form retry-upload">
+    <input type="hidden" name="capability" value="{e(token)}">
+    <label class="file-label" for="field-photo">Upload your own photograph</label>
+    <input id="field-photo" type="file" name="file" accept="image/*" required>
+    <button type="submit" class="btn">Submit my photo</button>
+    <span class="hint">Images only, up to 8 MB. The verdict is the Truth Engine's —
+    PASS, FAIL or INCONCLUSIVE.</span>
+  </form>
   <p class="note">This pilot session expires in {seconds_left // 60} minutes.</p>
 </section>
 """,
     )
+
+
+def _upload_form(token: str, *, primary: bool) -> str:
+    """A file input for the next photograph, posting to the same upload route.
+
+    Rendered as a plain form so it works with ``script-src 'none'`` and on a phone, where
+    the file picker offers the camera directly.
+    """
+    css = "btn primary big" if primary else "btn"
+    return f"""
+    <form method="post" action="/live/upload" enctype="multipart/form-data"
+          class="verify-form retry-upload">
+      <input type="hidden" name="capability" value="{e(token)}">
+      <label class="file-label" for="corrected-photo">Choose the corrected photograph</label>
+      <input id="corrected-photo" type="file" name="file" accept="image/*" required>
+      <button type="submit" class="{css}">Upload corrected photo</button>
+      <span class="hint">Photograph the work again and submit it. A new live Gemma
+      observation, adjudicated by the Truth Engine — PASS, FAIL or INCONCLUSIVE.</span>
+    </form>"""
+
+
+def _pilot_retry_form(token: str, *, primary: bool) -> str:
+    """Retry with the server-owned corrected pilot photograph."""
+    css = "btn primary big" if primary else "btn"
+    return f"""
+    <form method="post" action="/live/verify" class="verify-form">
+      <input type="hidden" name="capability" value="{e(token)}">
+      <input type="hidden" name="photo" value="corrected">
+      <button type="submit" class="{css}">Verify corrected state</button>
+      <span class="hint">Runs a new live verification against the corrected pilot
+      photograph.</span>
+    </form>"""
 
 
 def verdict(
@@ -198,8 +231,20 @@ def verdict(
     *,
     proof_ready: bool,
     latency: float | None = None,
+    submitted_by: str = "pilot",
 ) -> str:
-    """The outcome of one real verification. Never rendered before the backend answers."""
+    """The outcome of one real verification. Never rendered before the backend answers.
+
+    ``submitted_by`` records how this attempt's evidence arrived — ``upload`` for the
+    visitor's own photograph, ``pilot`` for a server-owned one — and decides which retry
+    leads. A visitor who uploaded their own photo and then failed used to be offered only
+    the *pilot* photograph, which silently switched the evidence out from under them and
+    left no way to submit a second photo of their own at all.
+
+    Both retries are always present after a non-passing verdict. Neither is hidden behind
+    a disclosure control: on a phone, a retry the worker cannot find is a retry that does
+    not exist.
+    """
     passed = result == "PASS"
     inconclusive = result == "INCONCLUSIVE"
 
@@ -238,14 +283,24 @@ def verdict(
     elif passed:
         action = '<p class="note">The proof is still being finalised.</p>'
     else:
+        # The retry that matches how this attempt arrived leads; the other stays offered,
+        # so neither path is a dead end.
+        from_upload = submitted_by == "upload"
+        first = (
+            _upload_form(token, primary=True)
+            if from_upload
+            else _pilot_retry_form(token, primary=True)
+        )
+        second = (
+            _pilot_retry_form(token, primary=False)
+            if from_upload
+            else _upload_form(token, primary=False)
+        )
         action = f"""
-    <form method="post" action="/live/verify">
-      <input type="hidden" name="capability" value="{e(token)}">
-      <input type="hidden" name="photo" value="corrected">
-      <button type="submit" class="btn primary big">Verify corrected state</button>
-      <span class="hint">The worker moves the label and photographs again — a second live
-      Gemma call against the corrected pilot photograph.</span>
-    </form>"""
+    <h2>Correct the work and prove it again</h2>
+    {first}
+    <div class="or">or</div>
+    {second}"""
 
     chronology = "".join(
         f'<li class="{"pass" if r == "PASS" else "fail"}">Attempt {i + 1}: <b>{e(r)}</b></li>'

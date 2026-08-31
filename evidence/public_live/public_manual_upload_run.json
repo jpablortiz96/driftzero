@@ -1,0 +1,99 @@
+{
+  "authenticated": false,
+  "backend_revision": "driftzero-api-00008-xzb",
+  "backend_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+  "change_proof": {
+    "affected_artifact_id": "wi-packing-standard-001",
+    "change_id": "dz-live-3cb9d7a5f676",
+    "completion_timestamp": "2026-08-31T20:55:47.512341Z",
+    "content_hash": "ead5848b9999ed7c07fda2e6be5edbd3a4a5dc8ab745049904b4bfb5bb480916",
+    "current_value": "TOP_RIGHT",
+    "latency_seconds": 0.687,
+    "previous_value": "LEFT",
+    "proof_id": "act-generate_proof-85254c4e4c876a82e8290e0ec5b2d7e8",
+    "seven_conditions_satisfied": true,
+    "verification_result": "PASS",
+    "workflow_id": "wf-51b80f48-007-001"
+  },
+  "credential_scan": {
+    "clean": true,
+    "findings": []
+  },
+  "evidence_class": "REAL_GOOGLE_CLOUD",
+  "frontend_revision": "driftzero-web-00004-jhr",
+  "gate_id": "PUBLIC_MANUAL_UPLOAD_RETRY",
+  "integrity": {
+    "content_hash_matches": true,
+    "is_not": [
+      "a digital signature",
+      "an attestation",
+      "a trusted timestamp",
+      "a ledger entry"
+    ],
+    "method": "SHA-256 over the proof's canonical JSON excluding its own content_hash, recomputed by the public surface rather than by the generator"
+  },
+  "note": "One end-to-end run from the public internet in which both photographs were uploaded manually. The first returned FAIL and the page offered a file input for a corrected photograph \u2014 the defect this run exists to prove fixed. Both submissions are new live Gemma calls on the same capability-bound workflow.",
+  "public_url": "https://driftzero-web-eepb64ze2q-uc.a.run.app",
+  "start": {
+    "gemini_call": "REAL",
+    "latency_seconds": 18.862
+  },
+  "timestamp": "2026-08-31T20:55:48+00:00",
+  "two_distinct_model_calls": {
+    "distinct_observations": true,
+    "distinct_payloads": true,
+    "distinct_verdicts": true,
+    "first_image_sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3",
+    "second_image_sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96",
+    "why_a_replay_is_impossible": "the backend derives submission identity from the image bytes, so resubmitting identical bytes is deduplicated into the same verification event rather than producing a second one; two verification events therefore require two different payloads"
+  },
+  "uploads": [
+    {
+      "expected_verdict": "FAIL",
+      "gemma_observation": "LEFT",
+      "image": {
+        "actual_type_sniffed_server_side": "image/heic",
+        "bytes": 696422,
+        "declared_by_extension": "image/jpeg",
+        "file": "fixtures/multimodal/label_left_01.jpg",
+        "note": "the extension says JPEG and the bytes say HEIC; the server derives the authoritative type from the bytes, so the filename is a claim only",
+        "sha256": "664cf4e7248baaa1f0d4f34db659f4b7c77c73331633ff4e364b4084d3bb95a3"
+      },
+      "inference": "REAL \u2014 a new live call against these bytes",
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "model_latency_seconds_shown": 2.3,
+      "offered_a_corrected_upload": true,
+      "offered_upload_as_primary": true,
+      "pilot_retry_still_offered": true,
+      "provider": "vertex_ai_maas",
+      "round_trip_seconds": 3.93,
+      "submission": "first",
+      "submitted_via": "POST /live/upload (multipart, visitor-supplied bytes)",
+      "truth_engine_verdict": "FAIL"
+    },
+    {
+      "expected_verdict": "PASS",
+      "gemma_observation": "TOP_RIGHT",
+      "image": {
+        "actual_type_sniffed_server_side": "image/heic",
+        "bytes": 702867,
+        "declared_by_extension": "image/jpeg",
+        "file": "fixtures/multimodal/label_top_right_01.jpg",
+        "note": "the extension says JPEG and the bytes say HEIC; the server derives the authoritative type from the bytes, so the filename is a claim only",
+        "sha256": "fc632845915021b78c67ce936de0ad794c91d8c3c79f6a576167b1211ab13f96"
+      },
+      "inference": "REAL \u2014 a new live call against these bytes",
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "model_latency_seconds_shown": 1.4,
+      "offered_a_corrected_upload": false,
+      "offered_upload_as_primary": false,
+      "pilot_retry_still_offered": false,
+      "provider": "vertex_ai_maas",
+      "round_trip_seconds": 3.551,
+      "submission": "corrected",
+      "submitted_via": "POST /live/upload (multipart, visitor-supplied bytes)",
+      "truth_engine_verdict": "PASS"
+    }
+  ],
+  "verdict": "PASS"
+}

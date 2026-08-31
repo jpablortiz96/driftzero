@@ -269,9 +269,20 @@ def _observation_from(state: dict[str, Any], result: str) -> str:
 
 
 def _verify_and_render(
-    held: cap.Capability, token: str, raw: bytes, name: str, media: str
+    held: cap.Capability,
+    token: str,
+    raw: bytes,
+    name: str,
+    media: str,
+    *,
+    submitted_by: str,
 ) -> HTMLResponse:
-    """Submit evidence, then render whatever the backend actually decided."""
+    """Submit evidence, then render whatever the backend actually decided.
+
+    ``submitted_by`` is carried through so the retry offered after a non-passing verdict
+    matches how this attempt arrived. Without it a visitor who uploaded their own
+    photograph was offered only the server-owned one.
+    """
     started = time.monotonic()
     try:
         outcome = _pilot.verify(held, raw, filename=name, media_type=media)
@@ -310,6 +321,7 @@ def _verify_and_render(
             token,
             proof_ready=proof_ready,
             latency=latency,
+            submitted_by=submitted_by,
         )
     )
 
@@ -329,7 +341,7 @@ def live_verify(capability: str = Form(""), photo: str = Form("current")) -> HTM
         raw, name, media = LivePilot.pilot_photo(photo)
     except UnsupportedEvidence as exc:
         return _live_html(live_views.refused("That evidence cannot be submitted", str(exc)), 400)
-    return _verify_and_render(held, capability, raw, name, media)
+    return _verify_and_render(held, capability, raw, name, media, submitted_by="pilot")
 
 
 @app.post("/live/upload", include_in_schema=False, response_model=None)
@@ -359,7 +371,9 @@ async def live_upload(
         return _live_html(
             live_views.refused("That file cannot be used as evidence", str(exc)), 400
         )
-    return _verify_and_render(held, capability, raw, "field-evidence", media)
+    return _verify_and_render(
+        held, capability, raw, "field-evidence", media, submitted_by="upload"
+    )
 
 
 @app.get("/live/proof", response_class=HTMLResponse, include_in_schema=False)

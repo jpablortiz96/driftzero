@@ -45,15 +45,27 @@ reused, and nothing is polluted by rehearsing.
 
 ## 3. The take
 
-Five actions. That is the whole demo.
+Six actions. **Upload both photographs yourself** — the viewer watches two physical files
+being chosen, which two buttons could never show as convincingly.
 
 | # | Action | Expected on screen — do not proceed otherwise | Time |
 | --- | --- | --- | --- |
 | 1 | Open the URL | Hero: *"The autonomous last-mile for operational change"*, backend chip **SERVING** | 0:00 |
-| 2 | Click **Run live pilot** → **Run live pilot** | ~20–25 s, then **Your work has changed**, five steps ticked, `Was LEFT → Now TOP RIGHT`, artifact `wi-packing-standard-001` | 0:20 |
-| 3 | Click **Verify current state** | ~2–3 s, then **Not done yet**, `Observed: LEFT`, `Truth Engine verdict: FAIL`, retry offered, **no proof button** | 1:00 |
-| 4 | Click **Verify corrected state** | ~2–3 s, then **Verified**, `Observed: TOP_RIGHT`, `PASS`, chronology `FAIL → PASS` | 1:30 |
-| 5 | Click **View Change Proof** | **Change deployed**, **7 / 7 conditions satisfied**, proof id, content hash, **Content hash matches** | 2:00 |
+| 2 | **Run live pilot** → **Run live pilot** | ~15–25 s, then **Your work has changed**, five steps ticked, `Was LEFT → Now TOP RIGHT`, artifact `wi-packing-standard-001` | 0:20 |
+| 3 | Under **Upload your own photograph**, choose `label_left_01.jpg` → **Submit my photo** | ~2–4 s, then **Not done yet**, `Observed: LEFT`, `Truth Engine verdict: FAIL`, **no proof button** | 1:00 |
+| 4 | **Upload corrected photo** — choose `label_top_right_01.jpg` | the file input is the primary CTA on the FAIL page | 1:30 |
+| 5 | Submit | ~2–4 s, then **Verified**, `Observed: TOP_RIGHT`, `PASS`, chronology `FAIL → PASS` | 1:50 |
+| 6 | **View Change Proof** | **Change deployed**, **7 / 7 conditions satisfied**, proof id, content hash, **Content hash matches** | 2:10 |
+
+Have both files ready on the desktop with visible names before you record, so choosing
+them is one quick click each.
+
+**Why upload rather than the buttons.** A button could be a lookup. Two different files,
+visibly selected, cannot be — and the page proves it: two different observations, two
+different verdicts, one workflow, one proof.
+
+The server-owned **Verify current state** / **Verify corrected state** buttons remain on
+the page and still work. They are the fallback, not the take.
 
 Step 3 is the demo. A verification system that only works when the worker gets it right
 the first time verifies nothing — say that while it is on screen.
@@ -77,16 +89,17 @@ remediation and real delivery happening inside one request.
 - **Do not** pre-render a result, splice a verdict from a different run, or reorder the
   second photograph before the first.
 
-Gemma is fast — measured **1.8–2.7 s** per verification on the deployed service — so the
-two verification steps need no trimming at all.
+Gemma is fast — measured **1.3–4 s** per verification on the deployed service, uploads
+included — so neither verification step needs trimming.
 
 ---
 
 ## 5. Do not click
 
 - **View Change Proof** before step 4 — it does not exist yet, and the page will say so
-- **Upload your own photograph** on camera unless you have rehearsed it; an unfamiliar
-  image can legitimately return `INCONCLUSIVE`, which is honest but not the story
+- Any photograph other than the two pilot files, unless you have rehearsed it; an
+  unfamiliar image can legitimately return `INCONCLUSIVE`, which is honest but not the
+  story you are telling
 - The **browser back button** after a verdict — re-fetching is fine, but do not imply a
   state change that did not happen
 - Any **cleanup or shutdown** script
@@ -111,7 +124,8 @@ Never put an identity token, an `Authorization` header or a billing identifier o
 | If | Then |
 | --- | --- |
 | Gemini is slow or erroring | Retry once. The pilot creates a fresh workflow each time, so a failed attempt costs nothing and taints nothing |
-| Gemma returns `INCONCLUSIVE` | That is an honest outcome. Retry with the pilot photograph; if it recurs, narrate it — the product shows it rather than hiding it |
+| Gemma returns `INCONCLUSIVE` | An honest outcome. The FAIL page keeps both retries open, so fall back to **Verify corrected state** and narrate it — the product shows it rather than hiding it |
+| The corrected upload button is missing | You are on a `PASS` page; there is nothing to correct |
 | The whole live path is down | The recorded run is preserved at `/demo` and in `evidence/runs/hero_run_001/`. Narrate over it **and say it is recorded** |
 
 In every fallback: **say what the viewer is looking at.** A recorded run presented as live
