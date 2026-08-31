@@ -196,6 +196,35 @@ def read_workflow(workflow_id: str, runtime: Runtime) -> WorkflowStatus:
 
 
 @router.post(
+    "/api/v1/workflows/{workflow_id}/advance",
+    response_model=WorkflowStatus,
+    tags=["workflows"],
+)
+def advance_workflow(workflow_id: str, runtime: Runtime) -> WorkflowStatus:
+    """Drive an accepted change to the point where it needs physical evidence.
+
+    Transport only. It calls the same three application methods the console and the ADK
+    workflow already call, in the same order, and adds no decision of its own:
+    ``analyze_change`` (Change Intelligence proposes, the Truth Engine qualifies),
+    ``deploy_change`` (scoped remediation under an authorization), and
+    ``deliver_to_frontline`` (the delta and Crossing 3).
+
+    It exists because ``POST /api/v1/changes`` creates a workflow and stops. Nothing on
+    this service could advance one over HTTP, so a deployed instance could ingest a
+    change and then never analyse it — which is exactly what a caller with no shell
+    would experience.
+
+    Each step is idempotent at the application layer: the state machine refuses a repeat
+    transition, so a retried request cannot remediate or deliver twice.
+    """
+    service = _live_or_404(runtime, workflow_id)
+    service.analyze_change()
+    service.deploy_change()
+    service.deliver_to_frontline()
+    return WorkflowStatus(**runtime.status(workflow_id))
+
+
+@router.post(
     "/api/v1/workflows/{workflow_id}/verify",
     response_model=VerificationResponse,
     tags=["workflows"],
@@ -240,6 +269,35 @@ async def verify_workflow(
         accepted=not bool(verification.get("rejected")),
         rejection_reason=verification.get("rejection_reason"),
     )
+
+
+@router.post("/api/v1/workflows/{workflow_id}/proof", tags=["workflows"])
+def create_proof(workflow_id: str, runtime: Runtime) -> dict[str, Any]:
+    """Ask the Truth Engine to generate this workflow's Change Proof.
+
+    Transport over the existing ``generate_proof`` application method — the same one the
+    console and the ADK workflow call. It requests; it does not decide. If any of the
+    seven completion conditions does not hold, no proof is produced and the read below
+    keeps returning ``PROOF_NOT_COMPLETE``.
+
+    Separate from the GET because generating and reading are different acts: a reader
+    must never cause a proof to come into existence.
+    """
+    service = _live_or_404(runtime, workflow_id)
+    service.generate_proof()
+    document = runtime.proof_document(workflow_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "PROOF_NOT_COMPLETE",
+                "detail": (
+                    f"workflow {workflow_id} does not satisfy all seven completion "
+                    "conditions, so no Change Proof was generated"
+                ),
+            },
+        )
+    return document
 
 
 @router.get("/api/v1/workflows/{workflow_id}/proof", tags=["workflows"])

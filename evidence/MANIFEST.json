@@ -240,7 +240,7 @@
       "judge_relevance": "The deterministic core, reproducible offline.",
       "path": "evidence/runs/hero_run_local/manifest.json",
       "present": true,
-      "sha256": "ed8435ed213b6309a5b1110aeab542ddd5efa3e72ea097b96d0667ffeaca8f1b",
+      "sha256": "b10b97fc3b11c006aabaf51fd34a11c42fab4b7906369f160584b932339ef09d",
       "size_bytes": 16690,
       "task": "T084"
     },
@@ -427,6 +427,13 @@
       "verified": true
     },
     {
+      "bundle": "evidence/public_live",
+      "files": 1,
+      "mismatches": [],
+      "missing": [],
+      "verified": true
+    },
+    {
       "bundle": "evidence/runs/hero_run_001",
       "files": 3,
       "mismatches": [],
@@ -441,8 +448,8 @@
       "verified": true
     }
   ],
-  "bundles_total": 14,
-  "bundles_verified": 14,
+  "bundles_total": 15,
+  "bundles_verified": 15,
   "evidence_classes": {
     "DERIVED": "Computed from other evidence in this pack rather than observed directly \u2014 an index, a gate result, or a checklist over recorded measurements.",
     "HISTORICAL_LIVE_MODEL": "A live-model run recorded earlier and referenced, never re-executed. Kept byte-identical so a later batch cannot quietly restate it.",
@@ -451,7 +458,7 @@
     "REAL_MAAS_EXECUTION": "Produced by real inference on Vertex AI MaaS, google/gemma-4-26b-a4b-it-maas, serverless ON_DEMAND. Each record carries the input hash and token usage.",
     "REAL_PHYSICAL_EVIDENCE": "Photographs of a real box with a printed label, taken with a camera. Nothing generated, rendered or composited occupies these paths."
   },
-  "generated_at": "2026-08-31T15:57:17+00:00",
+  "generated_at": "2026-08-31T20:01:12+00:00",
   "hash_guarantee": {
     "algorithm": "SHA-256",
     "covers": "complete file bytes of each listed artifact",

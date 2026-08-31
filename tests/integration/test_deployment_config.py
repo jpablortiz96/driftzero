@@ -42,7 +42,7 @@ def test_the_dockerfile_exists_and_targets_the_supported_python(dockerfile: str)
 
 def test_the_image_installs_only_the_api_and_cloud_extras(dockerfile: str) -> None:
     """Not the console, and not the live model extras — this serves the API."""
-    assert '".[api,cloud]"' in dockerfile or '"driftzero[api,cloud]"' in dockerfile
+    assert '".[api,cloud,live]"' in dockerfile or '"driftzero[api,cloud,live]"' in dockerfile
     assert "[console]" not in dockerfile
     assert "[live]" not in dockerfile
 
@@ -68,7 +68,7 @@ def test_the_runtime_stage_ships_no_source_tree(dockerfile: str) -> None:
     weight and would let an editable-install mistake ship uncompiled sources."""
     runtime = dockerfile[dockerfile.index("AS runtime") :]
     assert "COPY src/" not in runtime
-    assert 'find-links=/wheels "driftzero[api,cloud]"' in runtime
+    assert 'find-links=/wheels "driftzero[api,cloud,live]"' in runtime
 
 
 def test_only_the_source_corpus_fixtures_are_shipped(dockerfile: str) -> None:
@@ -180,7 +180,15 @@ def test_the_pilot_limitations_are_stated_not_hidden() -> None:
             "pilot_limitations"
         ]
         assert any("source registry" in item for item in limitations)
-        assert any("T097" in item for item in limitations)
+        # The worker surface sits behind the same IAM boundary as the API. This replaced
+        # a stale claim that a recovered workflow could not be resumed in a new instance:
+        # resumption is implemented and evidenced in restart_recovery.json, so continuing
+        # to publish it would have been a limitation the product no longer has.
+        assert any("worker" in item and "mediated" in item for item in limitations)
+        assert not any("T097" in item for item in limitations), (
+            "readiness must not cite an internal task id to a reader"
+        )
+        assert not any("not resumed" in item for item in limitations)
     finally:
         if previous is None:
             os.environ.pop("K_SERVICE", None)

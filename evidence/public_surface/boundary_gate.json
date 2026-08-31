@@ -76,7 +76,7 @@
     {
       "check": 13,
       "name": "the backend is still serving its existing revision",
-      "observed": "driftzero-api revision: driftzero-api-00005-gl5",
+      "observed": "driftzero-api revision: driftzero-api-00008-xzb",
       "result": "PASS"
     }
   ],
@@ -85,7 +85,7 @@
   "note": "Observed against live Cloud Run and live IAM. No identity token is recorded here; only the status codes it produced.",
   "passed": 13,
   "public_url": "https://driftzero-web-eepb64ze2q-uc.a.run.app",
-  "timestamp": "2026-08-31T15:53:31+00:00",
+  "timestamp": "2026-08-31T19:56:06+00:00",
   "total": 13,
   "verdict": "PASS"
 }

@@ -566,9 +566,16 @@ def test_the_proof_generator_has_exactly_one_call_site_outside_m0() -> None:
 
     # The frozen generator is reached from exactly one place: the proof store.
     assert sorted(set(generator_calls)) == ["driftzero/proof/store.py"]
-    # Adapters call the use case, never the generator.
-    assert set(use_case_calls) <= {"driftzero_console/app.py", "driftzero_adk/hero_workflow.py"}
-    for path in ("driftzero_console/app.py", "driftzero_adk/hero_workflow.py"):
+    # Adapters call the use case, never the generator. The API is the third adapter:
+    # the public live pilot has to be able to request a proof over HTTP, and it does so
+    # through the same application method the console and the ADK workflow use.
+    adapters = (
+        "driftzero_console/app.py",
+        "driftzero_adk/hero_workflow.py",
+        "driftzero_api/routes.py",
+    )
+    assert set(use_case_calls) <= set(adapters)
+    for path in adapters:
         assert "generate_change_proof" not in code_of(REPO_ROOT / "src" / path)
 
 

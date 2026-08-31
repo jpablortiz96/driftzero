@@ -18,6 +18,7 @@ from fastapi import FastAPI
 
 from driftzero_api import pubsub, routes, web
 from driftzero_api.runtime import ApiRuntime, build_runtime
+from driftzero_providers import composition
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FIXTURES = REPO_ROOT / "fixtures"
@@ -38,6 +39,15 @@ def create_app(runtime: ApiRuntime | None = None) -> FastAPI:
     starting this module never reaches Google Cloud on its own.
     """
     app = FastAPI(title=API_TITLE, description=API_DESCRIPTION, version="1.0.0")
+
+    # Composition root. Without it a deployed instance reads DRIFTZERO_SEMANTIC_PROVIDER
+    # and DRIFTZERO_FIELD_PROVIDER, finds no registered client, and silently degrades to
+    # "no analysis was performed" — configured for live models and never calling one.
+    # Neither call raises, and neither reaches a model: registration is not invocation.
+    app.state.provider_status = {
+        "semantic": composition.configure_semantic_provider(),
+        "field": composition.configure_field_provider(),
+    }
     app.state.runtime = runtime or build_runtime(
         fixtures_dir=Path(os.environ.get("DRIFTZERO_FIXTURES_DIR", DEFAULT_FIXTURES))
     )

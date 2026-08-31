@@ -65,7 +65,7 @@ Every artifact below already existed before this pack was assembled. Nothing her
 
 ## Bundle integrity
 
-14 of 14 recorded `SHA256SUMS.txt` bundles verify.
+15 of 15 recorded `SHA256SUMS.txt` bundles verify.
 
 ```
 cd evidence/<bundle> && sha256sum -c SHA256SUMS.txt

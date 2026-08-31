@@ -232,8 +232,8 @@
       "name": "proof content hash validates",
       "observed": {
         "authoritative_validation": "VALID",
-        "content_hash": "10053aeb35efcf30f83b2afeef6069938883c89fcb8c33f55211cdeaba483268",
-        "third_party_recompute": "10053aeb35efcf30f83b2afeef6069938883c89fcb8c33f55211cdeaba483268"
+        "content_hash": "4b73691f6dacfb635429c934b87ec181da8526994b129f6549ce3022d77d5f60",
+        "third_party_recompute": "4b73691f6dacfb635429c934b87ec181da8526994b129f6549ce3022d77d5f60"
       },
       "result": "PASS"
     },
@@ -398,7 +398,7 @@
       "check": 42,
       "mandatory": true,
       "name": "full regression suite passes",
-      "observed": "1939 passed, 52 skipped, 118 warnings in 45.99s",
+      "observed": "1986 passed, 52 skipped, 118 warnings in 28.98s",
       "result": "PASS"
     }
   ],
@@ -430,7 +430,7 @@
   ],
   "gate_id": "M1_EXIT_GATE",
   "git_branch": "master",
-  "git_head": "553b6372f8da29a7a34623caa5641519699f01ba",
+  "git_head": "a68e16501bc3c6eed0f7cef279302c62af90a7c7",
   "idempotency": {
     "delivery_dispatch": 1,
     "proofs": 1,
@@ -516,7 +516,7 @@
         "satisfied": true
       }
     ],
-    "content_hash": "10053aeb35efcf30f83b2afeef6069938883c89fcb8c33f55211cdeaba483268",
+    "content_hash": "4b73691f6dacfb635429c934b87ec181da8526994b129f6549ce3022d77d5f60",
     "hash_meaning": "SHA-256 over canonical JSON of the Change Proof excluding its own content_hash field. Content identity and alteration detection only.",
     "hash_preimage": "canonical-json-excluding-content_hash",
     "not_the_same_as_sha256sums": "SHA256SUMS.txt hashes the evidence FILES in this directory. It is a separate mechanism from ChangeProof.content_hash, which hashes the proof's canonical JSON excluding its own content_hash field.",
@@ -533,7 +533,7 @@
   "provider_calls": 2,
   "provider_mode": "OFFLINE_DETERMINISTIC_SUBSTITUTES",
   "remediation_dispatch_count": 1,
-  "run_timestamp": "2026-08-31T15:57:06+00:00",
+  "run_timestamp": "2026-08-31T20:01:00+00:00",
   "runtime_readiness": "LOCAL_PILOT",
   "source": {
     "current_hash": "e68d6d01670e2473dc9734937230e0628e293ba3fb4d549dcbc80ae3de4d9de6",
@@ -549,7 +549,7 @@
   "test_suite": {
     "exit_code": 0,
     "passed": true,
-    "summary": "1939 passed, 52 skipped, 118 warnings in 45.99s"
+    "summary": "1986 passed, 52 skipped, 118 warnings in 28.98s"
   },
   "verdict": "PASS",
   "verification_chronology": [
@@ -561,7 +561,7 @@
       "raw_evidence_ref": "field-evidence:obs-60b5b7555bf726f3a41747cf95ada43f",
       "result": "FAIL",
       "submission_id": "fev-60b5b7555bf726f3a41747cf95ada43f",
-      "timestamp": "2026-08-31T15:56:18.363684+00:00"
+      "timestamp": "2026-08-31T20:00:30.068247+00:00"
     },
     {
       "event_id": "vev-session-001-002",
@@ -571,7 +571,7 @@
       "raw_evidence_ref": "field-evidence:obs-a80a554e808be3dea2af964958ac2241",
       "result": "PASS",
       "submission_id": "fev-a80a554e808be3dea2af964958ac2241",
-      "timestamp": "2026-08-31T15:56:18.365228+00:00"
+      "timestamp": "2026-08-31T20:00:30.069968+00:00"
     }
   ],
   "workflow_id": "wf-m1-gate-001",

@@ -16,12 +16,18 @@ WORKDIR /build
 COPY pyproject.toml ./
 COPY src/ ./src/
 
-# .[api,cloud]: the HTTP surface plus the Firestore and Cloud Storage adapters. The
-# console and live model extras are deliberately absent — this image serves the
-# production API, not the demo console, and the deployed field/semantic providers are
-# selected by configuration rather than baked in.
+# .[api,cloud,live]: the HTTP surface, the Firestore and Cloud Storage adapters, and
+# the live model clients (google-adk for Gemini, google-auth/httpx for Vertex AI MaaS).
+#
+# `live` is present but not thereby active: DRIFTZERO_SEMANTIC_PROVIDER and
+# DRIFTZERO_FIELD_PROVIDER still select the provider, and both default to "disabled".
+# Shipping the dependency is what makes the choice available to a deployment -- without
+# it the composition root can only report UNAVAILABLE, and the service answers "no
+# analysis was performed" while looking correctly configured.
+#
+# The demo console extra stays absent: this image serves the production API.
 RUN python -m pip install --upgrade pip \
- && python -m pip wheel --wheel-dir /wheels ".[api,cloud]"
+ && python -m pip wheel --wheel-dir /wheels ".[api,cloud,live]"
 
 
 FROM python:3.13-slim AS runtime
@@ -44,7 +50,7 @@ COPY --from=build /wheels /wheels
 # path would make pip try to build the project again, offline, with no build
 # backend available. Only wheels are copied here, so no source tree ships in the
 # final image.
-RUN python -m pip install --no-index --find-links=/wheels "driftzero[api,cloud]" \
+RUN python -m pip install --no-index --find-links=/wheels "driftzero[api,cloud,live]" \
  && rm -rf /wheels
 
 # The controlled pilot source-procedure corpus and artifact catalog. The runtime globs

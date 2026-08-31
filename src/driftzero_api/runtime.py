@@ -168,8 +168,8 @@ class ApiRuntime:
             )
         if deployed:
             limitations.append(
-                "a workflow recovered from durable storage can be read but not resumed "
-                "in a new instance; resuming a persisted run is T097"
+                "the frontline surface is reachable by an operator through this service's "
+                "IAM boundary; a worker's own device would need a mediated session"
             )
 
         return {

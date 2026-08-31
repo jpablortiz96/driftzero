@@ -168,8 +168,8 @@ def home(status: BackendStatus) -> str:
   It's deployed when the work changes.</blockquote>
   {_status_chip(status)}
   <div class="cta">
-    <a class="btn primary" href="/demo">See the real run</a>
-    <a class="btn" href="/proof">Inspect the Change Proof</a>
+    <a class="btn primary big" href="/live">Run live pilot</a>
+    <a class="btn" href="/demo">View recorded evidence</a>
   </div>
 </section>
 
@@ -197,7 +197,8 @@ def home(status: BackendStatus) -> str:
   <p class="note">Recorded evidence from a real run — real photographs, real Gemma
   inference. Not a live interaction.</p>
   <div class="shots three">{shots}</div>
-  <p><a class="btn" href="/demo">Walk through the whole run →</a></p>
+  <p><a class="btn primary" href="/live">Run this yourself, live →</a>
+     <a class="btn" href="/demo">Walk through the recorded run</a></p>
 </section>
 
 <section class="split">
@@ -234,7 +235,8 @@ def home(status: BackendStatus) -> str:
 <section class="closing">
   <h2>DRIFTZERO doesn't ask whether the SOP changed.<br>It proves whether the work changed.</h2>
   <div class="cta">
-    <a class="btn primary" href="{REPO_URL}" rel="noopener">Read the source and evidence</a>
+    <a class="btn primary big" href="/live">Run live pilot</a>
+    <a class="btn" href="{REPO_URL}" rel="noopener">Read the source and evidence</a>
     <a class="btn" href="/architecture">See the architecture</a>
   </div>
 </section>

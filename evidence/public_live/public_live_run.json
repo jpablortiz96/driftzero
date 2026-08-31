@@ -1,0 +1,112 @@
+{
+  "backend_url": "https://driftzero-api-eepb64ze2q-uc.a.run.app",
+  "change_proof": {
+    "affected_artifact_id": "wi-packing-standard-001",
+    "change_id": "dz-live-e71e2c80c5e9",
+    "completion_timestamp": "2026-08-31T19:58:48.920114Z",
+    "content_hash": "7d1891d5ba09ad8d5bc5233df44f83bad4d9f451aa842e7c4e8cde22f871d0db",
+    "current_value": "TOP_RIGHT",
+    "delivery_status": "DELIVERED",
+    "generated_by_this_run": true,
+    "latency_seconds": 0.614,
+    "previous_value": "LEFT",
+    "proof_id": "act-generate_proof-e422a6176dede0c760a41d74bd43dcec",
+    "seven_conditions_satisfied": true,
+    "verification_result": "PASS",
+    "workflow_id": "wf-da8420c0-003-001"
+  },
+  "credential_scan": {
+    "clean": true,
+    "findings": []
+  },
+  "deployment": {
+    "backend_revision": "driftzero-api-00008-xzb",
+    "backend_service_account": "driftzero-run-sa@driftzero-runtime-2026.iam.gserviceaccount.com",
+    "frontend_revision": "driftzero-web-00003-9pk",
+    "frontend_service_account": "driftzero-web-sa@driftzero-runtime-2026.iam.gserviceaccount.com"
+  },
+  "evidence_class": "REAL_GOOGLE_CLOUD",
+  "field_provider": "REAL",
+  "gate_id": "PUBLIC_LIVE_PILOT",
+  "impact_and_delivery": {
+    "affected_artifact_id": "wi-packing-standard-001",
+    "delta": {
+      "now": "TOP RIGHT",
+      "was": "LEFT"
+    },
+    "latency_seconds": 0.703,
+    "note": "the artifact was qualified by the Truth Engine from Gemini's proposals",
+    "qualified_by": "DRIFTZERO TRUTH ENGINE (deterministic)",
+    "steps_completed": 5
+  },
+  "integrity": {
+    "content_hash_matches": true,
+    "is_not": [
+      "a digital signature",
+      "an attestation",
+      "a trusted timestamp",
+      "a ledger entry"
+    ],
+    "method": "SHA-256 over the proof's canonical JSON excluding its own content_hash field, recomputed by the public surface rather than by the generator"
+  },
+  "note": "One end-to-end run driven from the public internet with no authentication. Real Gemini, real Gemma, real Truth Engine, real Change Proof. The session capability used to drive it is deliberately not recorded.",
+  "provider_configuration": {
+    "DRIFTZERO_FIELD_PROVIDER": "vertex_maas",
+    "DRIFTZERO_GCP_LOCATION": "us-central1",
+    "DRIFTZERO_GEMINI_LOCATION": "global",
+    "DRIFTZERO_GEMINI_MODEL": "gemini-3.5-flash",
+    "DRIFTZERO_GEMMA_MODEL": "google/gemma-4-26b-a4b-it-maas",
+    "DRIFTZERO_PERSISTENCE": "firestore",
+    "DRIFTZERO_SEMANTIC_PROVIDER": "google_adk"
+  },
+  "public_url": "https://driftzero-web-eepb64ze2q-uc.a.run.app",
+  "security_boundary": {
+    "backend_health_unauthenticated": 403,
+    "expected": {
+      "backend_health_unauthenticated": 403,
+      "forged_capability": 403,
+      "public_change_route": 404,
+      "public_pubsub_route": 404,
+      "public_ready_route": 404,
+      "public_root_unauthenticated": 200
+    },
+    "forged_capability": 403,
+    "holds": true,
+    "public_change_route": 404,
+    "public_pubsub_route": 404,
+    "public_ready_route": 404,
+    "public_root_unauthenticated": 200
+  },
+  "semantic_provider": "REAL",
+  "start": {
+    "authenticated": false,
+    "gemini_call": "REAL \u2014 Change Intelligence ran inside this request",
+    "http_status": 303,
+    "latency_seconds": 20.605,
+    "redirected_to": "/live/pilot?capability=<REDACTED>"
+  },
+  "timestamp": "2026-08-31T19:58:14+00:00",
+  "verdict": "PASS",
+  "verification_chronology": [
+    {
+      "expected_verdict": "FAIL",
+      "gemma_observation": "LEFT",
+      "inference": "REAL \u2014 a new live call, not a replay",
+      "latency_seconds": 2.394,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "photo": "current",
+      "provider": "vertex_ai_maas",
+      "truth_engine_verdict": "FAIL"
+    },
+    {
+      "expected_verdict": "PASS",
+      "gemma_observation": "TOP_RIGHT",
+      "inference": "REAL \u2014 a new live call, not a replay",
+      "latency_seconds": 2.211,
+      "model": "google/gemma-4-26b-a4b-it-maas",
+      "photo": "corrected",
+      "provider": "vertex_ai_maas",
+      "truth_engine_verdict": "PASS"
+    }
+  ]
+}

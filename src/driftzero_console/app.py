@@ -29,7 +29,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from driftzero.config import DriftZeroConfig
 from driftzero.field.evidence import MAX_IMAGE_BYTES
 from driftzero.proof.store import HASH_PREIMAGE_LABEL
 from driftzero_adk.hero_workflow import HeroWorkflowRun
@@ -42,6 +41,7 @@ from driftzero_console.workflows import (
     WorkflowRegistry,
     dataset_from_fixture,
 )
+from driftzero_providers import composition
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).parent / "static"
@@ -66,64 +66,17 @@ def get_service() -> HeroConsoleService:
     return _service
 
 
+# Both composition roots now live in driftzero_providers.composition so the console and
+# the production API install providers through one implementation. The console keeps
+# these names because its tests and startup banner refer to them.
 def configure_providers() -> str:
-    """Composition root: install the live field provider, if one is configured.
-
-    The concrete provider is imported **only** when ``DRIFTZERO_FIELD_PROVIDER`` selects
-    it, so an unconfigured instance never needs ``google-auth`` or ``httpx`` installed —
-    and the deterministic core never imports them at all.
-
-    Returns a short status line for the startup banner. Never raises: a missing live
-    dependency degrades to "no observation is possible", which the UI states plainly,
-    rather than to a fabricated observation.
-
-    Kept ASCII-only — this goes to a terminal, and a Windows console encodes cp1252.
-    """
-    config = DriftZeroConfig.from_env().field_provider
-    if not config.is_live:
-        return f"field provider: {config.provider} (no live model call is possible)"
-    missing = config.missing_settings()
-    if missing:
-        return "field provider: MISCONFIGURED - missing " + ", ".join(missing)
-    try:
-        from driftzero_providers.vertex_maas import install  # noqa: PLC0415
-    except ImportError as exc:  # pragma: no cover - depends on the optional extra
-        return (
-            f"field provider: UNAVAILABLE - {exc}. Install the live extra: "
-            'pip install -e ".[live]"'
-        )
-    install()
-    return f"field provider: {config.provider} -> {config.model}"
+    """Install the live field provider, if one is configured."""
+    return composition.configure_field_provider()
 
 
 def configure_semantic_provider() -> str:
-    """Composition root: install the real Google ADK runtime, if configured.
-
-    The ADK is imported **only** when ``DRIFTZERO_SEMANTIC_PROVIDER`` selects it, so an
-    unconfigured instance never needs ``google-adk`` installed — and the deterministic
-    core never imports it at all.
-
-    ASCII-only and never raises: a missing dependency degrades to "no analysis is
-    possible", which the UI states plainly, rather than to a fabricated proposal.
-    """
-    config = DriftZeroConfig.from_env().semantic_provider
-    if not config.is_live:
-        return f"semantic provider: {config.provider} (no live model call is possible)"
-    missing = config.missing_settings()
-    if missing:
-        return "semantic provider: MISCONFIGURED - missing " + ", ".join(missing)
-    try:
-        from driftzero_adk.install import install_change_intelligence  # noqa: PLC0415
-    except ImportError as exc:  # pragma: no cover - depends on the optional extra
-        return (
-            f"semantic provider: UNAVAILABLE - {exc}. Install the live extra: "
-            'pip install -e ".[live]"'
-        )
-    version = install_change_intelligence(config)
-    return (
-        f"semantic provider: google_adk (ADK {version}) -> {config.model} "
-        f"@ {config.location}"
-    )
+    """Install the real Google ADK semantic runtime, if configured."""
+    return composition.configure_semantic_provider()
 
 
 configure_providers()

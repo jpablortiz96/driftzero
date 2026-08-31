@@ -167,14 +167,31 @@ def test_shipped_evidence_matches_the_repository_originals() -> None:
 # ------------------------------------------------------- no mutation surface
 
 
-def test_the_service_exposes_no_route_that_is_not_a_get() -> None:
-    """Not 'mutation is blocked' — mutation was never wired in."""
-    offending = [
-        (route.path, sorted(route.methods - {"HEAD", "OPTIONS"}))
+def test_the_only_mutating_routes_are_the_three_live_pilot_ones() -> None:
+    """The mutating surface is enumerated, not merely guarded.
+
+    The public service is no longer read-only: it runs the real pilot. What keeps that
+    safe is that exactly three POST routes exist, all belonging to the live pilot, and
+    every other verb on every other path is absent rather than rejected. A fourth POST
+    appearing here is a change that must be argued for, not noticed later.
+    """
+    mutating = {
+        (route.path, verb)
         for route in app.routes
-        if getattr(route, "methods", None) and route.methods - {"GET", "HEAD", "OPTIONS"}
-    ]
-    assert not offending, f"the public surface exposes non-GET routes: {offending}"
+        if getattr(route, "methods", None)
+        for verb in route.methods - {"GET", "HEAD", "OPTIONS"}
+    }
+    assert mutating == {
+        ("/live/start", "POST"),
+        ("/live/verify", "POST"),
+        ("/live/upload", "POST"),
+    }, f"unexpected mutating routes on the public surface: {sorted(mutating)}"
+
+
+def test_no_presentation_route_accepts_a_mutation(client: TestClient) -> None:
+    """The pages that existed before the live pilot stay reads."""
+    for path in ("/", "/demo", "/architecture", "/proof", "/health"):
+        assert client.post(path).status_code in (404, 405)
 
 
 @pytest.mark.parametrize(
@@ -332,3 +349,27 @@ def test_pages_render_no_script_tag(client: TestClient) -> None:
     """The CSP forbids script; the pages must not need one."""
     for path in PAGES:
         assert "<script" not in client.get(path).text.lower()
+
+
+def test_the_public_extra_declares_everything_the_routes_need() -> None:
+    """A missing form parser is a container that never listens, not an import error.
+
+    FastAPI analyses Form and File parameters at startup, so an undeclared
+    python-multipart passes every local test (the dev extra installs it) and then fails
+    the Cloud Run health check. Asserting the declaration is what catches it on the
+    ground rather than in a deploy log.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    pyproject = (_Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+    block = re.search(r"^public = \[(.*?)^\]", pyproject, re.S | re.M)
+    assert block, "the public extra is missing from pyproject.toml"
+    declared = block.group(1)
+    for requirement in ("fastapi", "uvicorn", "httpx", "python-multipart"):
+        assert requirement in declared, f"the public extra does not declare {requirement}"
+    # The public image must not pull a data-plane client into the internet-facing service.
+    for forbidden in ("google-cloud-firestore", "google-cloud-storage", "google-adk"):
+        assert forbidden not in declared, f"the public extra pulls in {forbidden}"

@@ -1,134 +1,121 @@
 # DRIFTZERO — recording runbook
 
-Follow this in order. It assumes the deployed service is up and produces exactly **one**
-live hero run.
+**The canonical recording flow is the public URL. Nothing local is used on camera.**
 
-**The rule that governs everything below:** never capture a success the backend has not
-actually produced. If a step does not show the expected state, stop and read
+```
+https://driftzero-web-eepb64ze2q-uc.a.run.app
+```
+
+No localhost. No `uvicorn`. No `gcloud run services proxy`. No identity token. A browser
+and that address is the entire setup, which is also the point the video is making.
+
+**The rule that governs everything:** never capture a success the backend has not
+produced. If a step does not show the expected state, stop and read
 [Troubleshooting](#troubleshooting) — do not re-shoot until it does.
 
 ---
 
 ## 1. Before you press record
 
-**Services**
-
-| | Check | Expected |
+| Check | Command or action | Expected |
 | --- | --- | --- |
-| Cloud Run | `gcloud run services describe driftzero-api --project=driftzero-runtime-2026 --region=us-central1 --format='value(status.url,status.latestReadyRevisionName)'` | a URL and a `READY` revision |
-| Auth | `gcloud auth print-identity-token` | a token (never shown on camera) |
-| Firestore | live | reachable |
+| Public surface is up | open the URL | the hero, and a **Run live pilot** button |
+| Backend is answering | look at the status chip on `/` | `Private backend: SERVING` |
+| Providers are live | `gcloud run services describe driftzero-api --project=driftzero-runtime-2026 --region=us-central1 --format="value(spec.template.spec.containers[0].env)"` | `google_adk` and `vertex_maas` present |
 
-The service is **private**. A browser cannot open it without an identity token, so use
-the local run for the on-camera browser (step 3) and keep the deployed service for the
-architecture/evidence beat.
+**Browser hygiene:** a clean window, no extensions bar, no bookmarks bar, no other tabs.
+Nothing on screen should identify the operator.
 
-**Do not** run `scripts/m2_exit_gate`, `m3_exit_gate`, or any cleanup script during the
-session — the first two are slow and the third is destructive.
-
-**Terminal hygiene:** clear scrollback, set a large font, and make sure no token is in
-history. Never put an identity token on screen.
+**Do not** run any cleanup or shutdown script during the session.
 
 ---
 
-## 2. Rehearse offline — no model calls, no cost
+## 2. Rehearse
 
-Rehearse the whole thing as many times as you like in deterministic mode. It is visually
-identical and spends nothing.
+Rehearse against the real thing. Each run costs one Gemini call and two Gemma calls, which
+is small, and the flow is identical every time — so there is no reason to rehearse against
+a substitute and then hope the real one behaves.
 
-```bash
-python -m scripts.m6_product_evidence     # drives the real flow with substitutes
-```
+Run it two or three times until the click path is muscle memory, then record.
 
-Rehearse until the click path is muscle memory. **Then** do step 3 once.
-
----
-
-## 3. The one live run
-
-```bash
-export DRIFTZERO_FIELD_PROVIDER=vertex_maas
-export DRIFTZERO_GCP_PROJECT=driftzero-runtime-2026
-export DRIFTZERO_SEMANTIC_PROVIDER=google_adk
-export DRIFTZERO_GEMINI_MODEL=gemini-3.5-flash
-export DRIFTZERO_GEMINI_LOCATION=global
-export DRIFTZERO_PERSISTENCE=firestore
-export DRIFTZERO_EVIDENCE_BUCKET=driftzero-evidence-driftzero-runtime-2026
-
-python -m uvicorn driftzero_api.app:app --port 8080
-```
-
-Budget: **3 live model calls.** One Gemini (change analysis), two Gemma (LEFT, TOP_RIGHT).
-
-### Browser tabs, left to right
-
-| Tab | URL | Used in |
-| --- | --- | --- |
-| 1 | `http://127.0.0.1:8080/web/delta?workflow=<ID>` | beats 4–5 |
-| 2 | `http://127.0.0.1:8080/web/verify?workflow=<ID>` | beat 5 |
-| 3 | `http://127.0.0.1:8080/web/proof?workflow=<ID>` | beat 6 |
-| 4 | `docs/architecture.md` rendered | beat 7 |
-| 5 | `evidence/JUDGES_START_HERE.md` | end card / B-roll |
-
-Put tab 1 and 2 in a **mobile viewport** (375 × 812). That is the frontline surface.
-
-### The steps
-
-| # | Action | Expected on screen — do not proceed otherwise |
-| --- | --- | --- |
-| 1 | `POST /api/v1/changes` with `fixtures/hero_change.json` | `201`, a `workflow_id`, `state: CHANGE_RECEIVED` |
-| 2 | Analyze (Gemini — **live call 1**) | 5 candidates proposed, **exactly 1** qualified: `wi-packing-standard-001` |
-| 3 | Check the decoy | `wi-forklift-turn-014` still reads `turn_direction: LEFT` |
-| 4 | Deploy the remediation | artifact now `label_position: TOP_RIGHT`; capability shown as granted |
-| 5 | Deliver to frontline | tab 1 shows **Your work has changed**, `Was LEFT` → `Now TOP_RIGHT` |
-| 6 | Tab 2 → upload `fixtures/multimodal/label_left_01.jpg` (**live call 2**) | "Checking your photo" → **Not done yet**, red ✖, retry offered |
-| 7 | Upload `fixtures/multimodal/label_top_right_01.jpg` (**live call 3**) | "Checking your photo" → **Verified**, green ✔ |
-| 8 | Tab 3 → the proof | `7/7`, `PROOF_COMPLETE`, chronology `FAIL → PASS`, proof id, content hash |
-| 9 | Click **Verify integrity** | "Content hash matches" — recomputed in the browser |
-
-**Use `label_left_01.jpg` first and `label_top_right_01.jpg` second. Never the ambiguous
-fixture** — it measured ~90 s and adds nothing to the story.
+Every rehearsal creates a genuinely new workflow and a genuinely new proof. Nothing is
+reused, and nothing is polluted by rehearsing.
 
 ---
 
-## 4. Do not click
+## 3. The take
 
-- **Verify integrity** before beat 6 — it is the payoff, don't spend it early
-- Anything under **Audit detail** on camera — raw JSON is the anti-narrative
-- The **/ready** endpoint on camera — it correctly says `production_ready: false`, which
-  needs a sentence of context the video has no room for
-- Any **cleanup or shutdown** script — it would take the demo URL down
-- **Browser back** after a verdict — re-fetching is fine, but don't imply a state change
-  that did not happen
+Five actions. That is the whole demo.
 
----
+| # | Action | Expected on screen — do not proceed otherwise | Time |
+| --- | --- | --- | --- |
+| 1 | Open the URL | Hero: *"The autonomous last-mile for operational change"*, backend chip **SERVING** | 0:00 |
+| 2 | Click **Run live pilot** → **Run live pilot** | ~20–25 s, then **Your work has changed**, five steps ticked, `Was LEFT → Now TOP RIGHT`, artifact `wi-packing-standard-001` | 0:20 |
+| 3 | Click **Verify current state** | ~2–3 s, then **Not done yet**, `Observed: LEFT`, `Truth Engine verdict: FAIL`, retry offered, **no proof button** | 1:00 |
+| 4 | Click **Verify corrected state** | ~2–3 s, then **Verified**, `Observed: TOP_RIGHT`, `PASS`, chronology `FAIL → PASS` | 1:30 |
+| 5 | Click **View Change Proof** | **Change deployed**, **7 / 7 conditions satisfied**, proof id, content hash, **Content hash matches** | 2:00 |
 
-## 5. Latency
+Step 3 is the demo. A verification system that only works when the worker gets it right
+the first time verifies nothing — say that while it is on screen.
 
-Gemini takes a few seconds; Gemma took **2.1 s** and **2.5 s** on the recorded fixtures.
+### The two lines that must be said exactly
 
-That is short enough to keep in the cut. If a call is slower on the day:
-
-- **Do** cut the waiting time in the edit — the "Checking your photo" state is real, and
-  trimming its duration changes nothing about what happened
-- **Do not** pre-render a result, splice a verdict from a different run, or reorder
-  photo #2 before photo #1
-
-If a call fails outright, the workflow is unharmed: submit again. A retry produces a new
-attempt and the chronology stays honest.
+1. *"The Truth Engine compares that to the expected value and returns FAIL. **Not the
+   model.**"*
+2. *"The hash establishes content identity and detects alteration. **It is not a signature
+   and not a ledger entry.**"*
 
 ---
 
-## 6. Fallbacks
+## 4. Latency
+
+The `Run live pilot` step takes **20–25 seconds**. That is a real Gemini call, real
+remediation and real delivery happening inside one request.
+
+- **Do** cut the wait in the edit. The waiting is real and trimming its duration changes
+  nothing about what happened.
+- **Do not** pre-render a result, splice a verdict from a different run, or reorder the
+  second photograph before the first.
+
+Gemma is fast — measured **1.8–2.7 s** per verification on the deployed service — so the
+two verification steps need no trimming at all.
+
+---
+
+## 5. Do not click
+
+- **View Change Proof** before step 4 — it does not exist yet, and the page will say so
+- **Upload your own photograph** on camera unless you have rehearsed it; an unfamiliar
+  image can legitimately return `INCONCLUSIVE`, which is honest but not the story
+- The **browser back button** after a verdict — re-fetching is fine, but do not imply a
+  state change that did not happen
+- Any **cleanup or shutdown** script
+
+---
+
+## 6. After the live flow — infrastructure proof
+
+Cut to the Google Cloud Console to show this ran where you said it did:
+
+1. **Cloud Run** — two services: `driftzero-web` (public) and `driftzero-api` (private).
+   Show that `driftzero-api` has no `allUsers`.
+2. **Firestore** — the workflow document the run just created.
+3. **Logs** — the correlated entries for that `workflow_id`.
+
+Never put an identity token, an `Authorization` header or a billing identifier on screen.
+
+---
+
+## 7. Fallbacks
 
 | If | Then |
 | --- | --- |
-| Gemini is slow or erroring | Rehearsal mode is visually identical. Record beats 3–4 there, label nothing as live, and keep the two Gemma calls live — they are the ones that matter |
-| Gemma is unavailable | Use `evidence/m6/worker_failed.png` and `worker_verified.png` as stills, and say "recorded run" in the voiceover |
-| The whole live path is down | The entire story is already evidenced: `evidence/runs/hero_run_001/real_camera_hero_run.json` is a real camera run with real Gemma. Narrate over the recorded evidence and say so |
+| Gemini is slow or erroring | Retry once. The pilot creates a fresh workflow each time, so a failed attempt costs nothing and taints nothing |
+| Gemma returns `INCONCLUSIVE` | That is an honest outcome. Retry with the pilot photograph; if it recurs, narrate it — the product shows it rather than hiding it |
+| The whole live path is down | The recorded run is preserved at `/demo` and in `evidence/runs/hero_run_001/`. Narrate over it **and say it is recorded** |
 
 In every fallback: **say what the viewer is looking at.** A recorded run presented as live
-is the one thing that would undermine the whole submission.
+is the one thing that would undermine the submission.
 
 ---
 
@@ -136,18 +123,18 @@ is the one thing that would undermine the whole submission.
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| `403` on every route | expected — the deployed service is private | use the local run for on-camera browsing |
-| Worker page shows "Not available yet" | delivery has not completed | finish step 5 first |
-| Verify returns `INCONCLUSIVE` | field provider not configured | re-export `DRIFTZERO_FIELD_PROVIDER=vertex_maas` and restart |
-| Verify returns `409` | that workflow is held elsewhere | create a fresh change and start again |
-| Proof returns `404` | fewer than 7 conditions hold | check the latest verification is `PASS` |
-| Impact qualifies 0 targets | the semantic provider is unset | check `DRIFTZERO_SEMANTIC_PROVIDER=google_adk` |
+| Status chip says `UNREACHABLE` | the backend is cold or the invoker binding changed | re-check `driftzero-web-sa` holds `run.invoker` on `driftzero-api` |
+| "The pilot did not reach the frontline" | Change Intelligence qualified no target | retry; if it persists, check `DRIFTZERO_SEMANTIC_PROVIDER=google_adk` on the backend |
+| "This pilot session is not valid" | the capability expired (30 minutes) | start a new run |
+| Verify returns `INCONCLUSIVE` repeatedly | the field provider is misconfigured | check `DRIFTZERO_FIELD_PROVIDER=vertex_maas` |
+| Proof page says no proof exists | fewer than seven conditions hold | confirm the latest verification actually returned PASS |
+| A page 503s | the backend did not answer | the public page degrades honestly; retry |
 
 ---
 
 ## After recording
 
-1. Note the `workflow_id`, the proof id and the content hash — they appear on screen and
-   should match what you can show in Firestore afterwards if asked.
-2. Do **not** delete the workflow. It is the run the video shows.
-3. Leave the deployed service running until judging closes.
+1. Note the `change_id`, `proof_id` and content hash shown on the proof page. They are
+   from your run and can be shown in Firestore afterwards if a judge asks.
+2. Do **not** delete the workflow.
+3. Leave both services running until judging closes.

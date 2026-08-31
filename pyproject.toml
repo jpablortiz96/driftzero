@@ -35,6 +35,10 @@ public = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "httpx>=0.27",
+    # The live pilot is HTML forms and a file upload, so FastAPI needs multipart. Its
+    # absence is not an import error: the app builds and then fails at *startup* when a
+    # Form route is analysed, which is a container that never listens.
+    "python-multipart>=0.0.9",
 ]
 # T098 observability export. Separate from `cloud` because a process can persist
 # durably without tracing, and tracing must never be a hard requirement to serve.
