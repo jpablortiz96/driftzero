@@ -93,8 +93,8 @@ A packing procedure changes exactly one requirement:
 | 14 | A **Change Proof** reaches `PROOF_COMPLETE` | **deterministic** |
 
 <p align="center">
-  <img src="docs/assets/driftzero-photo-left.jpg" alt="Real photograph of a box with the shipping label positioned on the left" width="44%">
-  <img src="docs/assets/driftzero-photo-top-right.jpg" alt="Real photograph of the same box with the label corrected to the top right" width="44%">
+  <img src="docs/assets/driftzero-photo-left.png" alt="Real photograph of a box with the shipping label positioned on the left" width="44%">
+  <img src="docs/assets/driftzero-photo-top-right.png" alt="Real photograph of the same box with the label corrected to the top right" width="44%">
 </p>
 <p align="center"><em>Real photographs, real Gemma inference. The left one failed. That failure is the point.</em></p>
 
